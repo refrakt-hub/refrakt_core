@@ -1,5 +1,10 @@
+"""
+The GAN Loss implementation for adversarial training.
+"""
+
+from typing import Dict
 import torch
-import torch.nn as nn
+from torch import nn, Tensor
 
 from refrakt_core.losses.templates.base import BaseLoss
 from refrakt_core.registry.loss_registry import register_loss
@@ -9,39 +14,51 @@ from refrakt_core.registry.loss_registry import register_loss
 class GANLoss(BaseLoss):
     """
     GAN Loss for adversarial training.
-    Supports both BCE and LSGAN loss.
+
+    Supports both:
+    - Binary Cross Entropy (BCE) with logits (default)
+    - Least Squares GAN (LSGAN)
+
+    Args:
+        use_lsgan (bool): Whether to use LSGAN (MSELoss) instead of BCEWithLogitsLoss.
+        device (str): Device identifier string (e.g., "cuda" or "cpu").
     """
 
-    def __init__(self, use_lsgan=False, device="cuda"):
+    def __init__(self, use_lsgan: bool = False, device: str = "cuda") -> None:
         super().__init__(name="GANLoss")
-        self.loss = nn.MSELoss() if use_lsgan else nn.BCEWithLogitsLoss()
-        self.use_lsgan = use_lsgan
-        self.device = torch.device(device)
+        self.loss: nn.Module = nn.MSELoss() if use_lsgan else nn.BCEWithLogitsLoss()
+        self.use_lsgan: bool = use_lsgan
+        self.device: torch.device = torch.device(device)
 
-    def forward(self, pred, target_is_real):
+    def forward(self, pred: Tensor, target_is_real: bool) -> Tensor:
         """
-        Compute GAN loss for discriminator or generator.
+        Compute the GAN loss for discriminator or generator output.
+
         Args:
-            pred (torch.Tensor): Predictions from the discriminator.
-            target_is_real (bool): True if the target is real, False if fake.
+            pred (Tensor): The prediction logits from the discriminator, shape (N, *).
+            target_is_real (bool): Whether the target is real (True) or fake (False).
+
         Returns:
-            torch.Tensor: GAN loss.
+            Tensor: Scalar GAN loss value.
+
+        Raises:
+            TypeError: If input types are incorrect.
         """
+        if not isinstance(pred, Tensor):
+            raise TypeError("pred must be a torch.Tensor.")
         if not isinstance(target_is_real, bool):
             raise TypeError("target_is_real must be a boolean.")
-        if not isinstance(pred, torch.Tensor):
-            raise TypeError("pred must be a torch.Tensor.")
 
-        target = torch.ones_like(pred) if target_is_real else torch.zeros_like(pred)
-        target = target.to(pred.device)  # Ensure target is on the same device as pred
-
+        target: Tensor = torch.ones_like(pred) if target_is_real else torch.zeros_like(pred)
+        target = target.to(pred.device)
         return self.loss(pred, target)
 
-    def get_config(self):
+    def get_config(self) -> Dict[str, str]:
         """
-        Get the configuration of the loss function.
+        Return configuration details of the GANLoss.
+
         Returns:
-            dict: Configuration dictionary.
+            dict: Configuration dictionary with loss type and device.
         """
         return {
             **super().get_config(),

@@ -33,8 +33,9 @@ def test_loss_output_is_scalar(loss_fn, dummy_inputs):
 def test_identical_inputs_returns_zero(loss_fn, device):
     tensor = torch.randn(1, 3, 224, 224, device=device)
     loss = loss_fn(tensor, tensor)
-    assert torch.isclose(loss, torch.tensor(0.0, device=device), atol=1e-5), \
-        f"Expected loss to be ~0.0 but got {loss.item()}"
+    assert torch.isclose(
+        loss, torch.tensor(0.0, device=device), atol=1e-5
+    ), f"Expected loss to be ~0.0 but got {loss.item()}"
 
 
 def test_backward_pass(loss_fn, dummy_inputs):
@@ -48,7 +49,7 @@ def test_backward_pass(loss_fn, dummy_inputs):
 def test_shape_mismatch_raises_error(loss_fn, device):
     sr = torch.randn(1, 3, 224, 224, device=device)
     hr = torch.randn(1, 3, 128, 128, device=device)  # Wrong shape
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError, match="Feature shape mismatch"):
         loss_fn(sr, hr)
 
 
@@ -77,11 +78,13 @@ def test_batched_inputs(loss_fn, device):
 # ---- Preprocessing fixture and test ---- #
 @pytest.fixture
 def vgg_preprocessed_images(device):
-    transform = T.Compose([
-        T.Resize((224, 224)),
-        T.ToTensor(),
-        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
+    transform = T.Compose(
+        [
+            T.Resize((224, 224)),
+            T.ToTensor(),
+            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
 
     img1 = Image.fromarray((np.random.rand(224, 224, 3) * 255).astype(np.uint8))
     img2 = Image.fromarray((np.random.rand(224, 224, 3) * 255).astype(np.uint8))

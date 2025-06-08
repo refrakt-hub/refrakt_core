@@ -25,6 +25,15 @@ dependencies = [
     "tqdm"
 ]
 
+[tool.black]
+line-length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+select = ["E", "F", "B", "I"]
+
+
 [project.urls]
 "Homepage" = "https://github.com/refrakt-hub/refrakt_core"
 "Bug Tracker" = "https://github.com/yourusername/refrakt_core/issues"

@@ -1,5 +1,12 @@
+"""
+NT-Xent Loss Implementation for contrastive learning.
+"""
+
+from typing import Dict, Optional
+
 import torch
-import torch.nn as nn
+from torch import Tensor, nn
+import torch.nn.functional as F
 
 from refrakt_core.losses.templates.base import BaseLoss
 from refrakt_core.registry.loss_registry import register_loss
@@ -8,72 +15,80 @@ from refrakt_core.registry.loss_registry import register_loss
 @register_loss("nt_xent")
 class NTXentLoss(BaseLoss):
     """
-    NT-Xent (Normalized Temperature-scaled Cross Entropy) Loss
+    NT-Xent (Normalized Temperature-scaled Cross Entropy) Loss.
 
-    This loss function is commonly used in contrastive learning frameworks like SimCLR.
-    It pulls positive pairs together while pushing apart negative pairs in the embedding space.
+    Used in contrastive learning frameworks like SimCLR. Encourages positive
+    pairs to be closer while separating all other (negative) pairs.
 
-    Parameters:
-    -----------
-    temperature : float, default=0.5
-        Scaling factor for the similarity scores. Lower values make the model more
-        sensitive to hard negatives.
-    name : str, optional
-        Name of the loss function. Defaults to the class name.
+    Args:
+        temperature (float): Temperature scaling factor.
+        name (str, optional): Name of the loss (defaults to class name).
     """
 
-    def __init__(self, temperature: float = 0.5, name: str = None):
+    def __init__(self, temperature: float = 0.5, name: Optional[str] = None) -> None:
         super().__init__(name=name)
-        self.temperature = temperature
+        self.temperature: float = temperature
 
-    def forward(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
+    def forward(self, z1: Tensor, z2: Tensor) -> Tensor:
         """
-        Compute the NT-Xent loss between two batches of embeddings.
+        Compute the NT-Xent loss.
 
-        Parameters:
-        -----------
-        z1 : torch.Tensor
-            First batch of embeddings with shape [N, D]
-        z2 : torch.Tensor
-            Second batch of embeddings with shape [N, D]
+        Args:
+            z1 (Tensor): First batch of embeddings with shape (N, D).
+            z2 (Tensor): Second batch of embeddings with shape (N, D).
 
         Returns:
-        --------
-        torch.Tensor
-            Scalar loss value
+            Tensor: Scalar loss value.
 
         Raises:
-        -------
-        ValueError
-            If batch size is <= 1
+            ValueError: If batch size is less than or equal to 1.
         """
-        N = z1.size(0)
-        if N <= 1:
+        n: int = z1.size(0)
+        if n <= 1:
             raise ValueError("Batch size must be > 1 for NT-Xent loss.")
 
-        z = torch.cat([z1, z2], dim=0)
+        z: Tensor = torch.cat([z1, z2], dim=0)  # (2N, D)
+        z_norm: Tensor = F.normalize(z, dim=1)  # L2 normalization
 
-        z_norm = nn.functional.normalize(z, dim=1)
-        sim_matrix = torch.matmul(z_norm, z_norm.T) / self.temperature
+        sim_matrix: Tensor = torch.matmul(z_norm, z_norm.T) / self.temperature  # (2N, 2N)
 
-        # Mask out self-comparisons
-        mask = torch.eye(2 * N, device=z.device).bool()
-        sim_matrix.masked_fill_(mask, -9e15)
+        # Mask self-similarity
+        mask: Tensor = torch.eye(2 * n, device=z.device).bool()
+        sim_matrix.masked_fill_(mask, float("-inf"))
 
-        positives = torch.cat([torch.arange(N, 2 * N), torch.arange(0, N)]).to(z.device)
-        pos_sim = sim_matrix[torch.arange(2 * N), positives]
+        # Positive pairs: i-th and (i+n)-th (for i in [0, N))
+        positive_indices: Tensor = torch.cat([
+            torch.arange(n, 2 * n),
+            torch.arange(0, n)
+        ]).to(z.device)
+        pos_sim: Tensor = sim_matrix[torch.arange(2 * n), positive_indices]
 
-        exp_sim = torch.exp(sim_matrix)
-        loss = -torch.log(torch.exp(pos_sim) / exp_sim.sum(dim=1))
+        # Compute contrastive loss
+        exp_sim: Tensor = torch.exp(sim_matrix)
+        denom: Tensor = exp_sim.sum(dim=1)
 
+        loss: Tensor = -torch.log(torch.exp(pos_sim) / denom)
         return loss.mean()
 
-    def get_config(self):
-        """Return detailed configuration of the loss function."""
+    def get_config(self) -> Dict[str, object]:
+        """
+        Return the configuration of the loss function.
+
+        Returns:
+            dict: Configuration dictionary.
+        """
         config = super().get_config()
-        config.update({"temperature": self.temperature, "type": "contrastive"})
+        config.update({
+            "temperature": self.temperature,
+            "type": "contrastive"
+        })
         return config
 
-    def extra_repr(self):
-        """Additional information for string representation."""
+    def extra_repr(self) -> str:
+        """
+        Return a string representation for printing/debugging.
+
+        Returns:
+            str: Loss configuration summary.
+        """
         return f"name={self.name}, temperature={self.temperature}"

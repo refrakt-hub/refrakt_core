@@ -1,33 +1,56 @@
-TRAINER_REGISTRY = {}
-_imported = False
+"""Trainer registry for managing trainer classes."""
+
+from typing import Dict, Type, Callable, Any
 
 from refrakt_core.logging import get_global_logger
 
+TRAINER_REGISTRY: Dict[str, Type[Any]] = {}
+_IMPORTED: bool = False
 
-def register_trainer(name):
-    def decorator(cls):
+
+def register_trainer(name: str) -> Callable[[Type[Any]], Type[Any]]:
+    """Register a trainer class with the given name.
+    
+    Args:
+        name: The name to register the trainer under.
+        
+    Returns:
+        A decorator function that registers the trainer class.
+    """
+    def decorator(cls: Type[Any]) -> Type[Any]:
         logger = get_global_logger()
-        logger.debug(f"Registering trainer: {name}")
+        logger.debug("Registering trainer: %s", name)
         TRAINER_REGISTRY[name] = cls
         return cls
 
     return decorator
 
 
-def get_trainer(name):
-    global _imported
-    if not _imported:
+def get_trainer(name: str) -> Type[Any]:
+    """Get trainer class by name.
+    
+    Args:
+        name: The name of the trainer to retrieve.
+        
+    Returns:
+        The trainer class (not an instance).
+        
+    Raises:
+        ValueError: If the trainer is not found.
+    """
+    global _IMPORTED  # pylint: disable=global-statement
+    if not _IMPORTED:
         # Trigger import of trainers
-        import refrakt_core.trainer
-
-        _imported = True
+        _IMPORTED = True
     if name not in TRAINER_REGISTRY:
+        available_trainers = list(TRAINER_REGISTRY.keys())
         raise ValueError(
-            f"Trainer '{name}' not found. Available: {list(TRAINER_REGISTRY.keys())}"
+            f"Trainer '{name}' not found. Available: {available_trainers}"
         )
     return TRAINER_REGISTRY[name]  # Return the class, not an instance
 
 
-def log_registry_id():
+def log_registry_id() -> None:
+    """Log the registry ID for debugging purposes."""
     logger = get_global_logger()
-    logger.debug(f"TRAINER REGISTRY ID: {id(TRAINER_REGISTRY)}")
+    logger.debug("TRAINER REGISTRY ID: %s", id(TRAINER_REGISTRY))

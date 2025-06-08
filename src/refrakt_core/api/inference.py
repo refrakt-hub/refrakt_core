@@ -10,8 +10,7 @@ from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.builders.model_builder import build_model
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.api.core.utils import import_modules, setup_device
-from refrakt_core.logging import get_global_logger
+from refrakt_core.api.core.utils import import_modules
 
 
 def inference(
@@ -129,32 +128,38 @@ def inference(
                     if targets is not None:
                         vis_targets.append(targets.cpu())  # ✅ Add this line
 
-
                 if batch_idx % 100 == 0:
                     logger.info(f"Processed batch {batch_idx + 1}/{len(data_loader)}")
 
         # ====== NEW: Log inference visualization ======
         try:
             if vis_inputs:
-                inputs_vis = torch.cat([t.cpu() for t in vis_inputs])[:max_visualization]
-                outputs_vis = torch.cat([t.cpu() for t in vis_outputs])[:max_visualization]
+                inputs_vis = torch.cat([t.cpu() for t in vis_inputs])[
+                    :max_visualization
+                ]
+                outputs_vis = torch.cat([t.cpu() for t in vis_outputs])[
+                    :max_visualization
+                ]
                 targets_vis = None
                 if vis_targets:
-                    targets_vis = torch.cat([t.cpu() for t in vis_targets])[:max_visualization]
+                    targets_vis = torch.cat([t.cpu() for t in vis_targets])[
+                        :max_visualization
+                    ]
 
                 if outputs_vis.ndim == 4:
                     logger.log_inference_results(
                         inputs=inputs_vis,
                         outputs=outputs_vis,
                         targets=targets_vis,
-                        step=0
+                        step=0,
                     )
                 else:
-                    logger.info("Skipping visual logging: output is not a 4D image tensor")
+                    logger.info(
+                        "Skipping visual logging: output is not a 4D image tensor"
+                    )
         except Exception as e:
             logger.error(f"Inference visualization failed: {str(e)}")
         # ====== END NEW ======
-
 
         logger.info("\nInference completed successfully!")
 

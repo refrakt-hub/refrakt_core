@@ -1,5 +1,4 @@
 import gc
-import os
 import sys
 import traceback
 from pathlib import Path
@@ -15,7 +14,6 @@ gc.collect()
 torch.cuda.empty_cache()
 
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
-
 # Import new builders
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.core.logger import RefraktLogger
@@ -28,11 +26,6 @@ def train(
     logger: Optional[RefraktLogger] = None,
 ):
 
-    import refrakt_core.datasets
-    import refrakt_core.losses
-    import refrakt_core.models
-    import refrakt_core.registry
-    import refrakt_core.trainer
     from refrakt_core.registry.loss_registry import get_loss
     from refrakt_core.registry.model_registry import get_model
     from refrakt_core.registry.trainer_registry import get_trainer
@@ -225,7 +218,6 @@ def train(
         final_device = device_param if device_param else device
 
         trainer_params["logger"] = logger
-
 
         # Handle different trainer types
         if cfg.trainer.name != "gan":

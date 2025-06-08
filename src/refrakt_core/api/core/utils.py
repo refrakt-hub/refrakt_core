@@ -1,5 +1,5 @@
 # [file content begin]
-from typing import Any, Dict, Tuple
+from typing import Any, Tuple
 
 import torch
 from omegaconf import OmegaConf
@@ -16,11 +16,6 @@ from refrakt_core.api.core.components import ModelComponents
 # pylint: disable=import-outside-toplevel
 def import_modules():
     """Import necessary modules"""
-    import refrakt_core.datasets
-    import refrakt_core.losses
-    import refrakt_core.models
-    import refrakt_core.registry
-    import refrakt_core.trainer
     from refrakt_core.registry.loss_registry import get_loss
     from refrakt_core.registry.model_registry import get_model
     from refrakt_core.registry.trainer_registry import get_trainer

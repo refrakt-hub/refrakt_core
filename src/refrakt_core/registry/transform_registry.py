@@ -1,54 +1,74 @@
-# transform_registry.py
-TRANSFORM_REGISTRY = {}
-_imported = False
+"""Transform registry for managing transform classes."""
+
+from typing import Dict, Any, Type, Callable
 
 from refrakt_core.logging import get_global_logger
 
+TRANSFORM_REGISTRY: Dict[str, Type[Any]] = {}
+_IMPORTED: bool = False
 
-def register_transform(name):
-    """Decorator to register a transform class with the given name."""
 
-    def decorator(cls):
+def register_transform(name: str) -> Callable[[Type[Any]], Type[Any]]:
+    """Register a transform class with the given name.
+    
+    Args:
+        name: The name to register the transform under.
+        
+    Returns:
+        A decorator function that registers the transform class.
+    """
+    def decorator(cls: Type[Any]) -> Type[Any]:
         logger = get_global_logger()
         if name in TRANSFORM_REGISTRY:
-            logger.debug(f"Warning: Transform '{name}' already registered. Skipping.")
+            logger.debug("Warning: Transform '%s' already registered. Skipping.", name)
             return cls
-        logger.debug(f"Registering transform: {name}")
+        logger.debug("Registering transform: %s", name)
         TRANSFORM_REGISTRY[name] = cls
         return cls
 
     return decorator
 
 
-def get_transform(name, *args, **kwargs):
-    """Get transform instance by name with optional arguments."""
-    global _imported
-    if not _imported:
+def get_transform(name: str, *args: Any, **kwargs: Any) -> Any:
+    """Get transform instance by name with optional arguments.
+    
+    Args:
+        name: The name of the transform to retrieve.
+        *args: Positional arguments to pass to the transform constructor.
+        **kwargs: Keyword arguments to pass to the transform constructor.
+        
+    Returns:
+        An instance of the requested transform.
+        
+    Raises:
+        ValueError: If the transform is not found.
+    """
+    global _IMPORTED  # pylint: disable=global-statement
+    if not _IMPORTED:
         # Trigger import of transforms module to register custom transforms
-        import refrakt_core.transforms
-
-        _imported = True
+        _IMPORTED = True
 
     if name not in TRANSFORM_REGISTRY:
         # Try to find in torchvision transforms as fallback
         try:
-            from torchvision import transforms
+            from torchvision import transforms  # pylint: disable=import-outside-toplevel
 
             if hasattr(transforms, name):
                 return getattr(transforms, name)(*args, **kwargs)
         except ImportError:
             pass
 
-        available = list(TRANSFORM_REGISTRY.keys()) + [
+        available_transforms = list(TRANSFORM_REGISTRY.keys()) + [
             "ToTensor",
-            "Normalize",
+            "Normalize", 
             "Compose",
         ]  # Example torchvision names
-        raise ValueError(f"Transform '{name}' not found. Available: {available}")
+        raise ValueError(f"Transform '{name}' not found. Available: {available_transforms}")
 
     return TRANSFORM_REGISTRY[name](*args, **kwargs)
 
 
-def log_registry_id():
+def log_registry_id() -> None:
+    """Log the registry ID for debugging purposes."""
     logger = get_global_logger()
-    logger.debug(f"TRANSFORM REGISTRY ID: {id(TRANSFORM_REGISTRY)}")
+    logger.debug("TRANSFORM REGISTRY ID: %s", id(TRANSFORM_REGISTRY))

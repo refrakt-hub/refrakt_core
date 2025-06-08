@@ -1,3 +1,7 @@
+"""
+Templates for foundational model types in Refrakt: classifiers, autoencoders, contrastive learners, and GANs.
+"""
+
 from abc import abstractmethod
 from typing import Any, Dict
 
@@ -24,9 +28,7 @@ class BaseClassifier(BaseModel):
             num_classes (int): Number of classification classes.
             model_name (str): Name identifier for the model. Defaults to "base_classifier".
         """
-        super(BaseClassifier, self).__init__(
-            model_name=model_name, model_type="classifier"
-        )
+        super().__init__(model_name=model_name, model_type="classifier")
         self.num_classes = num_classes
 
     def predict_proba(self, x: torch.Tensor) -> torch.Tensor:
@@ -58,11 +60,9 @@ class BaseAutoEncoder(BaseModel):
 
         Args:
             hidden_dim (int): Dimension of the latent space.
-            model_name (str): Name identifier for the model. Defaults to "base_autoencoder".
+            model_name (str): Name identifier for the model.
         """
-        super(BaseAutoEncoder, self).__init__(
-            model_name=model_name, model_type="autoencoder"
-        )
+        super().__init__(model_name=model_name, model_type="autoencoder")
         self.hidden_dim = hidden_dim
         self.model_name = model_name
 
@@ -77,7 +77,7 @@ class BaseAutoEncoder(BaseModel):
         Returns:
             torch.Tensor: Latent representation.
         """
-        pass
+        raise NotImplementedError("Subclasses must implement `encode`.")
 
     @abstractmethod
     def decode(self, z: torch.Tensor) -> torch.Tensor:
@@ -90,7 +90,7 @@ class BaseAutoEncoder(BaseModel):
         Returns:
             torch.Tensor: Reconstructed output.
         """
-        pass
+        raise NotImplementedError("Subclasses must implement `decode`.")
 
     def get_latent(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -104,9 +104,7 @@ class BaseAutoEncoder(BaseModel):
         """
         self.eval()
         with torch.no_grad():
-            if x.device != self.device:
-                x = x.to(self.device)
-            return self.encode(x)
+            return self.encode(x.to(self.device))
 
 
 class BaseContrastiveModel(BaseModel):
@@ -122,6 +120,14 @@ class BaseContrastiveModel(BaseModel):
         backbone_name: str = "resnet",
         proj_dim: int = 128,
     ):
+        """
+        Initialize the base contrastive model.
+
+        Args:
+            model_name (str): Model identifier.
+            backbone_name (str): Backbone architecture name.
+            proj_dim (int): Dimension of the projection head output.
+        """
         super().__init__(model_name=model_name, model_type="contrastive")
         self.backbone_name = backbone_name
         self.proj_dim = proj_dim
@@ -129,57 +135,78 @@ class BaseContrastiveModel(BaseModel):
     @abstractmethod
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass returning normalized projection (z) for contrastive loss.
-        """
-        pass
+        Forward pass returning normalized projection for contrastive loss.
 
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Normalized projected representation.
+        """
+        raise NotImplementedError("Subclasses must implement `forward`.")
+
+    @abstractmethod
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Returns the backbone features (before projection head).
-        """
-        raise NotImplementedError("Subclasses must implement encode()")
+        Return backbone features before projection head.
 
+        Args:
+            x (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Backbone features.
+        """
+        raise NotImplementedError("Subclasses must implement `encode`.")
+
+    @abstractmethod
     def project(self, h: torch.Tensor) -> torch.Tensor:
         """
-        Returns the projection head output from backbone features.
+        Return projection head output from backbone features.
+
+        Args:
+            h (torch.Tensor): Backbone features.
+
+        Returns:
+            torch.Tensor: Projected features.
         """
-        raise NotImplementedError("Subclasses must implement project()")
+        raise NotImplementedError("Subclasses must implement `project`.")
 
     def predict(self, x: torch.Tensor, return_embedding: bool = False) -> torch.Tensor:
         """
-        Returns projection or raw embedding depending on the flag.
+        Predict projection or raw embedding depending on flag.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+            return_embedding (bool): If True, returns raw backbone features.
+
+        Returns:
+            torch.Tensor: Projected or raw embedding.
         """
         self.eval()
         with torch.no_grad():
             x = x.to(self.device)
             h = self.encode(x)
-            if return_embedding:
-                return h
-            return self.forward(x)
+            return h if return_embedding else self.forward(x)
 
     def summary(self) -> Dict[str, Any]:
+        """
+        Return model summary.
+
+        Returns:
+            Dict[str, Any]: Summary of model properties.
+        """
         base = super().summary()
         base.update({"backbone": self.backbone_name, "projection_dim": self.proj_dim})
         return base
-
-
-from abc import abstractmethod
-from typing import Any, Dict
-
-import torch
-
-from refrakt_core.models.templates.base import BaseModel
 
 
 class BaseGAN(BaseModel):
     """
     Base class for Generative Adversarial Network models.
 
-    Extends the BaseModel with GAN-specific functionality, including generator and discriminator components.
-
     Attributes:
-        generator (torch.nn.Module): The generator component of the GAN.
-        discriminator (torch.nn.Module): The discriminator component of the GAN.
+        generator (torch.nn.Module): Generator network.
+        discriminator (torch.nn.Module): Discriminator network.
     """
 
     def __init__(self, model_name: str = "base_gan"):
@@ -187,41 +214,41 @@ class BaseGAN(BaseModel):
         Initialize the base GAN.
 
         Args:
-            model_name (str): Name identifier for the model. Defaults to "base_gan".
+            model_name (str): Model name.
         """
-        super(BaseGAN, self).__init__(model_name=model_name, model_type="gan")
+        super().__init__(model_name=model_name, model_type="gan")
         self.generator = None
         self.discriminator = None
 
     @abstractmethod
     def generate(self, input_data: torch.Tensor) -> torch.Tensor:
         """
-        Generate data using the generator component.
+        Generate data using generator.
 
         Args:
-            input_data (torch.Tensor): Input tensor for the generator.
+            input_data (torch.Tensor): Input to generator.
 
         Returns:
             torch.Tensor: Generated output.
         """
-        pass
+        raise NotImplementedError("Subclasses must implement `generate`.")
 
     @abstractmethod
     def discriminate(self, input_data: torch.Tensor) -> torch.Tensor:
         """
-        Discriminate data using the discriminator component.
+        Discriminate input using discriminator.
 
         Args:
-            input_data (torch.Tensor): Input tensor for the discriminator.
+            input_data (torch.Tensor): Input to discriminator.
 
         Returns:
-            torch.Tensor: Discrimination output (typically probability or score).
+            torch.Tensor: Output score or probability.
         """
-        pass
+        raise NotImplementedError("Subclasses must implement `discriminate`.")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass, typically uses the generator.
+        Forward pass uses the generator.
 
         Args:
             x (torch.Tensor): Input tensor.
@@ -236,17 +263,13 @@ class BaseGAN(BaseModel):
         Save model weights to disk.
 
         Args:
-            path (str): Path to save the model.
+            path (str): Save path.
         """
         model_state = {
             "model_name": self.model_name,
             "model_type": self.model_type,
-            "generator_state_dict": (
-                self.generator.state_dict() if self.generator else None
-            ),
-            "discriminator_state_dict": (
-                self.discriminator.state_dict() if self.discriminator else None
-            ),
+            "generator_state_dict": self.generator.state_dict() if self.generator else None,
+            "discriminator_state_dict": self.discriminator.state_dict() if self.discriminator else None,
         }
         torch.save(model_state, path)
         print(f"GAN model saved to {path}")
@@ -256,13 +279,11 @@ class BaseGAN(BaseModel):
         Load model weights from disk.
 
         Args:
-            path (str): Path to load the model from.
+            path (str): Load path.
         """
         checkpoint = torch.load(path, map_location=self.device)
-
         if self.generator and "generator_state_dict" in checkpoint:
             self.generator.load_state_dict(checkpoint["generator_state_dict"])
-
         if self.discriminator and "discriminator_state_dict" in checkpoint:
             self.discriminator.load_state_dict(checkpoint["discriminator_state_dict"])
 
@@ -277,25 +298,10 @@ class BaseGAN(BaseModel):
         Returns:
             Dict[str, Any]: Model summary information.
         """
-        gen_params = (
-            sum(p.numel() for p in self.generator.parameters()) if self.generator else 0
-        )
-        gen_trainable = (
-            sum(p.numel() for p in self.generator.parameters() if p.requires_grad)
-            if self.generator
-            else 0
-        )
-
-        disc_params = (
-            sum(p.numel() for p in self.discriminator.parameters())
-            if self.discriminator
-            else 0
-        )
-        disc_trainable = (
-            sum(p.numel() for p in self.discriminator.parameters() if p.requires_grad)
-            if self.discriminator
-            else 0
-        )
+        gen_params = sum(p.numel() for p in self.generator.parameters()) if self.generator else 0
+        gen_trainable = sum(p.numel() for p in self.generator.parameters() if p.requires_grad) if self.generator else 0
+        disc_params = sum(p.numel() for p in self.discriminator.parameters()) if self.discriminator else 0
+        disc_trainable = sum(p.numel() for p in self.discriminator.parameters() if p.requires_grad) if self.discriminator else 0
 
         return {
             "model_name": self.model_name,
@@ -314,10 +320,10 @@ class BaseGAN(BaseModel):
         Move model to specified device.
 
         Args:
-            device (torch.device): Device to move the model to.
+            device (torch.device): Target device.
 
         Returns:
-            BaseGAN: Self reference for method chaining.
+            BaseGAN: Self.
         """
         self.device = device
         if self.generator:

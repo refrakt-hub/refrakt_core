@@ -1,4 +1,3 @@
-import torch
 from torch.nn.utils import clip_grad_norm_
 from tqdm import tqdm
 
@@ -37,12 +36,16 @@ class MSNTrainer(BaseTrainer):
 
     def update_ema(self, momentum):
         for param, ema_param in zip(
-            self.model.encoder.parameters(), self.model.target_encoder.parameters()
+            self.model.encoder.parameters(),
+            self.model.target_encoder.parameters(),
+            strict=False,
         ):
             ema_param.data.mul_(momentum).add_((1 - momentum) * param.data)
 
         for param, ema_param in zip(
-            self.model.projector.parameters(), self.model.target_projector.parameters()
+            self.model.projector.parameters(),
+            self.model.target_projector.parameters(),
+            strict=False,
         ):
             ema_param.data.mul_(momentum).add_((1 - momentum) * param.data)
 

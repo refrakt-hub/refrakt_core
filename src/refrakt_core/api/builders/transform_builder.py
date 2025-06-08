@@ -1,5 +1,5 @@
 # [file content begin]
-from omegaconf import DictConfig, ListConfig
+from omegaconf import ListConfig
 from torchvision import transforms
 
 from refrakt_core.registry.transform_registry import get_transform

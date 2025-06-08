@@ -1,32 +1,59 @@
-LOSS_REGISTRY = {}
-_imported = False
+"""Loss registry for managing loss functions and classes."""
+
+from typing import Dict, Any, Type, Callable, Union
 
 from refrakt_core.logging import get_global_logger
 
+LOSS_REGISTRY: Dict[str, Union[Type[Any], Callable[..., Any]]] = {}
+_IMPORTED: bool = False
 
-def register_loss(name):
-    def decorator(cls_or_fn):
+
+def register_loss(name: str) -> Callable[[Union[Type[Any],
+                                        Callable[..., Any]]],
+                                        Union[Type[Any],
+                                        Callable[..., Any]]]:
+    """Register a loss class or function with the given name.
+    
+    Args:
+        name: The name to register the loss under.
+        
+    Returns:
+        A decorator function that registers the loss 
+        class or function.
+    """
+    def decorator(cls_or_fn: Union[Type[Any], Callable[..., Any]]) -> Union[Type[Any], Callable[..., Any]]:
         logger = get_global_logger()
         if name in LOSS_REGISTRY:
-            logger.debug(f"Warning: Loss '{name}' already registered. Skipping.")
+            logger.debug("Warning: Loss '%s' already registered. Skipping.", name)
             return cls_or_fn
-        logger.debug(f"Registering loss: {name}")
+        logger.debug("Registering loss: %s", name)
         LOSS_REGISTRY[name] = cls_or_fn
         return cls_or_fn
 
     return decorator
 
 
-def get_loss(name, *args, **kwargs):
-    global _imported
-    if not _imported:
+def get_loss(name: str, *args: Any, **kwargs: Any) -> Any:
+    """Get loss instance by name with optional arguments.
+    
+    Args:
+        name: The name of the loss to retrieve.
+        *args: Positional arguments to pass to the loss constructor.
+        **kwargs: Keyword arguments to pass to the loss constructor.
+        
+    Returns:
+        An instance of the requested loss.
+        
+    Raises:
+        ValueError: If the loss is not found.
+    """
+    global _IMPORTED  # pylint: disable=global-statement
+    if not _IMPORTED:
         # Auto-import custom losses
-        import refrakt_core.losses
-
-        _imported = True
+        _IMPORTED = True
 
         # Add standard PyTorch losses to registry
-        import torch.nn as nn
+        from torch import nn  # pylint: disable=import-outside-toplevel
 
         standard_losses = {
             "mse": nn.MSELoss,
@@ -39,13 +66,15 @@ def get_loss(name, *args, **kwargs):
                 register_loss(loss_name)(loss_class)
 
     if name not in LOSS_REGISTRY:
+        available_losses = list(LOSS_REGISTRY.keys())
         raise ValueError(
-            f"Loss '{name}' not found. Available: {list(LOSS_REGISTRY.keys())}"
+            f"Loss '{name}' not found. Available: {available_losses}"
         )
 
     return LOSS_REGISTRY[name](*args, **kwargs)
 
 
-def log_registry_id():
+def log_registry_id() -> None:
+    """Log the registry ID for debugging purposes."""
     logger = get_global_logger()
-    logger.debug(f"LOSS REGISTRY ID: {id(LOSS_REGISTRY)}")
+    logger.debug("LOSS REGISTRY ID: %s", id(LOSS_REGISTRY))

@@ -1,10 +1,29 @@
-from torch import nn
+"""
+Class implementations that cover the critical blocks of the Swin Transformer.
+
+Modules:
+- SwinBlock
+- AlternateBlock
+"""
+
+import torch
+from torch import Tensor, nn
 
 from refrakt_core.utils.classes.attention import ShiftedWindowMSA
 
 
 class SwinBlock(nn.Module):
-    def __init__(self, embed_dim, num_heads, window_size, mask):
+    """
+    A Swin Transformer block containing LayerNorm, (Shifted) Window MSA, and MLP.
+
+    Args:
+        embed_dim (int): Embedding dimension.
+        num_heads (int): Number of attention heads.
+        window_size (int): Size of attention windows.
+        mask (bool): Whether to apply masking (for shifted windows).
+    """
+
+    def __init__(self, embed_dim: int, num_heads: int, window_size: int, mask: bool):
         super().__init__()
         self.layer_norm = nn.LayerNorm(embed_dim)
         self.dropout = nn.Dropout(0.1)
@@ -17,8 +36,16 @@ class SwinBlock(nn.Module):
             nn.Linear(embed_dim * 4, embed_dim),
         )
 
-    def forward(self, x):
-        height, width = x.shape[1:3]
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Forward pass for the SwinBlock.
+
+        Args:
+            x (Tensor): Input tensor of shape (B, H*W, C).
+
+        Returns:
+            Tensor: Output tensor of shape (B, H*W, C).
+        """
         res1 = self.dropout(self.wmsa(self.layer_norm(x)) + x)
         x = self.layer_norm(res1)
         x = self.mlp(x)
@@ -26,7 +53,17 @@ class SwinBlock(nn.Module):
 
 
 class AlternateSwin(nn.Module):
-    def __init__(self, embed_dim, num_heads, window_size=7):
+    """
+    A module containing two SwinBlocks with alternating attention patterns:
+    one with regular WSA and one with shifted WMSA.
+
+    Args:
+        embed_dim (int): Embedding dimension.
+        num_heads (int): Number of attention heads.
+        window_size (int): Size of attention windows. Default is 7.
+    """
+
+    def __init__(self, embed_dim: int, num_heads: int, window_size: int = 7):
         super().__init__()
         self.wsa = SwinBlock(
             embed_dim=embed_dim,
@@ -35,8 +72,20 @@ class AlternateSwin(nn.Module):
             mask=False,
         )
         self.wmsa = SwinBlock(
-            embed_dim=embed_dim, num_heads=num_heads, window_size=window_size, mask=True
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            window_size=window_size,
+            mask=True,
         )
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Forward pass through alternating WSA and WMSA blocks.
+
+        Args:
+            x (Tensor): Input tensor of shape (B, H*W, C).
+
+        Returns:
+            Tensor: Output tensor after two Swin blocks.
+        """
         return self.wmsa(self.wsa(x))

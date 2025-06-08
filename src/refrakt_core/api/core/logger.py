@@ -3,18 +3,17 @@
 import logging
 import os
 import sys
-import numpy as np
+from datetime import datetime
 from typing import List, Optional, Union
+
+import numpy as np
 import torch
 from torch import Tensor
+
 from refrakt_core.api.core.utils import flatten_and_filter_config
-
-
-from datetime import datetime
 
 # logger.py (only __init__ shown here)
 
-from datetime import datetime
 
 class RefraktLogger:
     def __init__(
@@ -48,7 +47,24 @@ class RefraktLogger:
             self._setup_wandb()
         if "tensorboard" in self.log_types:
             self._setup_tensorboard()
-
+            
+    def init_from_existing(
+        self,
+        existing_logger: logging.Logger,
+        *,
+        log_dir: str = "./logs",
+        log_types: Optional[List[str]] = None,
+        console: bool = True,
+        debug: bool = False,
+    ):
+        self.logger = existing_logger
+        self.debug_enabled = debug
+        self.console = console
+        self.log_types = log_types or []
+        self.log_dir = log_dir
+        self.log_file = None  # Not used in this mode
+        self.wandb_run = None
+        self.tb_writer = None
 
     def _setup_handlers(self, level):
         for handler in self.logger.handlers[:]:
@@ -56,7 +72,9 @@ class RefraktLogger:
 
         file_handler = logging.FileHandler(self.log_file)
         file_handler.setLevel(level)
-        file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        )
         self.logger.addHandler(file_handler)
 
         if self.console:
@@ -68,6 +86,7 @@ class RefraktLogger:
     def _setup_wandb(self):
         try:
             import wandb
+
             self.wandb_run = wandb.init(project="refrakt", dir=self.log_dir)
             self.info("Weights & Biases initialized")
         except ImportError:
@@ -78,6 +97,7 @@ class RefraktLogger:
     def _setup_tensorboard(self):
         try:
             from torch.utils.tensorboard import SummaryWriter
+
             tb_dir = os.path.join(self.log_dir, "tensorboard")
             os.makedirs(tb_dir, exist_ok=True)
             self.tb_writer = SummaryWriter(log_dir=tb_dir)
@@ -97,6 +117,7 @@ class RefraktLogger:
             self.wandb_run.config.update(config)
         if self.tb_writer:
             from torch.utils.tensorboard.summary import hparams
+
             try:
                 filtered_config = flatten_and_filter_config(config)
                 exp, ssi, sei = hparams(filtered_config, {})
@@ -115,13 +136,23 @@ class RefraktLogger:
             except Exception as e:
                 self.error(f"Failed to log model graph: {str(e)}")
 
-    def log_images(self, tag: str, images: Union[Tensor, np.ndarray], step: int, dataformats: str = "NCHW"):
+    def log_images(
+        self,
+        tag: str,
+        images: Union[Tensor, np.ndarray],
+        step: int,
+        dataformats: str = "NCHW",
+    ):
         # Skip if not 4D
         if isinstance(images, torch.Tensor) and images.ndim != 4:
-            self.warning(f"Skipping image log for tag '{tag}': expected 4D tensor, got shape {images.shape}")
+            self.warning(
+                f"Skipping image log for tag '{tag}': expected 4D tensor, got shape {images.shape}"
+            )
             return
         if isinstance(images, np.ndarray) and images.ndim != 4:
-            self.warning(f"Skipping image log for tag '{tag}': expected 4D array, got shape {images.shape}")
+            self.warning(
+                f"Skipping image log for tag '{tag}': expected 4D array, got shape {images.shape}"
+            )
             return
 
         if self.tb_writer:
@@ -133,6 +164,7 @@ class RefraktLogger:
         if self.wandb_run:
             try:
                 import wandb
+
                 if isinstance(images, Tensor):
                     images = images.detach().cpu().numpy()
                 if dataformats == "NCHW":
@@ -142,8 +174,14 @@ class RefraktLogger:
             except Exception as e:
                 self.error(f"WandB image logging failed: {str(e)}")
 
-
-    def log_inference_results(self, inputs: Tensor, outputs: Tensor, targets: Optional[Tensor] = None, step: int = 0, max_images: int = 8):
+    def log_inference_results(
+        self,
+        inputs: Tensor,
+        outputs: Tensor,
+        targets: Optional[Tensor] = None,
+        step: int = 0,
+        max_images: int = 8,
+    ):
         try:
             n = min(inputs.shape[0], max_images)
             inputs = inputs[:n].cpu()
@@ -157,7 +195,9 @@ class RefraktLogger:
             if targets is not None and targets.ndim == 4:
                 self.log_images("Target", targets, step)
 
-            if targets is not None and all(t.ndim == 4 for t in [inputs, outputs, targets]):
+            if targets is not None and all(
+                t.ndim == 4 for t in [inputs, outputs, targets]
+            ):
                 comparisons = torch.cat([inputs, outputs, targets], dim=0)
                 self.log_images("Comparison", comparisons, step)
             elif all(t.ndim == 4 for t in [inputs, outputs]):
@@ -168,19 +208,18 @@ class RefraktLogger:
         except Exception as e:
             self.error(f"Inference visualization failed: {str(e)}")
 
-
-    def info(self, msg: str):
-        self.logger.info(msg)
-
-    def error(self, msg: str):
-        self.logger.error(msg)
-
-    def warning(self, msg: str):
-        self.logger.warning(msg)
-
-    def debug(self, msg):
+    def debug(self, msg: str, *args, **kwargs):
         if self.debug_enabled:
-            self.logger.debug(msg)
+            self.logger.debug(msg, *args, **kwargs)
+
+    def info(self, msg: str, *args, **kwargs):
+        self.logger.info(msg, *args, **kwargs)
+
+    def error(self, msg: str, *args, **kwargs):
+        self.logger.error(msg, *args, **kwargs)
+
+    def warning(self, msg: str, *args, **kwargs):
+        self.logger.warning(msg, *args, **kwargs)
 
     def close(self):
         for handler in self.logger.handlers[:]:

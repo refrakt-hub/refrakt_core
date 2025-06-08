@@ -11,6 +11,7 @@ def test_cross_entropy_basic():
     loss = loss_fn(pred, target)
     assert loss.item() > 0
 
+
 def test_cross_entropy_invalid_shape_pred():
     loss_fn = CrossEntropyLoss()
     pred = torch.randn(4)  # invalid shape
@@ -18,12 +19,14 @@ def test_cross_entropy_invalid_shape_pred():
     with pytest.raises(ValueError):
         loss_fn(pred, target)
 
+
 def test_cross_entropy_invalid_shape_target():
     loss_fn = CrossEntropyLoss()
     pred = torch.randn(4, 10)
     target = torch.randn(4, 1)
     with pytest.raises(ValueError):
         loss_fn(pred, target)
+
 
 def test_cross_entropy_mismatched_batch():
     loss_fn = CrossEntropyLoss()

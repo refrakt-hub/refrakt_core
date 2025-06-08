@@ -24,7 +24,9 @@ def split_dataset(hr_dir, lr_dir, output_dir, split_ratio=0.8, seed=42):
     train_files = all_files[:split_idx]
     val_files = all_files[split_idx:]
 
-    for phase, file_list in zip(["train", "val"], [train_files, val_files]):
+    for phase, file_list in zip(
+        ["train", "val"], [train_files, val_files], strict=False
+    ):
         hr_out = Path(output_dir) / phase / "HR"
         lr_out = Path(output_dir) / phase / "LR"
         hr_out.mkdir(parents=True, exist_ok=True)

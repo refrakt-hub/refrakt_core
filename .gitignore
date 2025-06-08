@@ -170,3 +170,5 @@ zips/
 requirements.txt
 .pypirc
 checkpoints/
+logs/
+legacy/

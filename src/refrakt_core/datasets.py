@@ -1,10 +1,15 @@
+"""
+Contains a set of dataset class for family of models. 
+Available dataset classes are: 
+- ContrastiveDataset
+- SuperResolutionDataset
+"""
+
 import os
 from pathlib import Path
 
-import torch
-import torch.nn as nn
-import torchvision.transforms as T
 from PIL import Image
+from torch import nn
 from torch.utils.data import Dataset
 
 from refrakt_core.registry.dataset_registry import register_dataset
@@ -12,6 +17,10 @@ from refrakt_core.registry.dataset_registry import register_dataset
 
 @register_dataset("contrastive")
 class ContrastiveDataset(Dataset):
+    """
+    A wrapper that sets up a dataset class for contrastive learning methods, 
+    like SimCLR and DINO. Further models to be implemented in the future. 
+    """
     def __init__(self, base_dataset, transform=None, train=None):
         self.base_dataset = base_dataset
         self.transform = transform
@@ -44,6 +53,9 @@ class ContrastiveDataset(Dataset):
 
 @register_dataset("super_resolution")
 class SuperResolutionDataset(Dataset):
+    """
+    A dataset class for super-resolution based training. 
+    """
     def __init__(self, lr_dir, hr_dir, transform=None, train=None):
         self.lr_dir = Path(lr_dir)
         self.hr_dir = Path(hr_dir)

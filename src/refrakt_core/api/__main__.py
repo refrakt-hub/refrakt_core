@@ -44,12 +44,11 @@ def main():
         base_log_dir=args.log_dir,
         log_types=args.log_type,
         console=args.console,
-        debug=args.debug
+        debug=args.debug,
     )
 
     logger.info(f"Logging initialized. Log file: {logger.log_file}")
     set_global_logger(logger)
-
 
     # Now import pipeline components
     from refrakt_core.api.inference import inference

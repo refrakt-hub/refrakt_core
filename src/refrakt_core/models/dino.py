@@ -1,21 +1,43 @@
+"""
+DINO: Self-Distillation with No Labels
+
+Implements the DINO head and wrapper model using student-teacher architecture with
+momentum update and normalized projection heads.
+"""
+
+from typing import Optional
+
 import torch
-import torch.nn as nn
+from torch import nn, Tensor
 import torch.nn.functional as F
 
 from refrakt_core.models.templates.base import BaseModel
-from refrakt_core.registry.model_registry import register_model
 
 
 class DINOHead(nn.Module):
     """
-    Projection head for DINO as used in the paper.
+    Projection head used in DINO. Applies multiple linear layers followed by GELU,
+    then a weight-normalized linear layer without bias and L2 normalization.
+
+    Args:
+        in_dim (int): Input feature dimension.
+        out_dim (int): Output projection dimension (default: 65536).
+        hidden_dim (int): Hidden dimension in the MLP (default: 2048).
+        bottleneck_dim (int): Final dimension before output layer (default: 256).
+        num_layers (int): Number of linear layers in MLP (default: 3).
     """
 
     def __init__(
-        self, in_dim, out_dim=65536, hidden_dim=2048, bottleneck_dim=256, num_layers=3
-    ):
+        self,
+        *,
+        in_dim: int,
+        out_dim: int = 65536,
+        hidden_dim: int = 2048,
+        bottleneck_dim: int = 256,
+        num_layers: int = 3,
+    ) -> None:
         super().__init__()
-        layers = []
+        layers: list[nn.Module] = []
         for i in range(num_layers):
             if i == 0:
                 layers.append(nn.Linear(in_dim, hidden_dim))
@@ -26,13 +48,22 @@ class DINOHead(nn.Module):
             if i < num_layers - 1:
                 layers.append(nn.GELU())
 
-        self.mlp = nn.Sequential(*layers)
-        self.last_layer = nn.utils.weight_norm(
+        self.mlp: nn.Sequential = nn.Sequential(*layers)
+        self.last_layer: nn.Module = nn.utils.weight_norm(
             nn.Linear(bottleneck_dim, out_dim, bias=False)
         )
         self.last_layer.weight_g.data.fill_(1.0)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Forward pass through the DINO projection head.
+
+        Args:
+            x (Tensor): Input features of shape (B, D)
+
+        Returns:
+            Tensor: Normalized projected features of shape (B, out_dim)
+        """
         x = self.mlp(x)
         x = F.normalize(self.last_layer(x), dim=-1)
         return x
@@ -40,36 +71,50 @@ class DINOHead(nn.Module):
 
 class DINOModel(BaseModel):
     """
-    DINO model that returns multi-view projections for student and teacher networks.
+    DINO self-supervised model wrapper that manages student and teacher heads.
+
+    Args:
+        backbone (nn.Module): Feature extractor that outputs flat feature vectors.
+        model_name (str): Model identifier.
+        out_dim (int): Output dimension for the projection head.
     """
 
-    def __init__(self, backbone, model_name="dino", out_dim=65536):
+    def __init__(
+        self,
+        backbone: nn.Module,
+        model_name: str = "dino",
+        out_dim: int = 65536,
+    ) -> None:
         super().__init__(model_name=model_name, model_type="contrastive")
-        self.backbone = backbone  # must output flat features
-        self.student_head = DINOHead(in_dim=backbone.feature_dim, out_dim=out_dim)
-        self.teacher_head = DINOHead(in_dim=backbone.feature_dim, out_dim=out_dim)
+        self.backbone: nn.Module = backbone
+        self.student_head: DINOHead = DINOHead(in_dim=backbone.feature_dim, out_dim=out_dim)
+        self.teacher_head: DINOHead = DINOHead(in_dim=backbone.feature_dim, out_dim=out_dim)
         self.teacher_head.load_state_dict(self.student_head.state_dict())
+
         for param in self.teacher_head.parameters():
             param.requires_grad = False
 
-    def forward(self, x, teacher=False):
+    def forward(self, x: Tensor, teacher: bool = False) -> Tensor:
         """
+        Forward pass through student or teacher head.
+
         Args:
-            x (Tensor): Input tensor of shape (B, C, H, W)
-            teacher (bool): If True, use teacher head
+            x (Tensor): Input tensor of shape (B, C, H, W).
+            teacher (bool): If True, use teacher head.
 
         Returns:
-            Tensor: Projected features
+            Tensor: Projected feature of shape (B, out_dim)
         """
         features = self.backbone(x)
-        if teacher:
-            return self.teacher_head(features)
-        return self.student_head(features)
+        return self.teacher_head(features) if teacher else self.student_head(features)
 
     @torch.no_grad()
-    def update_teacher(self, momentum=0.996):
+    def update_teacher(self, momentum: float = 0.996) -> None:
         """
-        EMA update for teacher parameters.
+        Exponential Moving Average (EMA) update of teacher parameters.
+
+        Args:
+            momentum (float): Momentum factor for EMA update.
         """
         for student_param, teacher_param in zip(
             self.student_head.parameters(), self.teacher_head.parameters()

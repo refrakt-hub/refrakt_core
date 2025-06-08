@@ -1,9 +1,10 @@
+"""Abstract base model definition for neural network architectures."""
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
-import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 class BaseModel(nn.Module, ABC):
@@ -12,14 +13,9 @@ class BaseModel(nn.Module, ABC):
 
     This class provides a common interface for different model architectures,
     including methods for forward pass, prediction, and saving/loading model weights.
-
-    Attributes:
-        device (torch.device): Device to run the model on.
-        model_name (str): Name identifier for the model.
-        model_type (str): Type/architecture of the model.
     """
 
-    def __init__(self, model_name: str = "base_model", model_type: str = "generic"):
+    def __init__(self, model_name: str = "base_model", model_type: str = "generic") -> None:
         """
         Initialize the base model.
 
@@ -27,10 +23,10 @@ class BaseModel(nn.Module, ABC):
             model_name (str): Name identifier for the model. Defaults to "base_model".
             model_type (str): Type/architecture of the model. Defaults to "generic".
         """
-        super(BaseModel, self).__init__()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model_name = model_name
-        self.model_type = model_type
+        super().__init__()
+        self.device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model_name: str = model_name
+        self.model_type: str = model_type
 
     @abstractmethod
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -45,36 +41,27 @@ class BaseModel(nn.Module, ABC):
         """
         pass
 
-    def predict(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+    def predict(self, x: torch.Tensor, **kwargs: Any) -> torch.Tensor:
         """
         Perform prediction with the model.
 
         Args:
             x (torch.Tensor): Input tensor.
-            **kwargs: Additional arguments for specific model implementations.
+            **kwargs: Additional arguments (e.g., return_probs for classifiers).
 
         Returns:
             torch.Tensor: Model predictions.
         """
-        self.eval()  # Set model to evaluation mode
-        with torch.no_grad():  # Disable gradient computation
-            if x.device != self.device:
-                x = x.to(self.device)
+        self.eval()
+        with torch.no_grad():
+            x = x.to(self.device) if x.device != self.device else x
             output = self.forward(x)
 
-            # Handle different output types based on model_type
             if self.model_type == "classifier":
-                # For classifiers, return class probabilities or indices
-                if kwargs.get("return_probs", False):
-                    return torch.softmax(output, dim=1)
-                else:
-                    return torch.argmax(output, dim=1)
-            elif self.model_type == "autoencoder":
-                # For autoencoders, return reconstructed output
+                return torch.softmax(output, dim=1) if kwargs.get("return_probs", False) else torch.argmax(output, dim=1)
+            if self.model_type == "autoencoder":
                 return output
-            else:
-                # Default behavior
-                return output
+            return output
 
     def save_model(self, path: str) -> None:
         """
@@ -83,7 +70,7 @@ class BaseModel(nn.Module, ABC):
         Args:
             path (str): Path to save the model.
         """
-        model_state = {
+        model_state: Dict[str, Any] = {
             "model_state_dict": self.state_dict(),
             "model_name": self.model_name,
             "model_type": self.model_type,
@@ -113,11 +100,10 @@ class BaseModel(nn.Module, ABC):
         """
         total_params = sum(p.numel() for p in self.parameters())
         trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-
         return {
             "model_name": self.model_name,
             "model_type": self.model_type,
-            "device": self.device,
+            "device": str(self.device),
             "total_parameters": total_params,
             "trainable_parameters": trainable_params,
         }
@@ -133,4 +119,4 @@ class BaseModel(nn.Module, ABC):
             BaseModel: Self reference for method chaining.
         """
         self.device = device
-        return self.to(device)
+        return super().to(device)  # type: ignore[return-value]

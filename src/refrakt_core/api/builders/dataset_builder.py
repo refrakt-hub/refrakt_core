@@ -4,7 +4,8 @@ from typing import Any
 from omegaconf import DictConfig, OmegaConf
 
 from refrakt_core.api.builders.transform_builder import build_transform
-from refrakt_core.registry.dataset_registry import DATASET_REGISTRY, get_dataset
+from refrakt_core.registry.dataset_registry import (DATASET_REGISTRY,
+                                                    get_dataset)
 
 
 def build_dataset(cfg: DictConfig) -> Any:

@@ -2,7 +2,6 @@ import importlib
 import os
 
 from refrakt_core.registry.model_registry import register_model
-from refrakt_core.wrappers.dino import DINOModelWrapper
 
 __all__ = ["register_model"]
 

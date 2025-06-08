@@ -83,7 +83,6 @@ def test(
         logger.info("\nRunning evaluation...")
         eval_results = trainer.evaluate()
 
-
         # Run evaluation
         # ====== NEW: Visualize test results ======
         try:
@@ -95,17 +94,17 @@ def test(
             else:
                 inputs = sample_batch.to(components.device)
                 targets = None
-                
+
             # Run model
             with torch.no_grad():
                 outputs = components.model(inputs)
-                
+
             # Log visualization
             logger.log_inference_results(
                 inputs=inputs,
                 outputs=outputs,
                 targets=targets,
-                step=0  # Use step 0 for test
+                step=0,  # Use step 0 for test
             )
         except Exception as e:
             logger.error(f"Test visualization failed: {str(e)}")

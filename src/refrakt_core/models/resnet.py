@@ -1,4 +1,12 @@
-import torch.nn as nn
+"""
+ResNet model definitions for Refrakt framework.
+
+Includes ResNet18, ResNet50, ResNet101, and ResNet152 with support for custom
+block definitions (Basic and Bottleneck), custom input channels, and projection layers.
+"""
+
+from typing import List, Optional, Type, Union
+from torch import nn, Tensor
 
 from refrakt_core.models.templates.models import BaseClassifier
 from refrakt_core.registry.model_registry import register_model
@@ -6,41 +14,68 @@ from refrakt_core.utils.classes.resnet import BottleneckBlock, ResidualBlock
 
 
 class ResNet(BaseClassifier):
+    """
+    ResNet base class for deep residual networks.
+
+    Args:
+        block (nn.Module): Residual block type (e.g., BasicBlock or BottleneckBlock).
+        layers (list): Number of blocks in each layer.
+        in_channels (int): Number of input channels.
+        num_classes (int): Number of output classes.
+        model_name (str): Model name for registration and tracking.
+    """
+
     def __init__(
-        self, block, layers, in_channels=3, num_classes=10, model_name="resnet"
-    ):
-        super(ResNet, self).__init__(num_classes=num_classes, model_name=model_name)
-        self.inplanes = 64
-        self.conv1 = nn.Sequential(
+        self,
+        block: Type[nn.Module],
+        layers: List[int],
+        in_channels: int = 3,
+        num_classes: int = 10,
+        model_name: str = "resnet",
+    ) -> None:
+        super().__init__(num_classes=num_classes, model_name=model_name)
+
+        self.inplanes: int = 64
+        self.conv1: nn.Sequential = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3),
             nn.BatchNorm2d(64),
             nn.ReLU(),
         )
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer0 = self._make_layer(block, 64, layers[0], stride=1)
-        self.layer1 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer2 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer3 = self._make_layer(block, 512, layers[3], stride=2)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.feature_dim = 512  # Required by DINOModel
-        self.projection = nn.Identity()  # Default identity unless overridden
-        self.fc = nn.Linear(self.feature_dim, num_classes)
+        self.maxpool: nn.Module = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-    def _make_layer(self, block, planes, blocks, stride=1):
-        downsample = None
+        self.layer0: nn.Sequential = self._make_layer(block, 64, layers[0], stride=1)
+        self.layer1: nn.Sequential = self._make_layer(block, 128, layers[1], stride=2)
+        self.layer2: nn.Sequential = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer3: nn.Sequential = self._make_layer(block, 512, layers[3], stride=2)
+
+        self.avgpool: nn.Module = nn.AdaptiveAvgPool2d((1, 1))
+
+        self.feature_dim: int = 512  # Required by DINOModel
+        self.projection: nn.Module = nn.Identity()
+        self.fc: nn.Linear = nn.Linear(self.feature_dim, num_classes)
+
+    def _make_layer(
+        self,
+        block: Type[nn.Module],
+        planes: int,
+        blocks: int,
+        stride: int = 1
+    ) -> nn.Sequential:
+        downsample: Optional[nn.Sequential] = None
         if stride != 1 or self.inplanes != planes:
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes, kernel_size=1, stride=stride),
                 nn.BatchNorm2d(planes),
             )
-        layers = [block(self.inplanes, planes, stride, downsample)]
+
+        layers: List[nn.Module] = [block(self.inplanes, planes, stride, downsample)]
         self.inplanes = planes
-        for i in range(1, blocks):
+        for _ in range(1, blocks):
             layers.append(block(self.inplanes, planes))
 
         return nn.Sequential(*layers)
 
-    def forward(self, x, return_features=False):
+    def forward(self, x: Tensor, return_features: bool = False) -> Union[Tensor, Tensor]:
         x = self.conv1(x)
         x = self.maxpool(x)
         x = self.layer0(x)
@@ -53,14 +88,13 @@ class ResNet(BaseClassifier):
 
         if return_features:
             return x
-
-        x = self.fc(x)
-        return x
+        return self.fc(x)
 
 
 @register_model("resnet18")
 class ResNet18(ResNet):
-    def __init__(self, in_channels=3, num_classes=10):
+    """ResNet-18 variant using basic residual blocks."""
+    def __init__(self, in_channels: int = 3, num_classes: int = 10) -> None:
         super().__init__(
             block=ResidualBlock,
             layers=[2, 2, 2, 2],
@@ -71,7 +105,8 @@ class ResNet18(ResNet):
 
 @register_model("resnet50")
 class ResNet50(ResNet):
-    def __init__(self, in_channels=3, num_classes=10):
+    """ResNet-50 variant using bottleneck blocks."""
+    def __init__(self, in_channels: int = 3, num_classes: int = 10) -> None:
         super().__init__(
             block=BottleneckBlock,
             layers=[3, 4, 6, 3],
@@ -82,7 +117,8 @@ class ResNet50(ResNet):
 
 @register_model("resnet101")
 class ResNet101(ResNet):
-    def __init__(self, in_channels=3, num_classes=10):
+    """ResNet-101 variant using bottleneck blocks."""
+    def __init__(self, in_channels: int = 3, num_classes: int = 10) -> None:
         super().__init__(
             block=BottleneckBlock,
             layers=[3, 4, 23, 3],
@@ -93,7 +129,8 @@ class ResNet101(ResNet):
 
 @register_model("resnet152")
 class ResNet152(ResNet):
-    def __init__(self, in_channels=3, num_classes=10):
+    """ResNet-152 variant using bottleneck blocks."""
+    def __init__(self, in_channels: int = 3, num_classes: int = 10) -> None:
         super().__init__(
             block=BottleneckBlock,
             layers=[3, 8, 36, 3],

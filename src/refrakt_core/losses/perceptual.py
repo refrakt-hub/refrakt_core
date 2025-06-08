@@ -1,4 +1,12 @@
-import torch.nn as nn
+"""
+Perceptual loss implementation using a pre-trained VGG19 network.
+"""
+
+from typing import Dict
+
+import torch
+import torch.nn.functional as F
+from torch import Tensor, nn
 from torchvision.models import vgg19
 
 from refrakt_core.losses.templates.base import BaseLoss
@@ -9,36 +17,54 @@ from refrakt_core.registry.loss_registry import register_loss
 class PerceptualLoss(BaseLoss):
     """
     Perceptual Loss using a pre-trained VGG19 network.
-    Computes the MSE loss between the feature maps of the predicted and target images.
+
+    Computes the MSE loss between feature maps extracted from
+    a fixed VGG19 model for the super-resolved and high-resolution images.
     """
 
-    def __init__(self, device="cuda"):
+    def __init__(self, device: str = "cuda") -> None:
+        """
+        Args:
+            device (str): Device to load the VGG network onto.
+        """
         super().__init__(name="PerceptualLoss")
-        vgg = vgg19(pretrained=True).features[:36].to(device).eval()
+
+        vgg: nn.Sequential = vgg19(pretrained=True).features[:36].to(device).eval()
         for param in vgg.parameters():
             param.requires_grad = False
-        self.vgg = vgg
-        self.device = device
+
+        self.vgg: nn.Sequential = vgg
+        self.device: str = device
+
         self.freeze()
 
-    def forward(self, sr, hr):
+    def forward(self, sr: Tensor, hr: Tensor) -> Tensor:
         """
-        Forward pass to compute perceptual loss.
-        Args:
-            sr (torch.Tensor): Super-resolved image of shape (N, C, H, W).
-            hr (torch.Tensor): High-resolution target image of shape (N, C, H, W).
-        Returns:
-            torch.Tensor: Perceptual loss (MSE between feature maps).
-        """
-        sr_features = self.vgg(sr)
-        hr_features = self.vgg(hr)
-        return nn.functional.mse_loss(sr_features, hr_features)
+        Compute perceptual loss between super-resolved and high-resolution images.
 
-    def get_config(self):
+        Args:
+            sr (Tensor): Super-resolved image of shape (N, C, H, W).
+            hr (Tensor): High-resolution target image of shape (N, C, H, W).
+
+        Returns:
+            Tensor: Scalar loss computed as MSE between VGG19 feature maps.
+        """
+        sr_features: Tensor = self.vgg(sr)
+        hr_features: Tensor = self.vgg(hr)
+
+        if sr_features.shape != hr_features.shape:
+            raise ValueError(
+                f"Feature shape mismatch: {sr_features.shape} vs {hr_features.shape}"
+            )
+
+        return F.mse_loss(sr_features, hr_features)
+
+    def get_config(self) -> Dict[str, str]:
         """
         Get the configuration of the loss function.
+
         Returns:
-            dict: Configuration dictionary.
+            dict: Configuration dictionary with model and layer info.
         """
         return {
             **super().get_config(),

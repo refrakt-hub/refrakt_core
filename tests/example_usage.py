@@ -29,13 +29,13 @@ def example_usage():
     x_resnet = torch.randn(batch_size, 3, img_size, img_size).to(device)
 
     # Make predictions
-    convnext_preds = convnext_model.predict(x_convnext)
-    autoencoder_preds = autoencoder_model.predict(x_autoencoder)
-    resnet_preds = resnet_model.predict(x_resnet)
+    convnext_model.predict(x_convnext)
+    autoencoder_model.predict(x_autoencoder)
+    resnet_model.predict(x_resnet)
 
     # Get probabilities for classification models
-    convnext_probs = convnext_model.predict_proba(x_convnext)
-    resnet_probs = resnet_model.predict_proba(x_resnet)
+    convnext_model.predict_proba(x_convnext)
+    resnet_model.predict_proba(x_resnet)
 
     # Get model summaries
     print(convnext_model.summary())
