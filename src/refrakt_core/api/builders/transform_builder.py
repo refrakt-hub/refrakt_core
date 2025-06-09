@@ -29,14 +29,14 @@ def build_transform(cfg) -> Callable:
         params = t.get("params", {})
 
         # Handle nested transform blocks like RandomApply
-        if name.lower() == "RandomApply":
+        if name.lower() == "randomapply":
             nested_cfgs = params.get("transforms", [])
             nested_transforms = build_transform(nested_cfgs)
 
             if isinstance(nested_transforms, transforms.Compose):
                 nested_transforms = nested_transforms.transforms
 
-            transform = get_transform("RandomApply", transforms=nested_transforms, p=params.get("p", 0.5))
+            transform = get_transform("RandomApply", nested_transforms, p=params.get("p", 0.5))
         else:
             transform = get_transform(name, **params)
 

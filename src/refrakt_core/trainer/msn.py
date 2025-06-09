@@ -54,7 +54,17 @@ class MSNTrainer(BaseTrainer):
         self.scheduler = scheduler
         self.ema_base: float = kwargs.pop("ema_base", 0.996)
         self.grad_clip: Optional[float] = kwargs.pop("grad_clip", None)
-        self.optimizer = optimizer_cls(model.parameters(), optimizer_args or {})
+        
+        if optimizer_args is None:
+            optimizer_args = {"lr": 1e-4}
+        
+        # Convert DictConfig to regular dict if needed
+        from omegaconf import DictConfig
+        if isinstance(optimizer_args, DictConfig):
+            from omegaconf import OmegaConf
+            optimizer_args = OmegaConf.to_container(optimizer_args, resolve=True)
+        
+        self.optimizer = optimizer_cls(self.model.parameters(), **optimizer_args)
         self.global_step = 0
 
     def update_ema(self, momentum: float) -> None:

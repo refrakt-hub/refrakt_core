@@ -187,6 +187,8 @@ class RefraktLogger:
     ) -> None:
         """Visualize inference results with inputs, outputs, and targets."""
         try:
+            import torch.nn.functional as F
+
             n = min(inputs.shape[0], max_images)
             inputs = inputs[:n].cpu()
             outputs = outputs[:n].cpu()
@@ -199,18 +201,23 @@ class RefraktLogger:
             if targets is not None and targets.ndim == 4:
                 self.log_images("Target", targets, step)
 
-            if targets is not None and all(
-                t.ndim == 4 for t in [inputs, outputs, targets]
-            ):
-                comparisons = torch.cat([inputs, outputs, targets], dim=0)
-                self.log_images("Comparison", comparisons, step)
-            elif all(t.ndim == 4 for t in [inputs, outputs]):
-                comparisons = torch.cat([inputs, outputs], dim=0)
-                self.log_images("Input_vs_Output", comparisons, step)
+            # Upsample inputs to match output/target resolution for side-by-side comparison
+            if outputs.ndim == 4:
+                target_size = outputs.shape[-2:]
+                inputs_up = F.interpolate(inputs, size=target_size, mode="bicubic", align_corners=False)
+
+                if targets is not None and targets.ndim == 4:
+                    comparisons = torch.cat([inputs_up, outputs, targets], dim=0)
+                    self.log_images("Comparison", comparisons, step)
+                else:
+                    comparisons = torch.cat([inputs_up, outputs], dim=0)
+                    self.log_images("Input_vs_Output", comparisons, step)
 
             self.info(f"Logged inference visualization for {n} samples")
+
         except (RuntimeError, ValueError) as err:
             self.error(f"Inference visualization failed: {str(err)}")
+
 
     def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
         """Log debug message."""
