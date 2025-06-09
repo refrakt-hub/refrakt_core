@@ -12,7 +12,7 @@ dataset:
 
 dataloader:
   params:
-    batch_size: 128
+    batch_size: 16
     shuffle: true
     num_workers: 4
     drop_last: false
