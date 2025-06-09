@@ -76,10 +76,11 @@ class AETrainer(BaseTrainer):
                 inputs = inputs.to(self.device)
 
                 self.optimizer.zero_grad()
-                raw_outputs = self._unwrap_output(self.model(inputs))
-                if isinstance(raw_outputs, dict):
-                    raw_outputs = raw_outputs["recon"]
-                loss = self.loss_fn(raw_outputs, inputs)
+                raw_outputs = self.model(inputs)
+                outputs = self._unwrap_output(raw_outputs)
+                # if isinstance(raw_outputs, dict):
+                #     raw_outputs = raw_outputs["recon"]
+                loss = self.loss_fn(outputs, inputs)
                 loss.backward()
                 self.optimizer.step()
 
@@ -117,31 +118,35 @@ class AETrainer(BaseTrainer):
                 inputs = inputs.to(self.device)
 
                 
-                raw_outputs = self._unwrap_output(self.model(inputs))
-                if isinstance(raw_outputs, dict):
-                    raw_outputs = raw_outputs["recon"]
-                loss = self.loss_fn(raw_outputs, inputs)
+                raw_outputs = self.model(inputs)
+                outputs = self._unwrap_output(raw_outputs)
+                # if isinstance(raw_outputs, dict):
+                #     raw_outputs = raw_outputs["recon"]
+                loss = self.loss_fn(outputs, inputs)
                 total_loss += loss.item()
 
         avg_val_loss = total_loss / len(self.val_loader)
         print(f"Validation Loss: {avg_val_loss:.4f}")
         return avg_val_loss
     
-    def _unwrap_output(self, output: Union[Dict, torch.Tensor]) -> torch.Tensor:
+    def _unwrap_output(self, output):
         """
-        Extracts the reconstruction output from the model's forward pass.
-
-        If the model returns a dict (e.g., VAE or transformer), this fetches 'recon'.
-        Otherwise, returns the tensor directly.
+        Unwrap model output for loss computation.
+        
+        For MAE models, return the full dictionary.
+        For other autoencoder models, extract the reconstruction tensor.
         """
         if isinstance(output, dict):
-            if "recon" in output:
+            # Check if this is MAE output (has mask and original_patches)
+            if "mask" in output and "original_patches" in output:
+                return output  # Return full dictionary for MAE
+            elif "recon" in output:
                 return output["recon"]
             elif "output" in output:
                 return output["output"]
-            raise KeyError("Expected 'recon' or 'output' key in model output.")
+            else:
+                raise KeyError("Expected 'recon' or 'output' key in model output.")
         return output
-
 
 
     def _extract_inputs(self, batch: Union[torch.Tensor, Dict, list, tuple]) -> torch.Tensor:
