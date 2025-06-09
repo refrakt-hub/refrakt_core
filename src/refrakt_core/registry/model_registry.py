@@ -44,6 +44,7 @@ def get_model(name: str, *args: Any, **kwargs: Any) -> Any:
     Raises:
         ValueError: If the model is not found.
     """
+    from refrakt_core.wrappers.dino import DINOModelWrapper
     global _IMPORTED  # pylint: disable=global-statement
     if not _IMPORTED:
         # Trigger import of models

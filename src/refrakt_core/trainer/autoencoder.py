@@ -65,6 +65,8 @@ class AETrainer(BaseTrainer):
         Args:
             num_epochs (int): Number of epochs to train for.
         """
+        best_loss = float('inf')
+        
         for epoch in range(num_epochs):
             self.model.train()
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
@@ -81,6 +83,21 @@ class AETrainer(BaseTrainer):
                 self.optimizer.step()
 
                 loop.set_postfix({"loss": loss.item()})
+
+            # Step scheduler if provided
+            if self.scheduler:
+                self.scheduler.step()
+                lr = self.optimizer.param_groups[0]["lr"]
+                print(f"Epoch {epoch + 1} complete. Learning rate: {lr:.6f}")
+
+            # Evaluate and save checkpoints
+            current_loss = self.evaluate()
+            if current_loss < best_loss:
+                best_loss = current_loss
+                self.save(suffix="best_model")
+                print(f"New best model saved with loss: {best_loss:.4f}")
+
+            self.save(suffix="latest")
 
     def evaluate(self) -> float:
         """
