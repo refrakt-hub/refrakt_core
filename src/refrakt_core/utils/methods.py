@@ -230,3 +230,26 @@ def random_patch_masking(x: torch.Tensor, mask_ratio=0.6, patch_size=16):
         )
         x_masked[i] *= mask.unsqueeze(0)
     return x_masked
+
+def setup_device_and_model(model, device, logger):
+    """Setup device and wrap model with DataParallel if multiple GPUs available."""
+    
+    # Check GPU availability
+    if torch.cuda.is_available():
+        gpu_count = torch.cuda.device_count()
+        logger.info(f"Found {gpu_count} GPU(s) available")
+        
+        if gpu_count > 1:
+            logger.info(f"Using DataParallel with {gpu_count} GPUs: {[torch.cuda.get_device_name(i) for i in range(gpu_count)]}")
+            model = nn.DataParallel(model)
+            # Set primary device
+            device = torch.device(f"cuda:{model.device_ids[0]}")
+        else:
+            logger.info(f"Using single GPU: {torch.cuda.get_device_name(0)}")
+            device = torch.device("cuda:0")
+    else:
+        logger.info("CUDA not available, using CPU")
+        device = torch.device("cpu")
+    
+    model = model.to(device)
+    return model, device

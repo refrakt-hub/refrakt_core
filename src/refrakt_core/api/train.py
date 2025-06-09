@@ -9,14 +9,10 @@ from omegaconf import OmegaConf
 
 from refrakt_core.api.core.logger import RefraktLogger
 
-# Add project root to path
-# project_root = Path(__file__).parent.parent.resolve()
-# sys.path.append(str(project_root))
 gc.collect()
 torch.cuda.empty_cache()
 
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
-# Import new builders
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.logging import get_global_logger
 

@@ -76,8 +76,7 @@ def test(
             components.optimizer,
             components.scheduler,
             components.device,
-            modules,
-            save_dir=None,
+            modules,save_dir=None,  # No save_dir needed for evaluation
         )
 
         trainer.logger = logger

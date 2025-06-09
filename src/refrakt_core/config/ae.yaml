@@ -24,7 +24,7 @@ model:
   params:
     input_dim: 784
     hidden_dim: 32
-    type: "simple"
+    type: "vae"
 
 loss:
   name: "mse"

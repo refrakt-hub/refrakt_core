@@ -101,14 +101,31 @@ def inference(
 
         with torch.no_grad():
             for batch_idx, batch in enumerate(data_loader):
-                if isinstance(batch, (list, tuple)):
+                if isinstance(batch, dict):
+                    # Try the most common keys first
+                    for key in ["image", "lr", "input"]:
+                        if key in batch:
+                            inputs = batch[key].to(device)
+                            break
+                    else:
+                        raise KeyError("Expected one of ['image', 'lr', 'input'] in batch dict.")
+
+                    # Optional: handle target if present
+                    for tgt_key in ["label", "target", "hr"]:
+                        if tgt_key in batch:
+                            targets = batch[tgt_key].to(device)
+                            break
+                    else:
+                        targets = None
+
+                elif isinstance(batch, (list, tuple)):
                     inputs = batch[0].to(device)
-                    # ====== NEW: Store targets if available ======
-                    targets = batch[1] if len(batch) > 1 else None
-                    # ====== END NEW ======
+                    targets = batch[1].to(device) if len(batch) > 1 else None
+
                 else:
                     inputs = batch.to(device)
                     targets = None
+
 
                 outputs = model(inputs)
 

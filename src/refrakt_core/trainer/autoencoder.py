@@ -77,7 +77,8 @@ class AETrainer(BaseTrainer):
 
                 self.optimizer.zero_grad()
                 raw_outputs = self.model(inputs)
-
+                if isinstance(raw_outputs, dict):
+                    raw_outputs = raw_outputs["recon"]
                 loss = self.loss_fn(raw_outputs, inputs)
                 loss.backward()
                 self.optimizer.step()
@@ -115,7 +116,10 @@ class AETrainer(BaseTrainer):
                 inputs = self._extract_inputs(batch)
                 inputs = inputs.to(self.device)
 
+                
                 raw_outputs = self.model(inputs)
+                if isinstance(raw_outputs, dict):
+                    raw_outputs = raw_outputs["recon"]
                 loss = self.loss_fn(raw_outputs, inputs)
                 total_loss += loss.item()
 

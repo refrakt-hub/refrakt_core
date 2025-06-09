@@ -90,9 +90,7 @@ class AutoEncoder(BaseAutoEncoder):
         enc = self.encode(x)
         return enc[0] if self.mode == "vae" else enc
 
-    # ──────────────────────────────────────────────────────────────────────
-    # training / validation steps (unchanged interface)
-    # ──────────────────────────────────────────────────────────────────────
+  
     def training_step(
         self, batch: Tuple[Tensor, ...], optimizer: Optimizer,
         loss_fn: nn.Module, device: torch.device,

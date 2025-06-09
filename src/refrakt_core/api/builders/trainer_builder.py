@@ -55,6 +55,8 @@ def initialize_trainer(
         )
     else:
         # For other trainers (GAN, etc.), pass optimizer instance or dict
+        if "save_dir" in trainer_params:
+            trainer_params.pop("save_dir")
         trainer = trainer_cls(
             model=model,
             train_loader=train_loader,
@@ -63,7 +65,8 @@ def initialize_trainer(
             optimizer=optimizer,
             device=final_device,
             scheduler=scheduler,
-            save_dir=save_dir**trainer_params,
+            save_dir=save_dir,
+            **trainer_params,
         )
 
     return trainer

@@ -121,7 +121,7 @@ class BaseTrainer(ABC):
             path = self.get_checkpoint_path(suffix)
 
         try:
-            checkpoint = torch.load(path, map_location=self.device)
+            checkpoint = torch.load(path, map_location=self.device, weights_only=False)
             self.model.load_state_dict(checkpoint["model_state_dict"])
 
             if self.optimizer is not None and "optimizer_state_dict" in checkpoint:
