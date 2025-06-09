@@ -1,14 +1,10 @@
 # test_msn.py
-import pytest
-import torch
-
-from refrakt_core.models.msn import MSNModel
-
 # test_msn.py
 import pytest
 import torch
 
 from refrakt_core.models.msn import MSNModel
+
 
 @pytest.fixture
 def small_msn():

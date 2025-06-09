@@ -3,6 +3,7 @@ import torch
 
 from refrakt_core.losses.dino import DINOLoss
 
+
 def test_dino_loss_basic():
     loss_fn = DINOLoss(out_dim=256)
     student_output = torch.randn(4, 3, 256)

@@ -4,6 +4,7 @@ import torch
 
 from refrakt_core.models.swin import SwinTransformer
 
+
 @pytest.fixture
 def small_swin():
     return SwinTransformer(in_channels=3, num_classes=10)

@@ -1,10 +1,12 @@
 # test_dino.py
-import pytest
-import torch
 import copy
 
-from refrakt_core.wrappers.dino import DINOBackboneWrapper, DINOModelWrapper
+import pytest
+import torch
+
 from refrakt_core.models.resnet import ResNet18
+from refrakt_core.wrappers.dino import DINOBackboneWrapper, DINOModelWrapper
+
 
 @pytest.fixture
 def dino_model():
@@ -28,6 +30,7 @@ def test_dino_forward(dino_model):
     assert teacher_out.shape == (2, 65536)
 
 import torch.nn as nn
+
 
 def test_dino_update_teacher(dino_model):
     # Grab the first Linear layer from the teacher_head

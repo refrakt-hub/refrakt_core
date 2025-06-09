@@ -1,8 +1,10 @@
 import torch
 from torch import nn
-from refrakt_core.utils.classes.encoder import EncoderBlock, Encoder
+
 from refrakt_core.utils.classes.attention import MHA
+from refrakt_core.utils.classes.encoder import Encoder, EncoderBlock
 from refrakt_core.utils.classes.utils import FeedForward
+
 
 def test_EncoderBlock():
     self_att = MHA(64, 4, 0.1)

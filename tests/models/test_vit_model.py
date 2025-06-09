@@ -4,6 +4,7 @@ import torch
 
 from refrakt_core.models.vit import VisionTransformer
 
+
 @pytest.fixture
 def small_vit():
     return VisionTransformer(

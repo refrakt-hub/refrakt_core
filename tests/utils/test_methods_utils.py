@@ -1,11 +1,9 @@
-import torch
 import pytest
-from refrakt_core.utils.methods import (
-    patchify, 
-    positional_embeddings,
-    random_masking,
-    random_patch_masking
-)
+import torch
+
+from refrakt_core.utils.methods import (patchify, positional_embeddings,
+                                        random_masking, random_patch_masking)
+
 
 def test_patchify():
     images = torch.randn(2, 3, 32, 32)

@@ -1,8 +1,10 @@
-import pytest
 import tempfile
+
+import pytest
 import torch
 
 from refrakt_core.models.srgan import SRGAN
+
 
 # Add device fixture
 @pytest.fixture(scope="module")

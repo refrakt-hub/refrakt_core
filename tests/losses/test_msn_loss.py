@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from refrakt_core.losses.msn import MSNLoss
 
+
 def test_msn_loss_basic():
     loss_fn = MSNLoss()
     B, M, D, K = 4, 3, 64, 100
@@ -20,7 +21,9 @@ def test_msn_loss_basic():
 import pytest
 import torch
 import torch.nn.functional as F
+
 from refrakt_core.losses.msn import MSNLoss
+
 
 def test_msn_loss_shape_mismatch():
     loss_fn = MSNLoss()

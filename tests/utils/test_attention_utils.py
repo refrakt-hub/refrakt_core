@@ -1,6 +1,8 @@
-import torch
 import pytest
-from refrakt_core.utils.classes.attention import MSA, MHA, ShiftedWindowMSA
+import torch
+
+from refrakt_core.utils.classes.attention import MHA, MSA, ShiftedWindowMSA
+
 
 def test_MSA():
     msa = MSA(d=64, n_heads=4)

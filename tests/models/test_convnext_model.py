@@ -5,6 +5,7 @@ import torch.nn as nn
 
 from refrakt_core.models.convnext import ConvNeXt, ConvNeXtBlock
 
+
 @pytest.fixture
 def small_convnext():
     return ConvNeXt(in_channels=3, num_classes=10)

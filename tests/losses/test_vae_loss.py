@@ -3,6 +3,7 @@ import torch
 
 from refrakt_core.losses.vae import VAELoss
 
+
 def test_vae_loss_basic():
     loss_fn = VAELoss()
     B, C, H, W = 4, 3, 32, 32

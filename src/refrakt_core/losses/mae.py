@@ -27,7 +27,7 @@ class MAELoss(BaseLoss):
         super().__init__(name="MAELoss")
         self.normalize_target: bool = normalize_target
 
-    def forward(self, predictions: Dict[str, Tensor]) -> Tensor:
+    def forward(self, predictions: Dict[str, Tensor], targets: Tensor = None) -> Tensor:
         """
         Compute reconstruction loss over masked patches.
 
@@ -36,6 +36,7 @@ class MAELoss(BaseLoss):
                 - "recon_patches" (Tensor): Reconstructed patches of shape (B, N, patch_dim).
                 - "mask" (Tensor): Binary mask tensor of shape (B, N) indicating masked patches.
                 - "original_patches" (Tensor): Ground truth patches of shape (B, N, patch_dim).
+            targets (Tensor, optional): Not used for MAE loss since targets are in predictions dict.
 
         Returns:
             Tensor: Scalar loss value representing masked MSE.

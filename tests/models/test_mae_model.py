@@ -4,6 +4,7 @@ import torch
 
 from refrakt_core.models.mae import MAE
 
+
 @pytest.fixture
 def small_mae():
     return MAE(img_size=64, patch_size=8, encoder_depth=2, decoder_depth=2)

@@ -5,6 +5,7 @@ import torch.nn.functional as F
 
 from refrakt_core.models.simclr import SimCLRModel
 
+
 @pytest.fixture
 def small_simclr():
     return SimCLRModel(proj_dim=64)

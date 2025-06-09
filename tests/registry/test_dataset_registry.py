@@ -1,6 +1,11 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from refrakt_core.registry.dataset_registry import register_dataset, get_dataset, DATASET_REGISTRY
+
+from refrakt_core.registry.dataset_registry import (DATASET_REGISTRY,
+                                                    get_dataset,
+                                                    register_dataset)
+
 
 # Mock logger
 @pytest.fixture

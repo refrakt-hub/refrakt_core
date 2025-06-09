@@ -1,10 +1,16 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from refrakt_core.registry.transform_registry import register_transform, get_transform, TRANSFORM_REGISTRY
+
+from refrakt_core.registry.transform_registry import (TRANSFORM_REGISTRY,
+                                                      get_transform,
+                                                      register_transform)
+
 
 def test_torchvision_fallback():
-    from refrakt_core.registry.transform_registry import get_transform
     from torchvision.transforms import RandomHorizontalFlip
+
+    from refrakt_core.registry.transform_registry import get_transform
 
     t = get_transform("RandomHorizontalFlip", p=0.5)
     assert isinstance(t, RandomHorizontalFlip)

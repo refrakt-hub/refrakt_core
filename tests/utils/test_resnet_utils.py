@@ -1,11 +1,9 @@
 import torch
 from torch import nn
 
-from refrakt_core.utils.classes.resnet import (
-    ResidualBlock, 
-    BottleneckBlock,
-    ViTResidual
-)
+from refrakt_core.utils.classes.resnet import (BottleneckBlock, ResidualBlock,
+                                               ViTResidual)
+
 
 def test_ResidualBlock():
     block = ResidualBlock(64, 64)

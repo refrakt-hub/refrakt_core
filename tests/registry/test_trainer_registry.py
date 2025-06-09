@@ -1,5 +1,9 @@
 import pytest
-from refrakt_core.registry.trainer_registry import register_trainer, get_trainer, TRAINER_REGISTRY
+
+from refrakt_core.registry.trainer_registry import (TRAINER_REGISTRY,
+                                                    get_trainer,
+                                                    register_trainer)
+
 
 def test_trainer_registration():
     """Test trainer class retrieval"""

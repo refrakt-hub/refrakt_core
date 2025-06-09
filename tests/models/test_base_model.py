@@ -1,7 +1,8 @@
 import pytest
 import torch
 
-from refrakt_core.registry.model_registry import MODEL_REGISTRY, get_model, register_model
+from refrakt_core.registry.model_registry import (MODEL_REGISTRY, get_model,
+                                                  register_model)
 
 # Import all models to ensure they are registered
 try:
@@ -9,13 +10,8 @@ try:
 except ImportError:
     # If the above doesn't work, try importing individual models
     try:
-        from refrakt_core.models import autoencoder
-        from refrakt_core.models import resnet
-        from refrakt_core.models import convnext
-        from refrakt_core.models import simclr
-        from refrakt_core.models import srgan
-        from refrakt_core.models import swin
-        from refrakt_core.models import vit
+        from refrakt_core.models import (autoencoder, convnext, resnet, simclr,
+                                         srgan, swin, vit)
     except ImportError:
         pass  # Some models might not be available
 

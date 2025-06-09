@@ -1,15 +1,19 @@
+from unittest.mock import MagicMock, patch
+
+import pytest
 import torch
 from torch import nn
-import pytest
-from unittest.mock import patch, MagicMock
-from refrakt_core.registry.loss_registry import register_loss, get_loss, LOSS_REGISTRY
 
-    
+from refrakt_core.registry.loss_registry import (LOSS_REGISTRY, get_loss,
+                                                 register_loss)
+
+
 def test_custom_loss_registration():
     """Test custom loss registration and retrieval"""
     import torch
-    from refrakt_core.registry.loss_registry import register_loss, get_loss
+
     from refrakt_core.losses.templates.base import BaseLoss
+    from refrakt_core.registry.loss_registry import get_loss, register_loss
 
     @register_loss("custom_mse")
     class CustomMSELoss(BaseLoss):

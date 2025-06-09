@@ -1,5 +1,7 @@
 import torch
+
 from refrakt_core.utils.classes.embedding import Embedding, RelativeEmbedding
+
 
 def test_Embedding():
     embed = Embedding(patch_size=4, C=96)

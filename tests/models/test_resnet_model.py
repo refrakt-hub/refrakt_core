@@ -4,6 +4,7 @@ import torch.nn as nn
 
 from refrakt_core.models.resnet import ResidualBlock, ResNet
 
+
 def get_device(model: torch.nn.Module) -> torch.device:
     return next(model.parameters()).device
 

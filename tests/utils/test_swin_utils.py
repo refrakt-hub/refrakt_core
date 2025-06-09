@@ -1,5 +1,7 @@
 import torch
-from refrakt_core.utils.classes.swin import SwinBlock, AlternateSwin
+
+from refrakt_core.utils.classes.swin import AlternateSwin, SwinBlock
+
 
 def test_SwinBlock():
     B, H, W, C = 2, 7, 7, 96  # window_size = 7 => 49 tokens

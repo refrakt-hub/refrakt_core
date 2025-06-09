@@ -1,8 +1,10 @@
 import torch
 from torch import nn
-from refrakt_core.utils.classes.decoder import DecoderBlock, Decoder
+
 from refrakt_core.utils.classes.attention import MHA
+from refrakt_core.utils.classes.decoder import Decoder, DecoderBlock
 from refrakt_core.utils.classes.utils import FeedForward
+
 
 def test_DecoderBlock():
     masked_att = MHA(64, 4, 0.1)

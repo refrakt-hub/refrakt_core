@@ -3,6 +3,7 @@ import torch
 
 from refrakt_core.losses.mae import MAELoss
 
+
 def test_mae_loss_basic():
     loss_fn = MAELoss()
     B, N, D = 4, 16, 64
