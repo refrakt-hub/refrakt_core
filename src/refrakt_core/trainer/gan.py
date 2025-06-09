@@ -63,6 +63,7 @@ class GANTrainer(BaseTrainer):
         Args:
             num_epochs (int): Total number of training epochs.
         """
+        best_accuracy = 0.0
         for epoch in range(num_epochs):
             self.model.train()
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
@@ -82,6 +83,15 @@ class GANTrainer(BaseTrainer):
                     "gen_loss": losses.get("g_loss", 0),
                     "disc_loss": losses.get("d_loss", 0),
                 })
+                
+            current_accuracy = self.evaluate()
+            if current_accuracy > best_accuracy:
+                best_accuracy = current_accuracy
+                self.save(suffix="best_model")
+                print(f"New best model saved with accuracy: {best_accuracy * 100:.2f}%")
+
+            self.save(suffix="latest")
+
 
     def evaluate(self) -> float:
         """

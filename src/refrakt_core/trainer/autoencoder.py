@@ -76,7 +76,7 @@ class AETrainer(BaseTrainer):
                 inputs = inputs.to(self.device)
 
                 self.optimizer.zero_grad()
-                raw_outputs = self.model(inputs)
+                raw_outputs = self._unwrap_output(self.model(inputs))
                 if isinstance(raw_outputs, dict):
                     raw_outputs = raw_outputs["recon"]
                 loss = self.loss_fn(raw_outputs, inputs)
@@ -117,7 +117,7 @@ class AETrainer(BaseTrainer):
                 inputs = inputs.to(self.device)
 
                 
-                raw_outputs = self.model(inputs)
+                raw_outputs = self._unwrap_output(self.model(inputs))
                 if isinstance(raw_outputs, dict):
                     raw_outputs = raw_outputs["recon"]
                 loss = self.loss_fn(raw_outputs, inputs)
@@ -126,6 +126,23 @@ class AETrainer(BaseTrainer):
         avg_val_loss = total_loss / len(self.val_loader)
         print(f"Validation Loss: {avg_val_loss:.4f}")
         return avg_val_loss
+    
+    def _unwrap_output(self, output: Union[Dict, torch.Tensor]) -> torch.Tensor:
+        """
+        Extracts the reconstruction output from the model's forward pass.
+
+        If the model returns a dict (e.g., VAE or transformer), this fetches 'recon'.
+        Otherwise, returns the tensor directly.
+        """
+        if isinstance(output, dict):
+            if "recon" in output:
+                return output["recon"]
+            elif "output" in output:
+                return output["output"]
+            raise KeyError("Expected 'recon' or 'output' key in model output.")
+        return output
+
+
 
     def _extract_inputs(self, batch: Union[torch.Tensor, Dict, list, tuple]) -> torch.Tensor:
         """
