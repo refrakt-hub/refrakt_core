@@ -169,7 +169,7 @@ class MAE(BaseModel):
         pred = self.decoder_pred(decoded)
 
         return {
-            "recon_patches": pred,
+            "recon": pred,
             "mask": mask,
             "original_patches": self.patchify(imgs),
         }
