@@ -1,10 +1,11 @@
+"""# optimizer_builder.py"""
 from typing import Any, Dict, Union
 
 import torch
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 
 
-def build_optimizer(cfg: OmegaConf, model: Any) -> Union[Any, Dict[str, Any]]:
+def build_optimizer(cfg: DictConfig, model: Any) -> Union[Any, Dict[str, Any]]:
     """Build optimizer(s)"""
     print("Building optimizer...")
     opt_map = {
@@ -27,7 +28,7 @@ def build_optimizer(cfg: OmegaConf, model: Any) -> Union[Any, Dict[str, Any]]:
                         f"Unsupported optimizer for {comp_name}: {opt_name}"
                     )
 
-                opt_params = comp_cfg.get("params", {})
+                opt_params = OmegaConf.to_container(comp_cfg.get("params", {}), resolve=True)
 
                 # Get parameters for specific component
                 if comp_name == "generator":
@@ -49,7 +50,7 @@ def build_optimizer(cfg: OmegaConf, model: Any) -> Union[Any, Dict[str, Any]]:
             if not opt_cls:
                 raise ValueError(f"Unsupported optimizer for {comp_name}: {opt_name}")
 
-            opt_params = comp_cfg.get("params", {})
+            opt_params = OmegaConf.to_container(comp_cfg.get("params", {}), resolve=True)
 
             # Get parameters for specific component
             if comp_name == "generator":
@@ -67,7 +68,7 @@ def build_optimizer(cfg: OmegaConf, model: Any) -> Union[Any, Dict[str, Any]]:
         if not opt_cls:
             raise ValueError(f"Unsupported optimizer: {cfg.optimizer.name}")
 
-        optimizer_params = cfg.optimizer.params or {}
+        optimizer_params = OmegaConf.to_container(cfg.optimizer.params or {}, resolve=True)
         optimizer = opt_cls(model.parameters(), **optimizer_params)
         print(f"Optimizer: {cfg.optimizer.name} with params: {optimizer_params}")
 

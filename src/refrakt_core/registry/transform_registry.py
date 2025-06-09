@@ -1,6 +1,6 @@
 """Transform registry for managing transform classes."""
 
-from typing import Dict, Any, Type, Callable
+from typing import Any, Callable, Dict, Type
 
 from refrakt_core.logging import get_global_logger
 
@@ -51,7 +51,8 @@ def get_transform(name: str, *args: Any, **kwargs: Any) -> Any:
     if name not in TRANSFORM_REGISTRY:
         # Try to find in torchvision transforms as fallback
         try:
-            from torchvision import transforms  # pylint: disable=import-outside-toplevel
+            from torchvision import \
+                transforms  # pylint: disable=import-outside-toplevel
 
             if hasattr(transforms, name):
                 return getattr(transforms, name)(*args, **kwargs)

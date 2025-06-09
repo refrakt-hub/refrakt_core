@@ -5,10 +5,10 @@ Defines a basic feed-forward auto-encoder or a variational auto-encoder (VAE),
 depending on the selected mode / type.
 """
 
-from typing import Union, Tuple, Dict
+from typing import Dict, Tuple, Union
 
 import torch
-from torch import nn, Tensor
+from torch import Tensor, nn
 from torch.optim import Optimizer
 
 from refrakt_core.models.templates.models import BaseAutoEncoder  # unchanged

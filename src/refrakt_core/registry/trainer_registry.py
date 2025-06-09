@@ -1,6 +1,6 @@
 """Trainer registry for managing trainer classes."""
 
-from typing import Dict, Type, Callable, Any
+from typing import Any, Callable, Dict, Type
 
 from refrakt_core.logging import get_global_logger
 

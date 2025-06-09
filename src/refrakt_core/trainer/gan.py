@@ -1,4 +1,16 @@
+"""
+Trainer module for Generative Adversarial Networks (GANs).
+
+Handles training and evaluation logic for GAN models using a structured interface
+for generator/discriminator, loss functions, and optimizers.
+"""
+
+from typing import Any, Dict, Optional, Union
+
 import torch
+from torch.nn import Module
+from torch.optim import Optimizer
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from refrakt_core.registry.trainer_registry import register_trainer
@@ -7,51 +19,58 @@ from refrakt_core.trainer.base import BaseTrainer
 
 @register_trainer("gan")
 class GANTrainer(BaseTrainer):
+    """
+    GAN Trainer for adversarial training.
+
+    Args:
+        model (Module): The GAN model (must implement `training_step` and `generate`).
+        train_loader (DataLoader): DataLoader for training.
+        val_loader (DataLoader): DataLoader for validation.
+        loss_fn (Dict[str, Callable]): Dict containing "generator" and "discriminator" loss functions.
+        optimizer (Dict[str, Optimizer]): Dict containing "generator" and "discriminator" optimizers.
+        device (str): Device for training ("cuda" or "cpu").
+        scheduler (Optional[Any]): Optional learning rate scheduler.
+        **kwargs: Extra parameters passed to BaseTrainer.
+    """
+
     def __init__(
         self,
-        model,
-        train_loader,
-        val_loader,
-        loss_fn,
-        optimizer,  # Dictionary of optimizers
-        device="cuda",
-        scheduler=None,
-        **kwargs,
-    ):
+        model: Module,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+        loss_fn: Dict[str, Any],
+        optimizer: Dict[str, Optimizer],
+        device: str = "cuda",
+        scheduler: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(model, train_loader, val_loader, device, **kwargs)
 
-        if not isinstance(loss_fn, dict) or not {"generator", "discriminator"}.issubset(
-            loss_fn.keys()
-        ):
-            raise ValueError(
-                "loss_fn must be a dictionary with 'generator' and 'discriminator' keys"
-            )
+        if not {"generator", "discriminator"}.issubset(loss_fn):
+            raise ValueError("loss_fn must contain 'generator' and 'discriminator' keys")
 
-        if not isinstance(optimizer, dict) or not {
-            "generator",
-            "discriminator",
-        }.issubset(optimizer.keys()):
-            raise ValueError(
-                "optimizer must be a dictionary with 'generator' and 'discriminator' keys"
-            )
+        if not {"generator", "discriminator"}.issubset(optimizer):
+            raise ValueError("optimizer must contain 'generator' and 'discriminator' keys")
 
         self.loss_fns = loss_fn
-        self.optimizer = optimizer  # Set as dictionary
-        self.scheduler = scheduler  # Could be dict or single scheduler
+        self.optimizer = optimizer
+        self.scheduler = scheduler
 
-    def train(self, num_epochs):
+    def train(self, num_epochs: int) -> None:
+        """
+        Train the GAN model for a specified number of epochs.
+
+        Args:
+            num_epochs (int): Total number of training epochs.
+        """
         for epoch in range(num_epochs):
             self.model.train()
-            loop = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
+            loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
 
             for batch in loop:
-                # Move batch to device
-                if isinstance(batch, dict):
-                    device_batch = {k: v.to(self.device) for k, v in batch.items()}
-                else:
-                    device_batch = [tensor.to(self.device) for tensor in batch]
+                device_batch = self._move_batch_to_device(batch)
 
-                # Use the model's training_step method if available
+                # Use model's custom training_step
                 losses = self.model.training_step(
                     device_batch,
                     optimizer=self.optimizer,
@@ -59,16 +78,21 @@ class GANTrainer(BaseTrainer):
                     device=self.device,
                 )
 
-                loop.set_postfix(
-                    {
-                        "gen_loss": losses.get("g_loss", 0),
-                        "disc_loss": losses.get("d_loss", 0),
-                    }
-                )
+                loop.set_postfix({
+                    "gen_loss": losses.get("g_loss", 0),
+                    "disc_loss": losses.get("d_loss", 0),
+                })
 
-    def evaluate(self):
+    def evaluate(self) -> float:
+        """
+        Evaluate the GAN model on the validation set using PSNR.
+
+        Returns:
+            float: Average PSNR score.
+        """
         self.model.eval()
         total_psnr = 0.0
+
         with torch.no_grad():
             for batch in tqdm(self.val_loader, desc="Evaluating", leave=False):
                 if isinstance(batch, dict):
@@ -89,3 +113,19 @@ class GANTrainer(BaseTrainer):
         avg_psnr = total_psnr / len(self.val_loader)
         print(f"\nValidation PSNR: {avg_psnr:.2f} dB")
         return avg_psnr
+
+    def _move_batch_to_device(
+        self, batch: Union[Dict[str, torch.Tensor], list, tuple]
+    ) -> Union[Dict[str, torch.Tensor], list[torch.Tensor]]:
+        """
+        Move batch data to the correct device.
+
+        Args:
+            batch: Input batch from the DataLoader.
+
+        Returns:
+            Batch moved to the appropriate device.
+        """
+        if isinstance(batch, dict):
+            return {k: v.to(self.device) for k, v in batch.items()}
+        return [x.to(self.device) for x in batch]

@@ -8,8 +8,8 @@ momentum update and normalized projection heads.
 from typing import Optional
 
 import torch
-from torch import nn, Tensor
 import torch.nn.functional as F
+from torch import Tensor, nn
 
 from refrakt_core.models.templates.base import BaseModel
 

@@ -1,6 +1,6 @@
 """Dataset registry for managing dataset classes."""
 
-from typing import Dict, Any, Type, Callable
+from typing import Any, Callable, Dict, Type
 
 from refrakt_core.logging import get_global_logger
 
@@ -51,7 +51,8 @@ def get_dataset(name: str, *args: Any, **kwargs: Any) -> Any:
     if name not in DATASET_REGISTRY:
         # Try to find in torchvision datasets as fallback
         try:
-            from torchvision import datasets  # pylint: disable=import-outside-toplevel
+            from torchvision import \
+                datasets  # pylint: disable=import-outside-toplevel
 
             if hasattr(datasets, name):
                 return getattr(datasets, name)(*args, **kwargs)

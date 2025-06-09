@@ -6,6 +6,7 @@ custom embedding, patch merging, and stacked Swin stages.
 """
 
 from typing import Any
+
 from torch import Tensor, nn
 
 from refrakt_core.registry.model_registry import register_model

@@ -5,8 +5,8 @@ NT-Xent Loss Implementation for contrastive learning.
 from typing import Dict, Optional
 
 import torch
-from torch import Tensor, nn
 import torch.nn.functional as F
+from torch import Tensor, nn
 
 from refrakt_core.losses.templates.base import BaseLoss
 from refrakt_core.registry.loss_registry import register_loss

@@ -6,12 +6,12 @@ Available transforms are:
 PatchifyTransform
 """
 
+import random
 from typing import Tuple
 
-import random
 import torch
-from torch import Tensor
 import torchvision.transforms as T
+from torch import Tensor
 
 from refrakt_core.registry.transform_registry import register_transform
 

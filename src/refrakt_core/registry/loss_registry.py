@@ -1,6 +1,6 @@
 """Loss registry for managing loss functions and classes."""
 
-from typing import Dict, Any, Type, Callable, Union
+from typing import Any, Callable, Dict, Type, Union
 
 from refrakt_core.logging import get_global_logger
 

@@ -3,6 +3,7 @@ Loss implementation for the masked autoencoder.
 """
 
 from typing import Dict
+
 import torch
 from torch import Tensor
 

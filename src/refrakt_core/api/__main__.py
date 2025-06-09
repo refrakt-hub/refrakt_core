@@ -1,8 +1,11 @@
 import argparse
 import os
+import sys
 
 
 def main():
+    print("==> Refrakt CLI launched")
+
     parser = argparse.ArgumentParser(description="Refrakt Core Pipeline")
     parser.add_argument("--config", required=True, help="Path to configuration file")
     parser.add_argument(
@@ -41,7 +44,7 @@ def main():
 
     logger = RefraktLogger(
         model_name=model_name,
-        base_log_dir=args.log_dir,
+        log_dir=args.log_dir,
         log_types=args.log_type,
         console=args.console,
         debug=args.debug,

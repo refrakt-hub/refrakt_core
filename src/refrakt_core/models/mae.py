@@ -8,8 +8,8 @@ randomly masked patches using a vision transformer encoder-decoder setup.
 from typing import Dict, Tuple
 
 import torch
-from torch import nn, Tensor
 from einops import rearrange
+from torch import Tensor, nn
 
 from refrakt_core.models.templates.base import BaseModel
 from refrakt_core.registry.model_registry import register_model

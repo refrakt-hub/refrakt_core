@@ -6,7 +6,8 @@ block definitions (Basic and Bottleneck), custom input channels, and projection 
 """
 
 from typing import List, Optional, Type, Union
-from torch import nn, Tensor
+
+from torch import Tensor, nn
 
 from refrakt_core.models.templates.models import BaseClassifier
 from refrakt_core.registry.model_registry import register_model

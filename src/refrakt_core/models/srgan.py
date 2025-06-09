@@ -6,6 +6,7 @@ adversarial and perceptual losses to upscale low-resolution images.
 """
 
 from typing import Dict
+
 import torch
 from torch import Tensor
 

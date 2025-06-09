@@ -2,7 +2,8 @@
 Cross-Entropy loss with optional label smoothing, commonly used for classification tasks.
 """
 
-from typing import Optional, Dict
+from typing import Dict, Optional
+
 import torch
 from torch import Tensor, nn
 

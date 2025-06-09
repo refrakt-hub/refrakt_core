@@ -3,8 +3,9 @@ The GAN Loss implementation for adversarial training.
 """
 
 from typing import Dict
+
 import torch
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 from refrakt_core.losses.templates.base import BaseLoss
 from refrakt_core.registry.loss_registry import register_loss

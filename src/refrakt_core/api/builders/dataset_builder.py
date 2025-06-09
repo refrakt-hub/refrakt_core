@@ -1,4 +1,4 @@
-# [file content begin]
+"""# dataset_builder.py"""
 from typing import Any
 
 from omegaconf import DictConfig, OmegaConf
@@ -40,6 +40,3 @@ def build_dataset(cfg: DictConfig) -> Any:
         if transform_fn:
             dataset_params["transform"] = transform_fn
         return get_dataset(dataset_name, **dataset_params)
-
-
-# [file content end]

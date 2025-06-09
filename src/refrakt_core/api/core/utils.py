@@ -1,5 +1,6 @@
-# [file content begin]
-from typing import Any, Tuple
+"""Utility functions for setting up and initializing datasets, dataloaders, and model components."""
+
+from typing import Any, Dict, Tuple
 
 import torch
 from omegaconf import OmegaConf
@@ -14,8 +15,13 @@ from refrakt_core.api.core.components import ModelComponents
 
 
 # pylint: disable=import-outside-toplevel
-def import_modules():
-    """Import necessary modules"""
+def import_modules() -> Dict[str, Any]:
+    """
+    Dynamically import and return registries and builder references.
+
+    Returns:
+        dict: A dictionary containing registry getter functions and dataset/dataloader builders.
+    """
     from refrakt_core.registry.loss_registry import get_loss
     from refrakt_core.registry.model_registry import get_model
     from refrakt_core.registry.trainer_registry import get_trainer
@@ -30,21 +36,32 @@ def import_modules():
 
 
 def setup_device() -> str:
-    """Setup and return the appropriate device"""
+    """
+    Determine and return the appropriate device.
+
+    Returns:
+        str: 'cuda' if available, else 'cpu'.
+    """
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     return device
 
 
 def build_datasets(cfg: OmegaConf) -> Tuple[Any, Any]:
-    """Build train and validation datasets"""
+    """
+    Construct the training and validation datasets from configuration.
+
+    Args:
+        cfg (OmegaConf): Dataset configuration.
+
+    Returns:
+        Tuple: Training and validation dataset objects.
+    """
     print("Building datasets...")
     train_dataset = build_dataset(cfg.dataset)
 
-    # For validation, use same dataset config but with train=False
-    val_cfg = OmegaConf.merge(
-        cfg.dataset, OmegaConf.create({"params": {"train": False}})
-    )
+    # Modify config to set train=False for validation
+    val_cfg = OmegaConf.merge(cfg.dataset, OmegaConf.create({"params": {"train": False}}))
     val_dataset = build_dataset(val_cfg)
 
     return train_dataset, val_dataset
@@ -53,7 +70,17 @@ def build_datasets(cfg: OmegaConf) -> Tuple[Any, Any]:
 def build_dataloaders(
     train_dataset: Any, val_dataset: Any, cfg: OmegaConf
 ) -> Tuple[Any, Any]:
-    """Build train and validation dataloaders"""
+    """
+    Build data loaders for training and validation.
+
+    Args:
+        train_dataset (Any): Training dataset.
+        val_dataset (Any): Validation dataset.
+        cfg (OmegaConf): Dataloader configuration.
+
+    Returns:
+        Tuple: Training and validation dataloaders.
+    """
     print("Building data loaders...")
     train_loader = build_dataloader(train_dataset, cfg.dataloader)
     val_loader = build_dataloader(val_dataset, cfg.dataloader)
@@ -62,31 +89,46 @@ def build_dataloaders(
 
 
 def build_model_components(cfg: OmegaConf) -> ModelComponents:
-    """Build all model-related components"""
+    """
+    Assemble the model, loss function, optimizer, scheduler, and device into a unified object.
+
+    Args:
+        cfg (OmegaConf): Configuration for all components.
+
+    Returns:
+        ModelComponents: Object containing all model-related components.
+    """
     modules = import_modules()
     device = setup_device()
-    # Build model
+
     model = build_model(cfg, modules, device)
-    # Build loss function
     loss_fn = build_loss(cfg, modules, device)
-    # Build optimizer
     optimizer = build_optimizer(cfg, model)
-    # Build scheduler
     scheduler = build_scheduler(cfg, optimizer)
+
     return ModelComponents(model, loss_fn, optimizer, scheduler, device)
 
 
-def flatten_and_filter_config(cfg: dict) -> dict:
-    flat_cfg = {}
+def flatten_and_filter_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Flatten a nested configuration dictionary and remove unsupported types.
 
-    def _flatten(prefix, d):
+    Args:
+        cfg (dict): Nested configuration dictionary.
+
+    Returns:
+        dict: Flattened dictionary with only serializable types.
+    """
+    flat_cfg: Dict[str, Any] = {}
+
+    def _flatten(prefix: str, d: Dict[str, Any]) -> None:
         for k, v in d.items():
             key = f"{prefix}.{k}" if prefix else k
             if isinstance(v, (int, float, str, bool, torch.Tensor)):
                 flat_cfg[key] = v
             elif isinstance(v, dict):
                 _flatten(key, v)
-            # skip others (lists, None, etc.)
+            # Skip other types (lists, None, etc.)
 
     _flatten("", cfg)
     return flat_cfg

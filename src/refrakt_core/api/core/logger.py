@@ -1,42 +1,43 @@
-# logger.py
+"""Logger utility for Refrakt: supports logging via console, files, WandB, and TensorBoard."""
 
 import logging
 import os
 import sys
 from datetime import datetime
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
 from torch import Tensor
+from torch.nn import Module
 
 from refrakt_core.api.core.utils import flatten_and_filter_config
 
-# logger.py (only __init__ shown here)
-
 
 class RefraktLogger:
+    """Logger class for handling console, file, WandB, and TensorBoard logging."""
+
     def __init__(
         self,
         model_name: str,
-        base_log_dir: str = "./logs",
+        log_dir: str = "./logs",
         log_types: Optional[List[str]] = None,
         console: bool = False,
         debug: bool = False,
-    ):
+    ) -> None:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        log_dir = os.path.join(base_log_dir, model_name)
+        log_dir = os.path.join(log_dir, model_name)
         os.makedirs(log_dir, exist_ok=True)
 
-        self.log_file = os.path.join(log_dir, f"{timestamp}.log")
-        self.log_dir = log_dir
-        self.log_types = log_types or []
-        self.console = console
-        self.wandb_run = None
-        self.tb_writer = None
-        self.debug_enabled = debug
+        self.log_file: str = os.path.join(log_dir, f"{timestamp}.log")
+        self.log_dir: str = log_dir
+        self.log_types: List[str] = log_types or []
+        self.console: bool = console
+        self.wandb_run: Optional[Any] = None
+        self.tb_writer: Optional[Any] = None
+        self.debug_enabled: bool = debug
 
-        self.logger = logging.getLogger(f"refrakt:{timestamp}")  # Unique per run
+        self.logger: logging.Logger = logging.getLogger(f"refrakt:{timestamp}")
         level = logging.DEBUG if debug else logging.INFO
         self.logger.setLevel(level)
 
@@ -47,7 +48,7 @@ class RefraktLogger:
             self._setup_wandb()
         if "tensorboard" in self.log_types:
             self._setup_tensorboard()
-            
+
     def init_from_existing(
         self,
         existing_logger: logging.Logger,
@@ -56,17 +57,19 @@ class RefraktLogger:
         log_types: Optional[List[str]] = None,
         console: bool = True,
         debug: bool = False,
-    ):
+    ) -> None:
+        """Initialize this logger from an existing logging.Logger object."""
         self.logger = existing_logger
         self.debug_enabled = debug
         self.console = console
         self.log_types = log_types or []
         self.log_dir = log_dir
-        self.log_file = None  # Not used in this mode
+        self.log_file = ""
         self.wandb_run = None
         self.tb_writer = None
 
-    def _setup_handlers(self, level):
+    def _setup_handlers(self, level: int) -> None:
+        """Set up logging handlers."""
         for handler in self.logger.handlers[:]:
             self.logger.removeHandler(handler)
 
@@ -83,18 +86,19 @@ class RefraktLogger:
             console_handler.setFormatter(logging.Formatter("%(message)s"))
             self.logger.addHandler(console_handler)
 
-    def _setup_wandb(self):
+    def _setup_wandb(self) -> None:
+        """Set up WandB logging."""
         try:
             import wandb
-
             self.wandb_run = wandb.init(project="refrakt", dir=self.log_dir)
             self.info("Weights & Biases initialized")
         except ImportError:
             self.error("wandb not installed. Skipping WandB setup")
-        except Exception as e:
-            self.error(f"WandB initialization failed: {str(e)}")
+        except (RuntimeError, ValueError) as err:
+            self.error(f"WandB initialization failed: {str(err)}")
 
-    def _setup_tensorboard(self):
+    def _setup_tensorboard(self) -> None:
+        """Set up TensorBoard logging."""
         try:
             from torch.utils.tensorboard import SummaryWriter
 
@@ -102,19 +106,22 @@ class RefraktLogger:
             os.makedirs(tb_dir, exist_ok=True)
             self.tb_writer = SummaryWriter(log_dir=tb_dir)
             self.info(f"TensorBoard initialized at {tb_dir}")
-        except Exception as e:
-            self.error(f"TensorBoard initialization failed: {str(e)}")
+        except (RuntimeError, ValueError) as err:
+            self.error(f"TensorBoard initialization failed: {str(err)}")
 
-    def log_metrics(self, metrics: dict, step: int):
+    def log_metrics(self, metrics: Dict[str, float], step: int) -> None:
+        """Log scalar metrics to available loggers."""
         if self.tb_writer:
             for key, value in metrics.items():
                 self.tb_writer.add_scalar(key, value, step)
         if self.wandb_run:
             self.wandb_run.log(metrics, step=step)
 
-    def log_config(self, config: dict):
+    def log_config(self, config: Dict[str, Union[int, float, str, bool, Tensor]]) -> None:
+        """Log model configuration."""
         if self.wandb_run:
             self.wandb_run.config.update(config)
+
         if self.tb_writer:
             from torch.utils.tensorboard.summary import hparams
 
@@ -125,16 +132,17 @@ class RefraktLogger:
                 self.tb_writer.file_writer.add_summary(ssi)
                 self.tb_writer.file_writer.add_summary(sei)
                 self.info("Logged filtered config to TensorBoard hparams")
-            except Exception as e:
-                self.error(f"Failed to log hparams to TensorBoard: {str(e)}")
+            except (RuntimeError, ValueError) as err:
+                self.error(f"Failed to log hparams to TensorBoard: {str(err)}")
 
-    def log_model_graph(self, model: torch.nn.Module, input_tensor: Tensor):
+    def log_model_graph(self, model: Module, input_tensor: Tensor) -> None:
+        """Log model graph."""
         if self.tb_writer:
             try:
                 self.tb_writer.add_graph(model, input_tensor)
                 self.info("Logged model graph to TensorBoard")
-            except Exception as e:
-                self.error(f"Failed to log model graph: {str(e)}")
+            except (RuntimeError, ValueError) as err:
+                self.error(f"Failed to log model graph: {str(err)}")
 
     def log_images(
         self,
@@ -142,24 +150,19 @@ class RefraktLogger:
         images: Union[Tensor, np.ndarray],
         step: int,
         dataformats: str = "NCHW",
-    ):
-        # Skip if not 4D
-        if isinstance(images, torch.Tensor) and images.ndim != 4:
+    ) -> None:
+        """Log image tensors."""
+        if isinstance(images, (Tensor, np.ndarray)) and images.ndim != 4:
             self.warning(
-                f"Skipping image log for tag '{tag}': expected 4D tensor, got shape {images.shape}"
-            )
-            return
-        if isinstance(images, np.ndarray) and images.ndim != 4:
-            self.warning(
-                f"Skipping image log for tag '{tag}': expected 4D array, got shape {images.shape}"
+                f"Skipping image log for tag '{tag}': expected 4D input, got shape {images.shape}"
             )
             return
 
         if self.tb_writer:
             try:
                 self.tb_writer.add_images(tag, images, step, dataformats=dataformats)
-            except Exception as e:
-                self.error(f"TensorBoard image logging failed: {str(e)}")
+            except (RuntimeError, ValueError) as err:
+                self.error(f"TensorBoard image logging failed: {str(err)}")
 
         if self.wandb_run:
             try:
@@ -171,8 +174,8 @@ class RefraktLogger:
                     images = np.transpose(images, (0, 2, 3, 1))
                 wandb_images = [wandb.Image(img) for img in images]
                 self.wandb_run.log({tag: wandb_images}, step=step)
-            except Exception as e:
-                self.error(f"WandB image logging failed: {str(e)}")
+            except (RuntimeError, ValueError) as err:
+                self.error(f"WandB image logging failed: {str(err)}")
 
     def log_inference_results(
         self,
@@ -181,7 +184,8 @@ class RefraktLogger:
         targets: Optional[Tensor] = None,
         step: int = 0,
         max_images: int = 8,
-    ):
+    ) -> None:
+        """Visualize inference results with inputs, outputs, and targets."""
         try:
             n = min(inputs.shape[0], max_images)
             inputs = inputs[:n].cpu()
@@ -205,23 +209,28 @@ class RefraktLogger:
                 self.log_images("Input_vs_Output", comparisons, step)
 
             self.info(f"Logged inference visualization for {n} samples")
-        except Exception as e:
-            self.error(f"Inference visualization failed: {str(e)}")
+        except (RuntimeError, ValueError) as err:
+            self.error(f"Inference visualization failed: {str(err)}")
 
-    def debug(self, msg: str, *args, **kwargs):
+    def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Log debug message."""
         if self.debug_enabled:
             self.logger.debug(msg, *args, **kwargs)
 
-    def info(self, msg: str, *args, **kwargs):
+    def info(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Log info message."""
         self.logger.info(msg, *args, **kwargs)
 
-    def error(self, msg: str, *args, **kwargs):
+    def error(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Log error message."""
         self.logger.error(msg, *args, **kwargs)
 
-    def warning(self, msg: str, *args, **kwargs):
+    def warning(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Log warning message."""
         self.logger.warning(msg, *args, **kwargs)
 
-    def close(self):
+    def close(self) -> None:
+        """Close logging resources."""
         for handler in self.logger.handlers[:]:
             handler.close()
             self.logger.removeHandler(handler)

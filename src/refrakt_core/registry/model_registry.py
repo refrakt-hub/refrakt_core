@@ -1,12 +1,13 @@
 """Model registry for managing model classes."""
 
-from typing import Dict, Any, Type, Callable
+from typing import Any, Callable, Dict, Type
 
 from refrakt_core.logging import get_global_logger
 
 MODEL_REGISTRY: Dict[str, Type[Any]] = {}
 _IMPORTED: bool = False
 
+import logging
 
 def register_model(name: str) -> Callable[[Type[Any]], Type[Any]]:
     """Register a model class with the given name.

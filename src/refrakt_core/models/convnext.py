@@ -7,7 +7,7 @@ Implements a simplified ConvNeXt architecture with layer norm and GELU.
 from typing import Any
 
 import torch
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 from refrakt_core.models.templates.models import BaseClassifier
 from refrakt_core.registry.model_registry import register_model

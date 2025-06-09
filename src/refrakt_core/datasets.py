@@ -1,76 +1,97 @@
 """
-Contains a set of dataset class for family of models. 
-Available dataset classes are: 
+Contains a set of dataset classes for different families of models.
+
+Available dataset classes:
 - ContrastiveDataset
 - SuperResolutionDataset
 """
 
 import os
 from pathlib import Path
+from typing import Callable, Optional, Tuple, Union, Dict, Any
 
 from PIL import Image
-from torch import nn
+from torch import Tensor, nn
 from torch.utils.data import Dataset
 
 from refrakt_core.registry.dataset_registry import register_dataset
 
 
 @register_dataset("contrastive")
-class ContrastiveDataset(Dataset):
+class ContrastiveDataset(Dataset[Tuple[Tensor, Tensor]]):
     """
-    A wrapper that sets up a dataset class for contrastive learning methods, 
-    like SimCLR and DINO. Further models to be implemented in the future. 
+    Dataset wrapper for contrastive learning methods like SimCLR and DINO.
+
+    Args:
+        base_dataset (Dataset): The underlying dataset to wrap.
+        transform (Optional[Callable]): A torchvision-style transform callable.
+        train (Optional[bool]): Flag indicating training mode (unused, for compatibility).
     """
-    def __init__(self, base_dataset, transform=None, train=None):
+    def __init__(
+        self,
+        base_dataset: Dataset,
+        transform: Optional[Callable[[Any], Tensor]] = None,
+        train: Optional[bool] = None
+    ) -> None:
         self.base_dataset = base_dataset
         self.transform = transform
 
-        if self.transform:
+        if self.transform and hasattr(self.transform, "transforms"):
             self.transform.transforms = [
                 t for t in self.transform.transforms if not isinstance(t, nn.Flatten)
             ]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.base_dataset)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
         item = self.base_dataset[idx]
 
-        # Handle different dataset formats
-        if isinstance(item, tuple) and len(item) >= 2:
-            x = item[0]  # Assume first element is image
-        else:
-            x = item  # Assume single element is image
+        # Handle tuple-based dataset
+        x = item[0] if isinstance(item, tuple) and len(item) >= 2 else item
 
-        # Apply transform if available
         if self.transform:
             view1 = self.transform(x)
             view2 = self.transform(x)
             return view1, view2
-        # Return original image twice if no transform
+
         return x, x
 
 
 @register_dataset("super_resolution")
-class SuperResolutionDataset(Dataset):
+class SuperResolutionDataset(Dataset[Dict[str, Tensor]]):
     """
-    A dataset class for super-resolution based training. 
+    Dataset for super-resolution tasks. Loads paired LR and HR images.
+
+    Args:
+        lr_dir (Union[str, Path]): Path to low-resolution image directory.
+        hr_dir (Union[str, Path]): Path to high-resolution image directory.
+        transform (Optional[Callable]): Callable to apply joint transforms to (lr, hr) pair.
+        train (Optional[bool]): Flag indicating training mode (unused, for compatibility).
     """
-    def __init__(self, lr_dir, hr_dir, transform=None, train=None):
+    def __init__(
+        self,
+        lr_dir: Union[str, Path],
+        hr_dir: Union[str, Path],
+        transform: Optional[Callable[[Image.Image, Image.Image], Tuple[Tensor, Tensor]]] = None,
+        train: Optional[bool] = None
+    ) -> None:
         self.lr_dir = Path(lr_dir)
         self.hr_dir = Path(hr_dir)
         self.filenames = sorted(os.listdir(self.lr_dir))
         self.transform = transform
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.filenames)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Dict[str, Tensor]:
         fname = self.filenames[idx]
-        lr = Image.open(self.lr_dir / fname).convert("RGB")
-        hr = Image.open(self.hr_dir / fname).convert("RGB")
+        lr_img = Image.open(self.lr_dir / fname).convert("RGB")
+        hr_img = Image.open(self.hr_dir / fname).convert("RGB")
 
         if self.transform:
-            lr, hr = self.transform(lr, hr)
+            lr_tensor, hr_tensor = self.transform(lr_img, hr_img)
+        else:
+            raise ValueError("Transform must be provided for SuperResolutionDataset.")
 
-        return {"lr": lr, "hr": hr}
+        return {"lr": lr_tensor, "hr": hr_tensor}

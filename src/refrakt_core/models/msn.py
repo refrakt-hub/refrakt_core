@@ -10,8 +10,8 @@ from typing import Tuple
 
 import torch
 import torch.nn.functional as F
-from torch import nn, Tensor
 from timm import create_model
+from torch import Tensor, nn
 
 from refrakt_core.models.templates.base import BaseModel
 from refrakt_core.registry.model_registry import register_model

@@ -5,8 +5,9 @@ This module defines a ViT-based classifier registered as "vit" in the model regi
 """
 
 from typing import List
+
 import torch
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 from refrakt_core.models.templates.models import BaseClassifier
 from refrakt_core.registry.model_registry import register_model

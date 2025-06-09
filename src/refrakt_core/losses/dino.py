@@ -5,8 +5,8 @@ The DINO Loss implementation, which is used in self-supervised learning.
 from typing import Dict
 
 import torch
-from torch import Tensor
 import torch.nn.functional as F
+from torch import Tensor
 
 from refrakt_core.losses.templates.base import BaseLoss
 from refrakt_core.registry.loss_registry import register_loss

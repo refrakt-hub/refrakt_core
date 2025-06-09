@@ -1,3 +1,4 @@
+"""The test module for Refrakt."""
 import os
 import sys
 import traceback

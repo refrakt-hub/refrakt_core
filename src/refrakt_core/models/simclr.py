@@ -5,9 +5,10 @@ Includes projection head and custom training/validation step hooks for contrasti
 """
 
 from typing import Dict, Tuple
+
 import torch
-from torch import nn, Tensor
 import torch.nn.functional as F
+from torch import Tensor, nn
 from torchvision import models
 
 from refrakt_core.models.templates.models import BaseContrastiveModel
