@@ -27,7 +27,7 @@ dataloader:
 model:
   name: "mae"
   params:
-    image_size: 224
+    img_size: 224
     patch_size: 16
     in_chans: 3
     embed_dim: 768
