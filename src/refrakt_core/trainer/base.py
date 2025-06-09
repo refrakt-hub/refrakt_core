@@ -8,6 +8,7 @@ Subclasses must implement `train` and `evaluate` methods.
 import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Union
+from omegaconf.listconfig import ListConfig
 
 import torch
 from torch.nn import Module
@@ -121,6 +122,7 @@ class BaseTrainer(ABC):
             path = self.get_checkpoint_path(suffix)
 
         try:
+            torch.serialization.add_safe_globals([ListConfig])
             checkpoint = torch.load(path, map_location=self.device, weights_only=False)
             self.model.load_state_dict(checkpoint["model_state_dict"])
 
