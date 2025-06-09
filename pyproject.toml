@@ -24,7 +24,8 @@ dependencies = [
     "pillow",
     "tqdm", 
     "omegaconf", 
-    "timm"
+    "timm", 
+    "pydantic"
 ]
 
 [tool.black]
