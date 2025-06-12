@@ -100,7 +100,7 @@ class RefraktLogger:
     def _setup_tensorboard(self) -> None:
         """Set up TensorBoard logging."""
         try:
-            from torch.utils.tensorboard import SummaryWriter
+            from torch.utils.tensorboard.writer import SummaryWriter
 
             tb_dir = os.path.join(self.log_dir, "tensorboard")
             os.makedirs(tb_dir, exist_ok=True)

@@ -213,6 +213,12 @@ def train(
             if cfg.trainer.params
             else {}
         )
+        
+        # Inject model variant into trainer params for naming/version control
+        if cfg.model.name == "autoencoder":
+            variant = cfg.model.params.get("type", "simple")
+            trainer_params["model_variant"] = variant
+
 
         # Extract special parameters
         num_epochs = trainer_params.pop("num_epochs", 1)

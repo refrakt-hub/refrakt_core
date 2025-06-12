@@ -7,13 +7,19 @@ import os
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any, Optional
 
+import matplotlib
 import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 import numpy as np
 import requests
 import torch
 from torchvision import transforms
+from refrakt_core.api.core.logger import RefraktLogger
+matplotlib.use("Agg")
+
 
 NOISE_FACTOR = 0.1
 SCALE_FACTOR = 4
@@ -253,3 +259,113 @@ def setup_device_and_model(model, device, logger):
     
     model = model.to(device)
     return model, device
+
+def extract_visual_tensor(outputs: Any) -> torch.Tensor:
+    """
+    Simplified tensor extraction - assumes model outputs proper shapes
+    """
+    if isinstance(outputs, torch.Tensor):
+        return outputs
+    if isinstance(outputs, dict):
+        # Return first available tensor in priority order
+        for key in ["recon", "output", "decoded", "logits"]:
+            if key in outputs:
+                return outputs[key]
+    return torch.tensor(outputs)  # Final fallback
+
+def plot_latent_histograms(mu_tensor: torch.Tensor, logger: Optional[RefraktLogger] = None):
+    mu_np = mu_tensor.cpu().numpy()
+    dim = mu_np.shape[1]
+
+    fig, axes = plt.subplots(nrows=int(np.ceil(dim / 8)), ncols=8, figsize=(20, 2 * (dim // 8 + 1)))
+    axes = axes.flatten()
+
+    for i in range(dim):
+        axes[i].hist(mu_np[:, i], bins=30, color='steelblue', alpha=0.7)
+        axes[i].set_title(f"Latent dim {i}")
+
+    for j in range(i+1, len(axes)):
+        axes[j].axis("off")
+
+    plt.tight_layout()
+    if logger:
+        logger.log_figure("latent_histograms", fig, step=0)
+    else:
+        plt.show()
+    
+    plt.close()
+
+def log_latent_distribution(mu_tensor: torch.Tensor, targets: Optional[torch.Tensor] = None, logger: Optional[RefraktLogger] = None):
+    mu_np = mu_tensor.cpu().numpy()
+    
+    # Reduce dimensionality if needed
+    if mu_np.shape[1] > 2:
+        reducer = TSNE(n_components=2, random_state=42)
+        mu_2d = reducer.fit_transform(mu_np)
+    else:
+        mu_2d = mu_np
+
+    plt.figure(figsize=(8, 6))
+    if targets is not None:
+        targets_np = targets.cpu().numpy()
+        scatter = plt.scatter(mu_2d[:, 0], mu_2d[:, 1], c=targets_np, cmap='tab10', alpha=0.7)
+        plt.colorbar(scatter, label="Labels")
+    else:
+        plt.scatter(mu_2d[:, 0], mu_2d[:, 1], alpha=0.7)
+
+    plt.title("Latent Space Projection (mu)")
+    plt.xlabel("Dimension 1")
+    plt.ylabel("Dimension 2")
+
+    if logger:
+        logger.log_figure("latent_space", plt.gcf(), step=0)
+    else:
+        plt.show()
+    
+    plt.close()
+    
+def visualize_latent_space(model, dataloader, device, logger=None):
+    import matplotlib.pyplot as plt
+    from sklearn.decomposition import PCA
+    import torch
+
+    model.eval()
+    all_latents = []
+    all_labels = []
+
+    for batch in dataloader:
+        inputs = batch[0].to(device)
+        labels = batch[1] if len(batch) > 1 else None
+
+        with torch.no_grad():
+            latents = model.get_latent(inputs)
+            all_latents.append(latents.cpu())
+            if labels is not None:
+                all_labels.append(labels)
+
+    latents = torch.cat(all_latents, dim=0).numpy()
+    if all_labels:
+        labels = torch.cat(all_labels, dim=0).numpy()
+    else:
+        labels = None
+
+    if latents.shape[1] > 2:
+        reducer = PCA(n_components=2)
+        latents_2d = reducer.fit_transform(latents)
+    else:
+        latents_2d = latents
+
+    plt.figure(figsize=(8, 6))
+    if labels is not None:
+        plt.scatter(latents_2d[:, 0], latents_2d[:, 1], c=labels, cmap="tab10", alpha=0.7)
+        plt.colorbar()
+    else:
+        plt.scatter(latents_2d[:, 0], latents_2d[:, 1], alpha=0.7)
+    plt.title("Latent Space Projection")
+    plt.xlabel("z1")
+    plt.ylabel("z2")
+    plt.show()
+
+    if logger:
+        logger.info("Latent space visualization complete.")
+

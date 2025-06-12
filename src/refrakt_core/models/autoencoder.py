@@ -84,11 +84,12 @@ class AutoEncoder(BaseAutoEncoder):
         return mu + torch.randn_like(std) * std
 
     def get_latent(self, x: Tensor) -> Tensor:
-        """
-        Return the latent representation (μ for VAE, encoded vector otherwise).
-        """
-        enc = self.encode(x)
-        return enc[0] if self.mode == "vae" else enc
+        """Return latent representation (μ for VAE, encoded vector otherwise)"""
+        if self.mode == "vae":
+            mu, _ = self.encode(x)
+            return mu
+        else: 
+            return self.encode(x)
 
   
     def training_step(
@@ -128,13 +129,20 @@ class AutoEncoder(BaseAutoEncoder):
         return {"val_loss": loss.item()}
 
     # ──────────────────────────────────────────────────────────────────────
+    # autoencoder.py - Update the forward method
     def forward(self, x: Tensor) -> Union[Tensor, Dict[str, Tensor]]:
+        # Preserve original shape for reconstruction
+        original_shape = x.shape
+        
         if self.mode == "simple":
-            return self.decode(self.encode(x))          # type: ignore[arg-type]
-
+            encoded = self.encode(x)
+            decoded = self.decode(encoded)
+            return decoded.view(original_shape)  # Reshape to input dimensions
+            
         # VAE forward
-        mu, sigma = self.encode(x)                      # type: ignore[misc]
-        z      = self._reparameterize(mu, sigma)
-        recon  = self.decode(z)
+        mu, sigma = self.encode(x)
+        z = self._reparameterize(mu, sigma)
+        decoded = self.decode(z)
+        recon = decoded.view(original_shape)  # Reshape to input dimensions
         logvar = torch.log(sigma.pow(2) + 1e-7)
         return {"recon": recon, "mu": mu, "logvar": logvar}

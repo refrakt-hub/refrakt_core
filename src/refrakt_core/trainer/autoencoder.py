@@ -49,7 +49,10 @@ class AETrainer(BaseTrainer):
         scheduler: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
+        variant = kwargs.pop("model_variant", "simple")
+        kwargs["model_name"] = f"autoencoder_{variant}"
         super().__init__(model, train_loader, val_loader, device, **kwargs)
+        
         self.loss_fn = loss_fn
         self.scheduler = scheduler
 
@@ -164,3 +167,69 @@ class AETrainer(BaseTrainer):
         if isinstance(batch, dict):
             return batch["image"]
         return batch
+    
+    def generate_latent_projection(self, dataloader, device, save_path=None, method="pca"):
+        import matplotlib.pyplot as plt
+        from sklearn.decomposition import PCA
+        from sklearn.manifold import TSNE
+
+        model = self.model
+        model.eval()
+        all_mu, all_labels = [], []
+
+        for batch in dataloader:
+            inputs = batch[0].to(device)
+            labels = batch[1].to(device) if len(batch) > 1 else None
+
+            with torch.no_grad():
+                output = model(inputs)
+                if isinstance(output, dict) and "mu" in output:
+                    all_mu.append(output["mu"].cpu())
+                    if labels is not None:
+                        all_labels.append(labels.cpu())
+
+        mu_tensor = torch.cat(all_mu, dim=0)
+        label_tensor = torch.cat(all_labels, dim=0) if all_labels else None
+        mu_np = mu_tensor.numpy()
+
+        if mu_np.shape[1] > 2:
+            reducer = PCA(n_components=2) if method == "pca" else TSNE(n_components=2)
+            mu_2d = reducer.fit_transform(mu_np)
+        else:
+            mu_2d = mu_np
+
+        plt.figure(figsize=(8, 6))
+        if label_tensor is not None:
+            plt.scatter(mu_2d[:, 0], mu_2d[:, 1], c=label_tensor.numpy(), cmap="tab10", alpha=0.7)
+            plt.colorbar()
+        else:
+            plt.scatter(mu_2d[:, 0], mu_2d[:, 1], alpha=0.7)
+
+        plt.title(f"Latent Space Projection ({method.upper()})")
+        plt.xlabel("z1")
+        plt.ylabel("z2")
+
+        if save_path:
+            plt.savefig(save_path)
+        else:
+            plt.show()
+
+    def generate_latent_grid_samples(self, grid_size=20, range_lim=3.0):
+        assert self.model.hidden_dim == 2, "Only for 2D latent space"
+        import matplotlib.pyplot as plt
+        
+        z = torch.stack([
+            torch.tensor([x, y]) for y in torch.linspace(-range_lim, range_lim, grid_size)
+                                for x in torch.linspace(-range_lim, range_lim, grid_size)
+        ])
+        z = z.to(self.device)
+        with torch.no_grad():
+            samples = self.model.decode(z).cpu()
+
+        fig, axes = plt.subplots(grid_size, grid_size, figsize=(10, 10))
+        for i in range(grid_size):
+            for j in range(grid_size):
+                axes[i, j].imshow(samples[i * grid_size + j].reshape(28, 28), cmap="gray")
+                axes[i, j].axis("off")
+        plt.suptitle("Latent Traversal Grid")
+        plt.show()

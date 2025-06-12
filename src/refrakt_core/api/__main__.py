@@ -8,29 +8,8 @@ def main():
 
     parser = argparse.ArgumentParser(description="Refrakt Core Pipeline")
     parser.add_argument("--config", required=True, help="Path to configuration file")
-    parser.add_argument(
-        "--mode",
-        choices=["train", "test", "inference", "pipeline"],
-        required=True,
-        help="Pipeline mode",
-    )
-    parser.add_argument("--log_dir", default="./logs", help="Log directory path")
-    parser.add_argument(
-        "--log_type",
-        nargs="*",
-        choices=["tensorboard", "wandb"],
-        default=[],
-        help="Logging integrations",
-    )
-    parser.add_argument("--console", action="store_true", help="Enable console logging")
-    parser.add_argument(
-        "--model_path", help="Path to model checkpoint (optional for pipeline)"
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug logging (e.g., registry prints)",
-    )
+    parser.add_argument("--log_dir", help="Override log directory path")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
     # Delay ALL imports until after logger configuration
@@ -40,14 +19,31 @@ def main():
     from refrakt_core.logging import set_global_logger
 
     cfg = OmegaConf.load(args.config)
+    
+    # Extract runtime parameters from YAML config
+    runtime_cfg = cfg.get('runtime', {})
+    mode = runtime_cfg.get('mode', 'train')
+    log_dir = args.log_dir or runtime_cfg.get('log_dir', './logs')
+    
+    # Handle log_types - accept list or single string
+    log_types = runtime_cfg.get('log_type', [])
+    if isinstance(log_types, str):
+        log_types = [log_types]  # Convert single string to list
+    elif log_types is None:
+        log_types = []  # Convert None to empty list
+        
+    console = runtime_cfg.get('console', True)
+    model_path = runtime_cfg.get('model_path', None)
+    debug = args.debug or runtime_cfg.get('debug', False)
+
     model_name = cfg.model.name
 
     logger = RefraktLogger(
         model_name=model_name,
-        log_dir=args.log_dir,
-        log_types=args.log_type,
-        console=args.console,
-        debug=args.debug,
+        log_dir=log_dir,
+        log_types=log_types,
+        console=console,
+        debug=debug,
     )
 
     logger.info(f"Logging initialized. Log file: {logger.log_file}")
@@ -59,23 +55,22 @@ def main():
     from refrakt_core.api.train import train
 
     try:
-        if args.mode == "train":
+        if mode == "train":
             logger.info(f"Starting training with config: {args.config}")
-            train(args.config, model_path=args.model_path, logger=logger)
+            train(args.config, model_path=model_path, logger=logger)
 
-        elif args.mode == "test":
+        elif mode == "test":
             logger.info(f"Starting testing with config: {args.config}")
-            test(args.config, model_path=args.model_path, logger=logger)
+            test(args.config, model_path=model_path, logger=logger)
 
-        elif args.mode == "inference":
-            if not args.model_path:
-                raise ValueError("--model_path is required for inference mode")
+        elif mode == "inference":
+            if not model_path:
+                raise ValueError("model_path must be provided in runtime config for inference mode")
             logger.info(f"Starting inference with config: {args.config}")
-            inference(args.config, model_path=args.model_path, logger=logger)
+            inference(args.config, model_path=model_path, logger=logger)
 
-        elif args.mode == "pipeline":
+        elif mode == "pipeline":
             logger.info("🔁 Starting full pipeline (train → test → inference)")
-            cfg = OmegaConf.load(args.config)
             save_dir = cfg.trainer.params.save_dir
             model_name = cfg.trainer.params.model_name
             model_path = os.path.join(save_dir, f"{model_name}.pth")

@@ -173,3 +173,6 @@ checkpoints/
 logs/
 legacy/
 .ruff_cache/
+wandb/
+config/
+inference/

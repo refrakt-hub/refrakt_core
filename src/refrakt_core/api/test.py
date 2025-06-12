@@ -14,6 +14,7 @@ from refrakt_core.api.builders.trainer_builder import initialize_trainer
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.core.utils import build_model_components, import_modules
 from refrakt_core.logging import get_global_logger
+from refrakt_core.utils.methods import extract_visual_tensor
 
 
 def test(
@@ -95,16 +96,19 @@ def test(
                 inputs = sample_batch.to(components.device)
                 targets = None
 
-            # Run model
+            # Run model - output should already be properly shaped
             with torch.no_grad():
                 outputs = components.model(inputs)
-
+            
+            # Extract without reshaping
+            outputs_vis = extract_visual_tensor(outputs)
+            
             # Log visualization
             logger.log_inference_results(
                 inputs=inputs,
-                outputs=outputs,
+                outputs=outputs_vis,
                 targets=targets,
-                step=0,  # Use step 0 for test
+                step=0,
             )
         except Exception as e:
             logger.error(f"Test visualization failed: {str(e)}")
