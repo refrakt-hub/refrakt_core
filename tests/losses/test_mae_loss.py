@@ -9,7 +9,7 @@ def test_mae_loss_basic():
     B, N, D = 4, 16, 64
     
     predictions = {
-        "recon_patches": torch.randn(B, N, D),
+        "recon": torch.randn(B, N, D),
         "mask": torch.ones(B, N),
         "original_patches": torch.randn(B, N, D)
     }
@@ -26,7 +26,7 @@ def test_mae_loss_partial_masking():
     
     # Controlled values for predictable loss
     predictions = {
-        "recon_patches": torch.ones(B, N, D),
+        "recon": torch.ones(B, N, D),
         "mask": mask,
         "original_patches": torch.zeros(B, N, D)
     }
@@ -41,7 +41,7 @@ def test_mae_loss_normalization():
     
     B, N, D = 4, 16, 64
     predictions = {
-        "recon_patches": torch.randn(B, N, D),
+        "recon": torch.randn(B, N, D),
         "mask": torch.ones(B, N),
         "original_patches": torch.randn(B, N, D)
     }
@@ -54,7 +54,7 @@ def test_mae_loss_normalization():
 def test_mae_loss_missing_keys():
     loss_fn = MAELoss()
     predictions = {
-        "recon_patches": torch.randn(4, 16, 64),
+        "recon": torch.randn(4, 16, 64),
         "original_patches": torch.randn(4, 16, 64)
     }
     

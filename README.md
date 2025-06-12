@@ -24,7 +24,6 @@
 - **DINO** – *Self-Supervised Vision Transformers*
 - **MAE** – *Masked Autoencoders*
 - **MSN** – *Masked Siamese Networks*
-- **LNN** – *Lagrangian Neural Networks*
 
 
 ## ⚙️ Setup

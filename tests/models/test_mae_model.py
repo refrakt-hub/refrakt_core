@@ -17,11 +17,11 @@ def test_mae_forward(small_mae):
     x = torch.randn(2, 3, 64, 64)
     output = small_mae(x)
     
-    assert "recon_patches" in output
+    assert "recon" in output
     assert "mask" in output
     assert "original_patches" in output
     
-    assert output["recon_patches"].shape == (2, 64, 192)
+    assert output["recon"].shape == (2, 64, 192)
     assert output["original_patches"].shape == (2, 64, 192)
     assert output["mask"].shape == (2, 64)
 
