@@ -1,3 +1,5 @@
+"""
+MAE (Masked Autoencoder) model implementation."""
 from typing import Dict
 
 import torch
