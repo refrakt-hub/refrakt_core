@@ -1,128 +1,88 @@
 """The test module for Refrakt."""
-import os
+
 import sys
 import traceback
-from typing import Any, Dict, Optional, Union
+from typing import Optional
 
 import torch
 from omegaconf import OmegaConf
 
-# Add direct imports for dataset and dataloader builders
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.builders.trainer_builder import initialize_trainer
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.api.core.utils import build_model_components, import_modules
 from refrakt_core.logging import get_global_logger
-from refrakt_core.utils.methods import extract_visual_tensor
+from refrakt_core.api.utils.test_utils import _load_config, _build_test_loader, _load_model_checkpoint
+
+from refrakt_core.api.builders.model_builder import build_model
+from refrakt_core.api.builders.loss_builder import build_loss
+from refrakt_core.registry.model_registry import get_model
+from refrakt_core.registry.loss_registry import get_loss
+from refrakt_core.registry.trainer_registry import get_trainer
+from refrakt_core.schema.artifact import ArtifactDumper
+from refrakt_core.schema.model_output import ModelOutput
 
 
-def test(
-    cfg: Union[str, OmegaConf],
-    model_path: Optional[str] = None,
-    logger: Optional[RefraktLogger] = None,
-) -> Dict[str, Any]:
-    """
-    Test/evaluate a model based on the provided configuration.
+def test(cfg, model_path=None, logger=None):
+    # === Load config and logger ===
+    config = _load_config(cfg)
+    logger = logger or get_global_logger()
+    logger.log_config(OmegaConf.to_container(config, resolve=True))
 
-    Args:
-        cfg: Either a path to a config file or an OmegaConf object
-        model_path: Optional path to a saved model checkpoint
+    # === Set up modules and device ===
+    modules = {"get_model": get_model, 
+               "get_loss": get_loss, 
+               "get_trainer": get_trainer}
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    Returns:
-        Dict containing evaluation results
-    """
+    # === Dataset & Model ===
+    dataloader = _build_test_loader(config)
+    model = build_model(config, modules=modules, device=device)
+    loss_fn = build_loss(config, modules=modules, device=device)
+    _load_model_checkpoint(model, model_path, device, logger)
 
-    if logger is None:
-        logger = get_global_logger()
+    # === Artifact dumper ===
+    artifact_dumper = ArtifactDumper(enabled=True, base_path="./artifacts/test")
 
-    try:
-        # Load configuration
-        if isinstance(cfg, str):
-            config = OmegaConf.load(cfg)
-        else:
-            config = cfg
+    # === Trainer ===
+    trainer = initialize_trainer(
+        cfg=config,
+        model=model,
+        train_loader=None,
+        val_loader=dataloader,
+        loss_fn=loss_fn,
+        optimizer=None,
+        scheduler=None,
+        device=device,
+        modules=modules,
+        save_dir=None,
+    )
+    trainer.logger = logger
 
-        logger.log_config(OmegaConf.to_container(config, resolve=True))
+    # Attach artifact dumper to trainer if supported
+    if hasattr(trainer, "artifact_dumper"):
+        trainer.artifact_dumper = artifact_dumper
 
-        modules = import_modules()
+    # === Evaluate and log outputs ===
+    logger.info("Running evaluation...")
+    model.eval()
+    eval_results = trainer.evaluate()
 
-        # === Build Dataset & DataLoader ===
-        logger.info("Building test datasets...")
-        test_cfg = OmegaConf.merge(
-            config.dataset, OmegaConf.create({"params": {"train": False}})
-        )
-        test_dataset = build_dataset(test_cfg)
-        test_loader = build_dataloader(test_dataset, config.dataloader)
-        logger.info(f"Test batches: {len(test_loader)}")
+    # Dump model outputs for posthoc visualization
+    with torch.no_grad():
+        for i, batch in enumerate(dataloader):
+            inputs = batch["input"] if isinstance(batch, dict) else batch[0]
+            inputs = inputs.to(device)
+            output = model(inputs)
+            if isinstance(output, ModelOutput):
+                artifact_dumper.log_output(output, batch_id=i)
 
-        # Build model components
-        components = build_model_components(config)
+    artifact_dumper.save(f"{trainer.model.__class__.__name__}_outputs.pt")
 
-        # Load model checkpoint if provided
-        if model_path and os.path.exists(model_path):
-            logger.info(f"Loading model from {model_path}")
-            checkpoint = torch.load(model_path, map_location=components.device)
-            components.model.load_state_dict(
-                checkpoint.get("model_state_dict", checkpoint)
-            )
-
-        # Initialize trainer for evaluation
-        trainer = initialize_trainer(
-            config,
-            components.model,
-            test_loader,
-            test_loader,  # Use test_loader for both
-            components.loss_fn,
-            components.optimizer,
-            components.scheduler,
-            components.device,
-            modules,save_dir=None,  # No save_dir needed for evaluation
-        )
-
-        trainer.logger = logger
-        logger.info("\nRunning evaluation...")
-        eval_results = trainer.evaluate()
-
-        # Run evaluation
-        # ====== NEW: Visualize test results ======
-        try:
-            # Get sample batch for visualization
-            sample_batch = next(iter(test_loader))
-            if isinstance(sample_batch, (tuple, list)):
-                inputs = sample_batch[0].to(components.device)
-                targets = sample_batch[1] if len(sample_batch) > 1 else None
-            else:
-                inputs = sample_batch.to(components.device)
-                targets = None
-
-            # Run model - output should already be properly shaped
-            with torch.no_grad():
-                outputs = components.model(inputs)
-            
-            # Extract without reshaping
-            outputs_vis = extract_visual_tensor(outputs)
-            
-            # Log visualization
-            logger.log_inference_results(
-                inputs=inputs,
-                outputs=outputs_vis,
-                targets=targets,
-                step=0,
-            )
-        except Exception as e:
-            logger.error(f"Test visualization failed: {str(e)}")
-        # ====== END NEW ======
-
-        logger.info("\nEvaluation completed successfully!")
-
-        return {
-            "model": components.model,
-            "evaluation_results": eval_results,
-            "config": config,
-        }
-
-    except Exception as e:
-        logger.error(f"\n❌ Training failed: {str(e)}")
-        logger.error(traceback.format_exc())
-        sys.exit(1)
+    logger.info("Evaluation completed.")
+    return {
+        "model": trainer.model,
+        "evaluation_results": eval_results,
+        "config": config,
+        "artifacts_path": f"./artifacts/test/{trainer.model.__class__.__name__}_outputs.pt"
+    }

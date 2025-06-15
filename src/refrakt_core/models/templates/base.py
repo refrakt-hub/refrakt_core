@@ -24,7 +24,7 @@ class BaseModel(nn.Module, ABC):
             model_type (str): Type/architecture of the model. Defaults to "generic".
         """
         super().__init__()
-        self.device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model_name: str = model_name
         self.model_type: str = model_type
 
@@ -120,3 +120,31 @@ class BaseModel(nn.Module, ABC):
         """
         self.device = device
         return super().to(device)  # type: ignore[return-value]
+    
+    def dummy_forward(self, x: Tensor) -> torch.Tensor:
+        """
+        Optional: Override this in models that need special input logic for tracing/graph logging.
+        Default: Assumes single input is sufficient (for simple models).
+        """
+        return self.forward(x)
+
+    def __call__(self, *args, **kwargs):
+        """
+        Handles both normal forward calls and special cases like model graph tracing.
+        If only a single tensor is passed during a tracing context (e.g., W&B or TorchScript),
+        we route it through dummy_forward.
+        """
+        if len(args) == 1 and isinstance(args[0], torch.Tensor) and self._is_graph_tracing():
+            return self.dummy_forward(args[0])
+        return super().__call__(*args, **kwargs)
+
+    def _is_graph_tracing(self) -> bool:
+        """
+        Detects whether we're in a model graph tracing context like wandb.watch or torch.jit.
+        """
+        import inspect
+        for frame in inspect.stack():
+            if any(keyword in frame.filename.lower() for keyword in ("wandb", "torch/jit")):
+                return True
+        return False
+            

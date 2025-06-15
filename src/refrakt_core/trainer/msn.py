@@ -1,10 +1,3 @@
-"""
-Trainer module for Masked Siamese Networks (MSN).
-
-This trainer handles the self-supervised training of MSN models using
-random patch masking and EMA updates for target networks.
-"""
-
 from typing import Any, Callable, Dict, Optional
 
 import torch
@@ -14,28 +7,16 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from torch.nn.functional import cosine_similarity
+
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.utils.methods import random_patch_masking
+from refrakt_core.schema.model_output import ModelOutput
 
 
 @register_trainer("msn")
 class MSNTrainer(BaseTrainer):
-    """
-    Trainer for Masked Siamese Networks (MSN).
-
-    Args:
-        model (Module): MSN model implementing the __call__ logic.
-        train_loader (DataLoader): Training data.
-        val_loader (DataLoader): Optional validation data.
-        loss_fn (Callable): Loss function taking (z_anchor, z_target, prototypes).
-        optimizer_cls (Callable[..., Optimizer]): Optimizer constructor (e.g., Adam).
-        optimizer_args (Optional[Dict[str, Any]]): Optimizer keyword arguments.
-        device (str): Training device ("cuda" or "cpu").
-        scheduler (Optional[Any]): Optional learning rate scheduler.
-        **kwargs: Extra args forwarded to BaseTrainer.
-    """
-
     def __init__(
         self,
         model: Module,
@@ -54,26 +35,20 @@ class MSNTrainer(BaseTrainer):
         self.scheduler = scheduler
         self.ema_base: float = kwargs.pop("ema_base", 0.996)
         self.grad_clip: Optional[float] = kwargs.pop("grad_clip", None)
-        
+
         if optimizer_args is None:
             optimizer_args = {"lr": 1e-4}
-        
+
         # Convert DictConfig to regular dict if needed
         from omegaconf import DictConfig
         if isinstance(optimizer_args, DictConfig):
             from omegaconf import OmegaConf
             optimizer_args = OmegaConf.to_container(optimizer_args, resolve=True)
-        
+
         self.optimizer = optimizer_cls(self.model.parameters(), **optimizer_args)
         self.global_step = 0
 
     def update_ema(self, momentum: float) -> None:
-        """
-        Update the exponential moving average (EMA) weights of the target networks.
-
-        Args:
-            momentum (float): The EMA momentum to use for update.
-        """
         for param, ema_param in zip(
             self.model.encoder.parameters(),
             self.model.target_encoder.parameters(),
@@ -89,12 +64,6 @@ class MSNTrainer(BaseTrainer):
             ema_param.data.mul_(momentum).add_((1 - momentum) * param.data)
 
     def train(self, num_epochs: int) -> None:
-        """
-        Train the MSN model for a specified number of epochs.
-
-        Args:
-            num_epochs (int): Number of epochs to train.
-        """
         self.model.train()
 
         for epoch in range(num_epochs):
@@ -108,7 +77,12 @@ class MSNTrainer(BaseTrainer):
                 x_target = x
 
                 self.optimizer.zero_grad()
-                z_anchor, z_target, prototypes = self.model(x_anchor, x_target)
+
+                output: ModelOutput = self.model(x_anchor, x_target)
+                z_anchor = output.embeddings
+                z_target = output.loss_components.get("z_target")
+                prototypes = output.loss_components.get("prototypes")
+
                 loss = self.loss_fn(z_anchor, z_target, prototypes)
 
                 loss.backward()
@@ -127,13 +101,40 @@ class MSNTrainer(BaseTrainer):
 
             avg_loss = running_loss / len(self.train_loader)
             print(f"[Epoch {epoch + 1}] Avg Loss: {avg_loss:.4f}")
-
+        
     def evaluate(self) -> float:
         """
-        No-op evaluation for self-supervised training.
+        Evaluate MSN model by measuring average cosine similarity between
+        anchor and target embeddings across the validation set.
 
         Returns:
-            float: Dummy 0.0 for pipeline compatibility.
+            float: Average cosine similarity (0.0 to 1.0)
         """
-        print("[MSNTrainer] Evaluation not implemented for self-supervised pretraining.")
-        return 0.0
+        self.model.eval()
+        total_cos_sim = 0.0
+        num_samples = 0
+
+        if self.val_loader is None:
+            print("[MSNTrainer] No validation loader provided. Skipping evaluation.")
+            return 0.0
+
+        with torch.no_grad():
+            for batch in self.val_loader:
+                x = batch[0].to(self.device)
+                x_anchor = x  # use masked view here if you want, e.g., random_patch_masking(x, ...)
+                x_target = x
+
+                output: ModelOutput = self.model(x_anchor, x_target)
+                z_anchor = output.embeddings  # This is a single tensor
+                z_target = output.loss_components.get("z_target")
+
+                if z_anchor is None or z_target is None:
+                    continue
+
+                cos_sim = cosine_similarity(z_anchor, z_target, dim=-1)  # shape: (batch_size,)
+                total_cos_sim += cos_sim.sum().item()
+                num_samples += cos_sim.size(0)
+
+        avg_cos_sim = total_cos_sim / num_samples if num_samples > 0 else 0.0
+        print(f"[MSNTrainer] Evaluation - Avg Cosine Similarity: {avg_cos_sim:.4f}")
+        return avg_cos_sim

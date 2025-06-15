@@ -1,35 +1,28 @@
 """Loss registry for managing loss functions and classes."""
 
-from typing import Any, Callable, Dict, Type, Union
+from typing import Any, Callable, Dict, Type, Union, Optional
 
 from refrakt_core.logging import get_global_logger
 
 LOSS_REGISTRY: Dict[str, Union[Type[Any], Callable[..., Any]]] = {}
+LOSS_MODES: Dict[str, str] = {}
 _IMPORTED: bool = False
 
 
-def register_loss(name: str) -> Callable[[Union[Type[Any],
-                                        Callable[..., Any]]],
-                                        Union[Type[Any],
-                                        Callable[..., Any]]]:
-    """Register a loss class or function with the given name.
-    
-    Args:
-        name: The name to register the loss under.
-        
-    Returns:
-        A decorator function that registers the loss 
-        class or function.
-    """
-    def decorator(cls_or_fn: Union[Type[Any], Callable[..., Any]]) -> Union[Type[Any], Callable[..., Any]]:
+def register_loss(name: str, mode: Optional[str] = None) -> Callable:
+    def decorator(cls_or_fn):
         logger = get_global_logger()
         if name in LOSS_REGISTRY:
             logger.debug("Warning: Loss '%s' already registered. Skipping.", name)
             return cls_or_fn
+
         logger.debug("Registering loss: %s", name)
         LOSS_REGISTRY[name] = cls_or_fn
-        return cls_or_fn
 
+        if mode:
+            LOSS_MODES[name] = mode  # Register mode if given
+
+        return cls_or_fn
     return decorator
 
 
@@ -72,6 +65,9 @@ def get_loss(name: str, *args: Any, **kwargs: Any) -> Any:
         )
 
     return LOSS_REGISTRY[name](*args, **kwargs)
+
+def get_loss_mode(name: str) -> str:
+    return LOSS_MODES.get(name, "logits")
 
 
 def log_registry_id() -> None:

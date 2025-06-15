@@ -52,9 +52,12 @@ class GANTrainer(BaseTrainer):
         if not {"generator", "discriminator"}.issubset(optimizer):
             raise ValueError("optimizer must contain 'generator' and 'discriminator' keys")
 
-        self.loss_fns = loss_fn
         self.optimizer = optimizer
         self.scheduler = scheduler
+        self.model.to(device)
+        self.loss_fns = {k: v.to(device) for k, v in loss_fn.items()}
+
+        
 
     def train(self, num_epochs: int) -> None:
         """
@@ -88,7 +91,7 @@ class GANTrainer(BaseTrainer):
             if current_accuracy > best_accuracy:
                 best_accuracy = current_accuracy
                 self.save(suffix="best_model")
-                print(f"New best model saved with accuracy: {best_accuracy * 100:.2f}%")
+                print(f"New best model saved with PSNR: {best_accuracy:.2f} dB")
 
             self.save(suffix="latest")
 

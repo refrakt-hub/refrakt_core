@@ -36,6 +36,10 @@ class SRGAN(BaseGAN):
         self.scale_factor: int = scale_factor
         self.generator: Generator = Generator(scale_factor=scale_factor)
         self.discriminator: Discriminator = Discriminator()
+        
+    @property
+    def device(self):
+        return next(self.generator.parameters()).device
 
     def training_step(
         self,
@@ -79,6 +83,8 @@ class SRGAN(BaseGAN):
         optimizer["discriminator"].step()
 
         return {"g_loss": g_loss.item(), "d_loss": d_loss.item()}
+    
+    
 
     def generate(self, input_data: Tensor) -> Tensor:
         """
@@ -150,3 +156,16 @@ class SRGAN(BaseGAN):
         super().load_model(path)
         checkpoint = torch.load(path, map_location=self.device)
         self.scale_factor = checkpoint.get("scale_factor", self.scale_factor)
+    
+    
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        Forward pass through the generator.
+
+        Args:
+            x: Input low-resolution image tensor.
+
+        Returns:
+            Super-resolution output image tensor.
+        """
+        return self.generator(x)
