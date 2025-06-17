@@ -40,6 +40,11 @@ def train(
     try:
         cfg = OmegaConf.load(config_path)
 
+        if cfg.model.name == "autoencoder":
+            variant = cfg.model.params.get("type", "simple")
+            cfg.model.name = f"autoencoder_{variant}"
+
+
         # === Logger Setup ===
         if logger is None:
             runtime_cfg = cfg.get("runtime", {})
@@ -238,6 +243,9 @@ def train(
         final_metrics = trainer.train(num_epochs=num_epochs)
 
         logger.info("Saving model now...")
+        if model_path is None:
+            model_path = f"{cfg.model.name}.pth"
+
         trainer.save(path=model_path)
 
         config_save_path = os.path.join(
