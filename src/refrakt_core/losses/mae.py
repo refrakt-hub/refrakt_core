@@ -59,7 +59,6 @@ class MAELoss(BaseLoss):
         Returns:
             Tensor: Scalar loss value representing masked MSE.
         """
-        print("Shape of Predictions:", predictions)
         pred: Tensor = predictions["recon"]                 # (B, C, H, W)
         mask: Tensor = predictions["mask"].unsqueeze(-1)    # (B, N, 1)
         original: Tensor = predictions["original_patches"]  # (B, N, patch_dim)
