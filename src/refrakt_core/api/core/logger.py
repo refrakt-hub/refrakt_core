@@ -44,7 +44,7 @@ class RefraktLogger:
             self._init_tensorboard()
         if "wandb" in self.log_types:
             self._init_wandb()
-
+            
     def _initialize_logger(self, timestamp: str) -> logging.Logger:
         logger = logging.getLogger(f"refrakt:{timestamp}")
         level = logging.DEBUG if self.debug_enabled else logging.INFO
@@ -76,57 +76,191 @@ class RefraktLogger:
 
     def _init_tensorboard(self) -> None:
         try:
-            from torch.utils.tensorboard import SummaryWriter
-            tb_path = os.path.join(self.log_dir, "tensorboard")
+            from torch.utils.tensorboard.writer import SummaryWriter
+            # Create unique directory using timestamp
+            tb_path = os.path.join(self.log_dir, "tensorboard", 
+                                datetime.now().strftime("%Y%m%d_%H%M%S"))
             os.makedirs(tb_path, exist_ok=True)
             self.tb_writer = SummaryWriter(log_dir=tb_path)
             self.info(f"TensorBoard initialized at {tb_path}")
         except Exception as e:
             self.error(f"TensorBoard init failed: {e}")
+    
+    def _extract_tensor_from_model_output(self, output: Any) -> Optional[Tensor]:
+        """
+        Extracts a tensor from ModelOutput or raw output for logging compatibility.
+        Prioritizes 'logits', 'reconstruction', or any available tensor field.
+        """
+        if isinstance(output, torch.Tensor):
+            return output
 
-    def log_metrics(self, metrics: Dict[str, float], step: int) -> None:
+        if hasattr(output, "logits") and isinstance(output.logits, torch.Tensor):
+            return output.logits
+        if hasattr(output, "reconstruction") and isinstance(output.reconstruction, torch.Tensor):
+            return output.reconstruction
+
+        # Check if any attribute is a tensor
+        for attr in dir(output):
+            if not attr.startswith("_"):
+                val = getattr(output, attr)
+                if isinstance(val, torch.Tensor):
+                    return val
+        return None
+            
+    def log_metrics(self, metrics: Dict[str, float], step: int, prefix: Optional[str] = None) -> None:
+        if not hasattr(self, "_logged_metrics"):
+            self._logged_metrics = set()
+
+        # Create metrics to log, checking for duplicates
+        metrics_to_log = {}
+        for metric_name, value in metrics.items():
+            # Apply prefix only once
+            full_metric_name = f"{prefix}/{metric_name}" if prefix else metric_name
+            
+            # Create unique ID for this metric at this step
+            metric_id = (full_metric_name, step)
+            
+            if metric_id not in self._logged_metrics:
+                self._logged_metrics.add(metric_id)
+                metrics_to_log[metric_name] = value
+            else:
+                self.debug(f"[RefraktLogger] Skipping duplicate metric '{full_metric_name}' at step {step}")
+
+        # Only log if we have metrics to log
+        if not metrics_to_log:
+            return
+
+        # Log to TensorBoard
         if self.tb_writer:
-            for k, v in metrics.items():
-                self.tb_writer.add_scalar(k, v, step)
+            for k, v in metrics_to_log.items():
+                full_k = f"{prefix}/{k}" if prefix else k
+                self.tb_writer.add_scalar(full_k, v, step)
+        
+        # Log to WandB
         if self.wandb_run:
-            self.wandb_run.log(metrics, step=step)
-
-    def log_config(self, config: Dict[str, Union[int, float, str, bool, Tensor]]) -> None:
+            log_data = {f"{prefix}/{k}" if prefix else k: v for k, v in metrics_to_log.items()}
+            self.wandb_run.log(log_data, step=step)
+            
+    def log_config(self, config: Dict[str, Any]) -> None:
+        """Log configuration to WandB and TensorBoard, handling complex types."""
         if self.wandb_run:
             self.wandb_run.config.update(config)
+        
         if self.tb_writer:
             try:
-                from torch.utils.tensorboard.summary import hparams
-                cfg = flatten_and_filter_config(config)
-                exp, ssi, sei = hparams(cfg, {})
-                self.tb_writer.file_writer.add_summary(exp)
-                self.tb_writer.file_writer.add_summary(ssi)
-                self.tb_writer.file_writer.add_summary(sei)
+                # Create a clean scalar-only config by flattening and filtering
+                scalar_config = {}
+                for k, v in flatten_and_filter_config(config).items():
+                    # Handle different value types
+                    if isinstance(v, (int, float, str, bool)):
+                        scalar_config[k] = v
+                    elif torch.is_tensor(v) and v.numel() == 1:
+                        scalar_config[k] = v.item()
+                    elif isinstance(v, (list, tuple)) and len(v) == 1:
+                        scalar_config[k] = v[0]
+                    elif hasattr(v, 'summary') and callable(v.summary):
+                        # Handle ModelOutput by using its summary
+                        summary = v.summary()
+                        for sk, sv in summary.items():
+                            scalar_config[f"{k}/{sk}"] = sv
+                    
+                # Add placeholder metric for TensorBoard requirements
+                metric_dict = {'placeholder': 0.0}
+                
+                # Create hparams summary
+                self.tb_writer.add_hparams(scalar_config, metric_dict)
+                
+                # Add config as text for visibility
+                config_text = "\n".join([f"{k}: {v}" for k, v in scalar_config.items()])
+                self.tb_writer.add_text("config", config_text, 0)
+                
+                # Flush to ensure immediate write
+                self.tb_writer.flush()
             except Exception as e:
-                self.error(f"TensorBoard hparams failed: {e}")
+                self.error(f"TensorBoard hparams logging failed: {e}")
+                
+    def log_model_graph(
+        self,
+        model: nn.Module,
+        input_tensor: Union[torch.Tensor, Dict[str, torch.Tensor]],
+        model_output: Optional[Any] = None,
+    ) -> None:
+        if not isinstance(model, nn.Module):
+            self.warning("Model graph logging skipped: model is not nn.Module.")
+            return
 
-    def log_model_graph(self, model: nn.Module, input_tensor: Union[torch.Tensor, Dict[str, torch.Tensor]]) -> None:
-        if self.tb_writer:
-            try:
-                # Automatically move tensors to model device
-                device = next(model.parameters()).device
+        try:
+            device = next(model.parameters()).device
+            if isinstance(input_tensor, dict):
+                input_tensor = {k: v.to(device) for k, v in input_tensor.items()}
+            else:
+                input_tensor = input_tensor.to(device)
 
-                if isinstance(input_tensor, dict):
-                    input_tensor = {k: v.to(device) for k, v in input_tensor.items()}
-                else:
-                    input_tensor = input_tensor.to(device)
+            if self.tb_writer:
+                try:
+                    # Create a tracing module that wraps the original model
+                    class TracingModel(nn.Module):
+                        def __init__(self, model):
+                            super().__init__()
+                            self.model = model
+                        
+                        def forward(self, x):
+                            # Use forward_for_graph if available
+                            if hasattr(self.model, 'forward_for_graph'):
+                                return self.model.forward_for_graph(x)
+                            # Otherwise extract tensor from regular output
+                            output = self.model(x)
+                            return self._extract_tensor(output)
+                        
+                        @staticmethod
+                        def _extract_tensor(output: Any) -> torch.Tensor:
+                            """Extract a tensor from ModelOutput or raw output"""
+                            if isinstance(output, torch.Tensor):
+                                return output
+                            if hasattr(output, "logits") and isinstance(output.logits, torch.Tensor):
+                                return output.logits
+                            if hasattr(output, "reconstruction") and isinstance(output.reconstruction, torch.Tensor):
+                                return output.reconstruction
+                            # Try to find any tensor in output
+                            for attr in dir(output):
+                                if not attr.startswith("_") and isinstance(getattr(output, attr), torch.Tensor):
+                                    return getattr(output, attr)
+                            raise ValueError("No tensor found in model output for tracing")
 
-                self.tb_writer.add_graph(model, input_tensor)
-            except Exception as e:
-                self.error(f"Model graph logging failed: {e}")
+                    tracing_model = TracingModel(model)
+                    tracing_model.eval()
+                    self.tb_writer.add_graph(tracing_model, input_tensor)
+                    self.info("Logged model graph to TensorBoard.")
+                except Exception as e:
+                    self.error(f"TensorBoard model graph logging failed: {e}")
 
+            if self.wandb_run:
+                try:
+                    import wandb
+                    self.wandb_run.watch(model, log="all", log_freq=100)
+                    self.info("WandB is watching model and gradients.")
+                except Exception as e:
+                    self.error(f"WandB model watching failed: {e}")
+        except Exception as e:
+            self.error(f"Model graph logging failed: {e}")
 
     def log_images(self, tag: str, images: Union[Tensor, np.ndarray], step: int, dataformats: str = "NCHW") -> None:
         if isinstance(images, Tensor):
             images = images.detach().cpu().numpy()
-        if images.ndim != 4:
-            self.warning(f"Expected 4D image tensor, got {images.shape}")
+        if images.ndim == 2:
+            if isinstance(images, np.ndarray):
+                images = images.reshape(-1, 1, 28, 28)
+            else:
+                images = images.view(-1, 1, 28, 28)
+        elif images.ndim == 3:
+            if isinstance(images, np.ndarray):
+                images = np.expand_dims(images, axis=1)
+            else:
+                images = images.unsqueeze(1)
+        elif images.ndim != 4:
+            self.warning(f"Expected 2D–4D image tensor, got {images.shape}")
             return
+
 
         if dataformats == "NCHW":
             images = np.transpose(images, (0, 2, 3, 1))
@@ -181,8 +315,42 @@ class RefraktLogger:
         except (RuntimeError, ValueError) as err:
             self.error(f"Inference visualization failed: {str(err)}")
 
+    def log_parameters(self, model: nn.Module, step: int, prefix: str = ""):
+        """Log model parameters to TensorBoard and WandB"""
+        if self.tb_writer or self.wandb_run:
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    full_name = f"{prefix}parameters/{name}"
+                    param_data = param.data.cpu().detach()
+                    
+                    # TensorBoard
+                    if self.tb_writer:
+                        # Log as histogram (requires flattened data)
+                        self.tb_writer.add_histogram(full_name, param_data.flatten(), step)
+                    
+                    # WandB
+                    if self.wandb_run:
+                        import wandb
+                        wandb.log({full_name: wandb.Histogram(param_data.numpy())}, step=step)
 
-    # Logging levels
+    def log_gradients(self, model: nn.Module, step: int, prefix: str = ""):
+        """Log model gradients to TensorBoard and WandB"""
+        if self.tb_writer or self.wandb_run:
+            for name, param in model.named_parameters():
+                if param.requires_grad and param.grad is not None:
+                    full_name = f"{prefix}gradients/{name}"
+                    grad_data = param.grad.cpu().detach()
+                    
+                    # TensorBoard
+                    if self.tb_writer:
+                        # Log as histogram (requires flattened data)
+                        self.tb_writer.add_histogram(full_name, grad_data.flatten(), step)
+                    
+                    # WandB
+                    if self.wandb_run:
+                        import wandb
+                        wandb.log({full_name: wandb.Histogram(grad_data.numpy())}, step=step)
+
     def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
         if self.debug_enabled:
             self.logger.debug(msg, *args, **kwargs)

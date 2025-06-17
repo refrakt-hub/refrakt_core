@@ -2,6 +2,7 @@
 The ResNet wrapper that dyynamically loads a ResNet model from the registry
 """
 
+import torch
 from torch import nn
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.registry.model_registry import MODEL_REGISTRY
@@ -27,3 +28,7 @@ class ResNetWrapper(nn.Module):
     def forward(self, x):
         logits = self.backbone(x)
         return ModelOutput(logits=logits)
+
+    def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:
+        """Used only for graph logging; returns just the raw output tensor."""
+        return self.forward(x).logits  # or `.reconstruction`, etc. depending on task

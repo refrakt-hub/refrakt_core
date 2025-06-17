@@ -1,0 +1,28 @@
+# wrappers/perceptual.py
+from typing import Dict, Optional
+import torch
+from torch import nn
+
+from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.registry.loss_registry import register_loss
+from refrakt_core.losses.perceptual import PerceptualLoss
+
+@register_loss("perceptual", mode="features")
+class PerceptualLossWrapper(nn.Module):
+    def __init__(self, loss_params: Optional[Dict] = None):
+        super().__init__()
+        loss_params = loss_params or {}
+        self.loss_fn = PerceptualLoss(**loss_params)
+        self.required_fields = ["sr", "hr"]
+
+    def forward(self, output: ModelOutput, target=None) -> LossOutput:
+        sr = output.reconstruction
+        hr = target  # Use target for high-res images
+        
+        if sr is None or hr is None:
+            missing = [f for f in self.required_fields if locals()[f] is None]
+            raise ValueError(f"Missing required fields: {missing}")
+
+        loss = self.loss_fn(sr, hr)
+        return LossOutput(total=loss, components={"perceptual": loss})

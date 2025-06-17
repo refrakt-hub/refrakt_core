@@ -6,7 +6,7 @@ projector + prototypes for clustering and contrastive learning.
 """
 
 import copy
-from typing import Tuple
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -14,8 +14,8 @@ from timm import create_model
 from torch import Tensor, nn
 
 from refrakt_core.models.templates.base import BaseModel
-from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.registry.model_registry import register_model
+
 
 @register_model("msn")
 class MSNModel(BaseModel):
@@ -46,6 +46,7 @@ class MSNModel(BaseModel):
             encoder_name, pretrained=False, num_classes=0
         )
 
+        # Freeze target encoder
         for param in self.target_encoder.parameters():
             param.requires_grad = False
 
@@ -66,38 +67,28 @@ class MSNModel(BaseModel):
         self.prototypes: nn.Parameter = nn.Parameter(torch.randn(num_prototypes, dim))
         nn.init.xavier_uniform_(self.prototypes)
 
-    def forward(self, x_anchor: Tensor, x_target: Tensor) -> ModelOutput:
+    def forward(self, x_anchor: torch.Tensor, x_target: Optional[torch.Tensor] = None):
         """
-        Forward pass for MSN training.
-        Returns a ModelOutput with embeddings and auxiliary data.
-        """
-        z_anchor: Tensor = self.encoder(x_anchor)
-        z_anchor = self.projector(z_anchor)
-        z_anchor = F.normalize(z_anchor, dim=-1)
+        Forward pass for MSNModel.
 
+        If x_target is None, it assumes x_target = x_anchor. This helps for model graph logging or inference hooks.
+
+        Args:
+            x_anchor (Tensor): Masked input.
+            x_target (Tensor): Unmasked input.
+        Returns:
+            z_anchor, z_target, prototypes
+        """
+        if x_target is None:
+            x_target = x_anchor
+
+        z_anchor = self.projector(self.encoder(x_anchor))  # (B*M, D)
         with torch.no_grad():
-            z_target: Tensor = self.target_encoder(x_target)
-            z_target = self.target_projector(z_target)
-            z_target = F.normalize(z_target, dim=-1)
+            z_target = self.target_projector(self.target_encoder(x_target))  # (B, D)
 
-        return ModelOutput(
-            embeddings=z_anchor,
-            loss_components={
-                "z_target": z_target,
-                "prototypes": self.prototypes
-            }
-        )
+        # Normalize outputs
+        z_anchor = F.normalize(z_anchor, dim=-1)
+        z_target = F.normalize(z_target, dim=-1)
+        prototypes = F.normalize(self.prototypes.weight, dim=-1)
 
-
-    def __call__(self, *args, **kwargs):
-        """
-        Override to handle W&B or TorchScript tracing (which pass a single tensor).
-        If only one input is passed, we assume it's a dummy call and replicate it.
-        """
-        if len(args) == 1 and isinstance(args[0], torch.Tensor):
-            dummy = args[0]
-            return self.forward(dummy, dummy)
-        return super().__call__(*args, **kwargs)
-
-    def dummy_forward(self, x: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-        return self.forward(x, x)
+        return z_anchor, z_target, prototypes

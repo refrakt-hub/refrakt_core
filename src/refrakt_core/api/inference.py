@@ -17,7 +17,10 @@ from refrakt_core.api.builders.model_builder import build_model
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.core.utils import import_modules
 from refrakt_core.api.builders.transform_builder import build_transform
+from refrakt_core.logging import get_global_logger
 
+import warnings
+warnings.filterwarnings("ignore")
 
 class CustomImageDataset(torch.utils.data.Dataset):
     def __init__(self, image_paths, transform=None, expected_channels: int = 3):
@@ -44,39 +47,49 @@ def inference(
 ) -> Dict[str, Any]:
     """Run inference with a trained model and return raw outputs."""
 
-    if logger is None:
-        logger = RefraktLogger("./logs", console=True)
-
     try:
         config = OmegaConf.load(cfg) if isinstance(cfg, str) else cfg
+        runtime_cfg = config.get("runtime", {})
+        log_types = runtime_cfg.get("log_type", [])
+        log_dir = runtime_cfg.get("log_dir", "./logs")
+        mode = runtime_cfg.get("mode", "inference")
+        console = runtime_cfg.get("console", True)
+        debug = runtime_cfg.get("debug", False)
+
+        logger = logger or RefraktLogger(
+            model_name=config.model.name,
+            log_dir=log_dir,
+            log_types=log_types,
+            console=console,
+            debug=debug,
+        )
+        logger.log_config(OmegaConf.to_container(config, resolve=True))
+
         modules = import_modules()
 
-        device = (
-            config.trainer.params.device
-            if hasattr(config, "trainer") and hasattr(config.trainer, "params") and hasattr(config.trainer.params, "device")
-            else "cuda" if torch.cuda.is_available() else "cpu"
-        )
+        # Device selection
+        device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using device: {device}")
 
+        # Model Loading
         model = build_model(config, modules, device)
-
+        
+        # Handle model checkpoint with variant suffix
         if not os.path.exists(model_path):
-            logger.warning(f"Model checkpoint not found at: {model_path}")
-            base_name = os.path.splitext(os.path.basename(model_path))[0]
-            search_pattern = os.path.join(os.path.dirname(model_path), f"{base_name}_*.pth")
-            candidates = sorted(glob.glob(search_pattern))
+            base_path = os.path.splitext(model_path)[0]
+            candidates = glob.glob(f"{base_path}_*.pth")
             if candidates:
                 model_path = max(candidates, key=os.path.getmtime)
-                logger.warning(f"⚠️ Falling back to available checkpoint: {model_path}")
+                logger.warning(f"Using available checkpoint: {model_path}")
             else:
-                raise FileNotFoundError(f"❌ No matching checkpoint found for pattern: {search_pattern}")
+                raise FileNotFoundError(f"No model found at {model_path}")
 
         logger.info(f"Loading model from {model_path}")
-        checkpoint = torch.load(model_path, map_location=device, weights_only=False)
+        checkpoint = torch.load(model_path, map_location=device)
         model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
         model.eval()
 
-        # Dataloader setup
+        # Data Loader Setup
         custom_data = config.get("custom_data")
         if custom_data:
             logger.info("Using custom data for inference...")
@@ -85,22 +98,20 @@ def inference(
             elif custom_data.get("image_dir"):
                 image_dir = custom_data.image_dir
                 image_paths = glob.glob(os.path.join(image_dir, "*.jpg")) + \
-                              glob.glob(os.path.join(image_dir, "*.png")) + \
-                              glob.glob(os.path.join(image_dir, "*.jpeg"))
+                             glob.glob(os.path.join(image_dir, "*.png")) + \
+                             glob.glob(os.path.join(image_dir, "*.jpeg"))
             else:
                 raise ValueError("custom_data must contain either image_path or image_dir")
 
-            transform_config = custom_data.get("transform", [])
-            transform = build_transform(transform_config)
+            transform = build_transform(custom_data.get("transform", []))
             expected_channels = config.model.params.get("in_channels", 3)
-            custom_dataset = CustomImageDataset(image_paths, transform, expected_channels)
+            dataset = CustomImageDataset(image_paths, transform, expected_channels)
             data_loader = torch.utils.data.DataLoader(
-                custom_dataset,
+                dataset,
                 batch_size=config.dataloader.params.get("batch_size", 1),
                 shuffle=False,
                 num_workers=config.dataloader.params.get("num_workers", 0)
             )
-
         elif data is None:
             logger.info("No data provided, using test dataset...")
             test_cfg = OmegaConf.merge(config.dataset, OmegaConf.create({"params": {"train": False}}))
@@ -109,48 +120,76 @@ def inference(
         else:
             data_loader = data
 
+        # Artifact Dumper (only for inference visualization)
+        from refrakt_core.schema.artifact import ArtifactDumper
+        artifact_dumper = ArtifactDumper(
+            enabled=True,  # Always enabled for inference
+            base_path=os.path.join("./artifacts", mode.strip("/")),
+            model_name=config.model.name,
+            log_every=1,  # Log every batch
+            logger=logger
+        )
+
+        # Inference Phase
         logger.info("Running inference...")
         results = []
 
+        def ensure_4d_tensor(tensor):
+            if tensor.dim() == 2:  # Flattened [B, 784]
+                return tensor.view(-1, 1, 28, 28)
+            elif tensor.dim() == 4:
+                return tensor
+            raise ValueError(f"Expected 2D or 4D tensor, got {tensor.shape}")
+        
+        if hasattr(logger, 'wandb') and hasattr(logger, 'step'): 
+            logger.wandb.step = 0
+
         with torch.no_grad():
-            for batch_idx, batch in enumerate(data_loader):
-                if isinstance(batch, torch.Tensor) or (isinstance(batch, list) and len(batch) == 1):
-                    inputs = batch[0] if isinstance(batch, list) else batch
-                    inputs = inputs.to(device)
+            for i, batch in enumerate(data_loader):
+                # Handle different batch formats
+                if isinstance(batch, torch.Tensor):
+                    inputs = batch
                 elif isinstance(batch, dict):
-                    inputs = next((batch[k].to(device) for k in ["image", "lr", "input"] if k in batch), None)
-                    if inputs is None:
-                        raise KeyError("Expected one of ['image', 'lr', 'input'] in batch dict.")
+                    inputs = batch.get("input") or batch.get("image") or batch[0]
                 elif isinstance(batch, (list, tuple)):
-                    inputs = batch[0].to(device)
+                    inputs = batch[0]
                 else:
-                    inputs = batch.to(device)
+                    inputs = batch
 
-                if inputs.dim() != 4:
-                    raise ValueError(f"Expected 4D image tensor (B, C, H, W), got {inputs.shape}")
-
-                if hasattr(model, 'generator'):
-                    outputs = model.generator(inputs)
+                inputs = inputs.to(device)
+                inputs = ensure_4d_tensor(inputs)
+                
+                output = model(inputs)
+                
+                # Handle different output formats
+                if isinstance(output, ModelOutput):
+                    if hasattr(output, "reconstruction") and output.reconstruction is not None:
+                        output.reconstruction = ensure_4d_tensor(output.reconstruction)
+                    artifact_dumper.log_output(output, batch_id=i, targets=inputs)
+                    results.append(output)
+                elif isinstance(output, dict):
+                    if 'recon' in output:
+                        output['recon'] = ensure_4d_tensor(output['recon'])
+                    results.append(ModelOutput(**output))
+                elif isinstance(output, torch.Tensor):
+                    output = ensure_4d_tensor(output)
+                    results.append(ModelOutput(reconstruction=output))
                 else:
-                    outputs = model(inputs)
+                    raise TypeError(f"Unknown output type: {type(output)}")
 
-                if isinstance(outputs, dict):
-                    result = {k: v.cpu() for k, v in outputs.items()}
-                elif isinstance(outputs, torch.Tensor):
-                    result = {"logits": outputs.cpu()}
-                elif isinstance(outputs, ModelOutput):
-                    result = outputs.__dict__  # or serialize relevant fields only
-                    result = {k: (v.cpu() if isinstance(v, torch.Tensor) else v) for k, v in result.items()}
-                else:
-                    raise ValueError(f"Unexpected model output type: {type(outputs)}")
-
-                results.append(result)
-
+        artifact_path = os.path.join(artifact_dumper.base_path, f"{model.__class__.__name__}_outputs.pt")
+        artifact_dumper.save(artifact_path)
 
         logger.info("✅ Inference completed successfully.")
-        return {"model": model, "results": results, "config": config}
+        return {
+            "model": model,
+            "results": results,
+            "config": config,
+            "artifacts_path": artifact_path,
+        }
 
     except Exception as e:
+        logger = logger or get_global_logger()
         logger.error(f"\n❌ Inference failed: {str(e)}")
         logger.error(traceback.format_exc())
-        sys.exit(1)
+        raise

@@ -175,4 +175,5 @@ legacy/
 .ruff_cache/
 wandb/
 config/
+artifacts/
 inference/

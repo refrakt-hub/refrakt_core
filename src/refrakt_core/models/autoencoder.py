@@ -48,18 +48,63 @@ class AutoEncoder(BaseAutoEncoder):
 
         self.input_dim: int = input_dim
         self.hidden_dim: int = hidden_dim
+        self.input_shape = (1, 28, 28) if input_dim == 784 else (input_dim,)
+
 
         # ── encoder / decoder ───────────────────────────────────────────────
-        self.encoder_layers = nn.Sequential(
-            nn.Linear(input_dim, 256), nn.ReLU(inplace=True),
-            nn.Linear(256, 64),        nn.ReLU(),
-            nn.Linear(64, hidden_dim), nn.ReLU(inplace=True),
-        )
-        self.decoder_layers = nn.Sequential(
-            nn.Linear(hidden_dim, 64), nn.ReLU(inplace=True),
-            nn.Linear(64, 256),        nn.ReLU(inplace=True),
-            nn.Linear(256, input_dim), nn.Sigmoid(),
-        )
+        if self.input_dim == 784:
+            self.encoder_layers = nn.Sequential(
+            nn.Linear(input_dim, 512), 
+            nn.ReLU(inplace=True),
+            nn.BatchNorm1d(512),
+            nn.Linear(512, 256),        
+            nn.ReLU(),
+            nn.BatchNorm1d(256),
+            nn.Linear(256, 128),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm1d(128),
+            nn.Linear(128, hidden_dim), 
+            nn.ReLU(inplace=True),
+            )
+            self.decoder_layers = nn.Sequential(
+                nn.Linear(hidden_dim, 128), 
+                nn.ReLU(inplace=True),
+                nn.BatchNorm1d(128),
+                nn.Linear(128, 256),        
+                nn.ReLU(inplace=True),
+                nn.BatchNorm1d(256),
+                nn.Linear(256, 512),        
+                nn.ReLU(inplace=True),
+                nn.BatchNorm1d(512),
+                nn.Linear(512, input_dim), 
+                nn.Sigmoid(),
+            )
+            
+            for m in self.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.kaiming_normal_(m.weight)
+                    nn.init.constant_(m.bias, 0)
+                    
+        else: 
+            in_channels = 1 if input_dim == 224*224 else 3
+
+            self.encoder_layers = nn.Sequential(
+                nn.Conv2d(in_channels, 16, 3, stride=2, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(16, 32, 3, stride=2, padding=1),
+                nn.ReLU(),
+                nn.Flatten(),
+                nn.Linear(32*56*56, hidden_dim)
+            )
+            
+            self.decoder_layers = nn.Sequential(
+                nn.Linear(hidden_dim, 32*56*56),
+                nn.Unflatten(1, (32, 56, 56)),
+                nn.ConvTranspose2d(32, 16, 3, stride=2, padding=1, output_padding=1),
+                nn.ReLU(),
+                nn.ConvTranspose2d(16, in_channels, 3, stride=2, padding=1, output_padding=1),
+                nn.Sigmoid()
+            )
 
         if self.mode == "vae":
             self.mu    = nn.Linear(hidden_dim, hidden_dim)
@@ -91,58 +136,61 @@ class AutoEncoder(BaseAutoEncoder):
         else: 
             return self.encode(x)
 
-  
-    def training_step(
-        self, batch: Tuple[Tensor, ...], optimizer: Optimizer,
-        loss_fn: nn.Module, device: torch.device,
-    ) -> Dict[str, float]:
-        inputs = batch[0].to(device)
-        optimizer.zero_grad()
-        output = self(inputs)
+    # def training_step(
+    #     self, batch: Tuple[Tensor, ...], optimizer: Optimizer,
+    #     loss_fn: nn.Module, device: torch.device,
+    # ) -> Dict[str, float]:
+    #     inputs = batch[0].to(device)
+    #     optimizer.zero_grad()
+    #     output = self(inputs)
 
-        if self.mode == "vae":                          # VAE loss = MSE + KL
-            recon, mu, logvar = output["recon"], output["mu"], output["logvar"]
-            mse = loss_fn(recon, inputs)
-            kl  = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-            loss = mse + kl
-        else:                                           # plain MSE
-            loss = loss_fn(output, inputs)
+    #     if self.mode == "vae":                          # VAE loss = MSE + KL
+    #         recon, mu, logvar = output["recon"], output["mu"], output["logvar"]
+    #         mse = loss_fn(recon, inputs)
+    #         kl  = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+    #         loss = mse + kl
+    #     else:                                           # plain MSE
+    #         loss = loss_fn(output, inputs)
 
-        loss.backward()
-        optimizer.step()
-        return {"loss": loss.item()}
+    #     loss.backward()
+    #     optimizer.step()
+    #     return {"loss": loss.item()}
 
-    def validation_step(
-        self, batch: Tuple[Tensor, ...], loss_fn: nn.Module,
-        device: torch.device,
-    ) -> Dict[str, float]:
-        inputs = batch[0].to(device)
-        output = self(inputs)
+    # def validation_step(
+    #     self, batch: Tuple[Tensor, ...], loss_fn: nn.Module,
+    #     device: torch.device,
+    # ) -> Dict[str, float]:
+    #     inputs = batch[0].to(device)
+    #     output = self(inputs)
 
-        if self.mode == "vae":
-            recon, mu, logvar = output["recon"], output["mu"], output["logvar"]
-            mse = loss_fn(recon, inputs)
-            kl  = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
-            loss = mse + kl
-        else:
-            loss = loss_fn(output, inputs)
-        return {"val_loss": loss.item()}
+    #     if self.mode == "vae":
+    #         recon, mu, logvar = output["recon"], output["mu"], output["logvar"]
+    #         mse = loss_fn(recon, inputs)
+    #         kl  = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+    #         loss = mse + kl
+    #     else:
+    #         loss = loss_fn(output, inputs)
+    #     return {"val_loss": loss.item()}
 
     # ──────────────────────────────────────────────────────────────────────
     # autoencoder.py - Update the forward method
     def forward(self, x: Tensor) -> Union[Tensor, Dict[str, Tensor]]:
-        # Preserve original shape for reconstruction
+        # Store original shape
         original_shape = x.shape
+        
+        # Flatten if needed (for linear models)
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
         
         if self.mode == "simple":
             encoded = self.encode(x)
             decoded = self.decode(encoded)
-            return decoded.view(original_shape)  # Reshape to input dimensions
+            return decoded.view(original_shape)  # Reshape to original input dimensions
             
         # VAE forward
         mu, sigma = self.encode(x)
         z = self._reparameterize(mu, sigma)
         decoded = self.decode(z)
-        recon = decoded.view(original_shape)  # Reshape to input dimensions
+        recon = decoded.view(original_shape)  # Reshape to original input dimensions
         logvar = torch.log(sigma.pow(2) + 1e-7)
         return {"recon": recon, "mu": mu, "logvar": logvar}

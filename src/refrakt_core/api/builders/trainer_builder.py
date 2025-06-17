@@ -29,10 +29,11 @@ def initialize_trainer(
     # Extract special parameters
     device_param = trainer_params.pop("device", device)
     final_device = device_param if device_param else device
+    artifact_dumper = modules.get("artifact_dumper", None)
 
     # Handle different trainer types
-    if cfg.trainer.name != "gan":
-        # For supervised trainers, pass optimizer class and arguments
+    if cfg.trainer.name in ["supervised", "autoencoder", "msn"]:
+        # For standard trainers, pass optimizer class and arguments
         opt_map = {
             "adam": torch.optim.Adam,
             "sgd": torch.optim.SGD,
@@ -51,12 +52,27 @@ def initialize_trainer(
             optimizer_args=optimizer_params,
             device=final_device,
             scheduler=scheduler,
+            artifact_dumper=artifact_dumper,
+            **trainer_params,
+        )
+    elif cfg.trainer.name == "gan":
+        # For GAN trainer, pass optimizer instance
+        if "save_dir" in trainer_params:
+            trainer_params.pop("save_dir")
+        trainer = trainer_cls(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            loss_fn=loss_fn,  # Dict of loss wrappers
+            optimizer_cls=optimizer,  # Dict of optimizers
+            device=final_device,
+            scheduler=scheduler,
+            artifact_dumper=artifact_dumper,
+            save_dir=save_dir,
             **trainer_params,
         )
     else:
-        # For other trainers (GAN, etc.), pass optimizer instance or dict
-        if "save_dir" in trainer_params:
-            trainer_params.pop("save_dir")
+        # Fallback for other trainer types
         trainer = trainer_cls(
             model=model,
             train_loader=train_loader,
@@ -65,7 +81,7 @@ def initialize_trainer(
             optimizer=optimizer,
             device=final_device,
             scheduler=scheduler,
-            save_dir=save_dir,
+            artifact_dumper=artifact_dumper,
             **trainer_params,
         )
 

@@ -1,140 +1,144 @@
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Union
 
 import torch
 from torch.nn import Module
-from torch.nn.utils import clip_grad_norm_
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from torch.nn.functional import cosine_similarity
-
-from refrakt_core.registry.trainer_registry import register_trainer
-from refrakt_core.trainer.base import BaseTrainer
-from refrakt_core.utils.methods import random_patch_masking
 from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.trainer.base import BaseTrainer
+from refrakt_core.registry.trainer_registry import register_trainer
 
 
 @register_trainer("msn")
 class MSNTrainer(BaseTrainer):
+    """
+    Trainer for Masked Siamese Networks (MSN) models.
+    
+    Handles the unique training requirements of MSN models, including:
+    - Processing of masked and unmasked patches
+    - Custom loss functions for siamese networks
+    - Specialized artifact logging for visualizations
+    """
+    
     def __init__(
         self,
         model: Module,
         train_loader: DataLoader,
-        val_loader: Optional[DataLoader],
-        loss_fn: Callable[[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor],
+        val_loader: DataLoader,
+        loss_fn: Callable,
         optimizer_cls: Callable[..., Optimizer],
         optimizer_args: Optional[Dict[str, Any]] = None,
-        device: str = "cpu",
+        device: str = "cuda",
         scheduler: Optional[Any] = None,
+        artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
+        variant = kwargs.pop("model_variant", "msn")
+        kwargs["model_name"] = f"msn_{variant}"
         super().__init__(model, train_loader, val_loader, device, **kwargs)
 
         self.loss_fn = loss_fn
         self.scheduler = scheduler
-        self.ema_base: float = kwargs.pop("ema_base", 0.996)
-        self.grad_clip: Optional[float] = kwargs.pop("grad_clip", None)
+        self.artifact_dumper = artifact_dumper
+        self.extra_params = kwargs
 
-        if optimizer_args is None:
-            optimizer_args = {"lr": 1e-4}
-
-        # Convert DictConfig to regular dict if needed
-        from omegaconf import DictConfig
+        from omegaconf import DictConfig, OmegaConf
         if isinstance(optimizer_args, DictConfig):
-            from omegaconf import OmegaConf
             optimizer_args = OmegaConf.to_container(optimizer_args, resolve=True)
 
-        self.optimizer = optimizer_cls(self.model.parameters(), **optimizer_args)
-        self.global_step = 0
-
-    def update_ema(self, momentum: float) -> None:
-        for param, ema_param in zip(
-            self.model.encoder.parameters(),
-            self.model.target_encoder.parameters(),
-            strict=False,
-        ):
-            ema_param.data.mul_(momentum).add_((1 - momentum) * param.data)
-
-        for param, ema_param in zip(
-            self.model.projector.parameters(),
-            self.model.target_projector.parameters(),
-            strict=False,
-        ):
-            ema_param.data.mul_(momentum).add_((1 - momentum) * param.data)
+        self.optimizer = optimizer_cls(self.model.parameters(), **(optimizer_args or {"lr": 1e-3}))
+        self.log_every = getattr(self.artifact_dumper, "log_every", 10) if self.artifact_dumper else None
 
     def train(self, num_epochs: int) -> None:
-        self.model.train()
+        best_loss = float("inf")
 
         for epoch in range(num_epochs):
-            running_loss = 0.0
-            pbar = tqdm(self.train_loader, desc=f"Epoch [{epoch + 1}/{num_epochs}]")
+            self.model.train()
+            loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
 
-            for batch in pbar:
-                x = batch[0].to(self.device)
-
-                x_anchor = random_patch_masking(x, mask_ratio=0.6, patch_size=16)
-                x_target = x
+            for step, batch in enumerate(loop):
+                # MSN models typically require both masked and unmasked inputs
+                inputs = self._prepare_msn_inputs(batch).to(self.device)
 
                 self.optimizer.zero_grad()
+                raw_outputs = self.model(inputs)
+                model_output = self._build_model_output(raw_outputs, inputs)
 
-                output: ModelOutput = self.model(x_anchor, x_target)
-                z_anchor = output.embeddings
-                z_target = output.loss_components.get("z_target")
-                prototypes = output.loss_components.get("prototypes")
-
-                loss = self.loss_fn(z_anchor, z_target, prototypes)
-
-                loss.backward()
-                if self.grad_clip is not None:
-                    clip_grad_norm_(self.model.parameters(), self.grad_clip)
+                # MSN loss typically uses predictions and targets from siamese branches
+                loss_output: LossOutput = self.loss_fn(model_output)
+                loss_output.total.backward()
                 self.optimizer.step()
 
-                momentum = self.ema_base + (1 - self.ema_base) * (
-                    self.global_step / 10000
-                )
-                self.update_ema(momentum)
-                self.global_step += 1
+                loop.set_postfix({"loss": loss_output.total.item()})
 
-                running_loss += loss.item()
-                pbar.set_postfix({"loss": loss.item()})
+                # Artifact logging for visualization
+                if self.artifact_dumper and self.log_every and step % self.log_every == 0:
+                    self.artifact_dumper.log_output(model_output, batch_id=f"train_ep{epoch}_step{step}")
+                    self.artifact_dumper.log_loss(loss_output, batch_id=f"train_ep{epoch}_step{step}")
 
-            avg_loss = running_loss / len(self.train_loader)
-            print(f"[Epoch {epoch + 1}] Avg Loss: {avg_loss:.4f}")
-        
+            if self.scheduler:
+                self.scheduler.step()
+
+            val_loss = self.evaluate()
+            if val_loss < best_loss:
+                best_loss = val_loss
+                self.save(suffix="best_model")
+                print(f"New best model saved with loss: {best_loss:.4f}")
+
+            self.save(suffix="latest")
+
+        if self.artifact_dumper:
+            self.artifact_dumper.save(filename=f"msn_final_epoch{num_epochs}.pt")
+
     def evaluate(self) -> float:
-        """
-        Evaluate MSN model by measuring average cosine similarity between
-        anchor and target embeddings across the validation set.
-
-        Returns:
-            float: Average cosine similarity (0.0 to 1.0)
-        """
         self.model.eval()
-        total_cos_sim = 0.0
-        num_samples = 0
-
-        if self.val_loader is None:
-            print("[MSNTrainer] No validation loader provided. Skipping evaluation.")
-            return 0.0
+        total_loss = 0.0
 
         with torch.no_grad():
-            for batch in self.val_loader:
-                x = batch[0].to(self.device)
-                x_anchor = x  # use masked view here if you want, e.g., random_patch_masking(x, ...)
-                x_target = x
+            for step, batch in enumerate(tqdm(self.val_loader, desc="Validating", leave=False)):
+                inputs = self._prepare_msn_inputs(batch).to(self.device)
 
-                output: ModelOutput = self.model(x_anchor, x_target)
-                z_anchor = output.embeddings  # This is a single tensor
-                z_target = output.loss_components.get("z_target")
+                raw_outputs = self.model(inputs)
+                model_output = self._build_model_output(raw_outputs, inputs)
+                
+                loss_output: LossOutput = self.loss_fn(model_output)
+                total_loss += loss_output.total.item()
 
-                if z_anchor is None or z_target is None:
-                    continue
+                if self.artifact_dumper and self.log_every and step % self.log_every == 0:
+                    self.artifact_dumper.log_output(model_output, batch_id=f"val_step{step}")
+                    self.artifact_dumper.log_loss(loss_output, batch_id=f"val_step{step}")
 
-                cos_sim = cosine_similarity(z_anchor, z_target, dim=-1)  # shape: (batch_size,)
-                total_cos_sim += cos_sim.sum().item()
-                num_samples += cos_sim.size(0)
+        avg_loss = total_loss / len(self.val_loader)
+        print(f"Validation Loss: {avg_loss:.4f}")
+        return avg_loss
 
-        avg_cos_sim = total_cos_sim / num_samples if num_samples > 0 else 0.0
-        print(f"[MSNTrainer] Evaluation - Avg Cosine Similarity: {avg_cos_sim:.4f}")
-        return avg_cos_sim
+    def _prepare_msn_inputs(self, batch: Union[torch.Tensor, Dict]) -> torch.Tensor:
+        """Prepare inputs for MSN training, handling both masked and unmasked patches"""
+        if isinstance(batch, dict):
+            # MSN batches typically contain both masked and unmasked patches
+            return {k: v.to(self.device) for k, v in batch.items()}
+        return batch.to(self.device)
+
+    def _build_model_output(self, output: Union[Dict, torch.Tensor], inputs: Any) -> ModelOutput:
+        """Construct a standardized ModelOutput object from MSN model results"""
+        if isinstance(output, dict):
+            return ModelOutput(
+                embeddings=output.get("embeddings"),
+                targets=inputs.get("unmasked") if isinstance(inputs, dict) else inputs,
+                attention_maps=output.get("attention_maps"),
+                extra={
+                    "masked_embeddings": output.get("masked_embeddings"),
+                    "unmasked_embeddings": output.get("unmasked_embeddings"),
+                    "mask": output.get("mask"),
+                    "predicted_mask": output.get("predicted_mask"),
+                }
+            )
+        else:
+            return ModelOutput(
+                embeddings=output,
+                targets=inputs,
+                extra={"raw": output},
+            )

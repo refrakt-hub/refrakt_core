@@ -1,4 +1,5 @@
-import os 
+import os
+import glob
 import torch
 from omegaconf import OmegaConf
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
@@ -16,10 +17,38 @@ def _build_test_loader(config):
 def _load_model_checkpoint(model, model_path, device, logger):
     if model_path is None:
         logger.warning("No model checkpoint provided — using random init weights")
-        return
-    if not os.path.exists(model_path):
-        logger.error(f"Model path does not exist: {model_path}")
-        raise FileNotFoundError(model_path)
-    checkpoint = torch.load(model_path, map_location=device)
-    model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
-    logger.info(f"Loaded model from {model_path}")
+        return 0
+
+    if os.path.exists(model_path):
+        checkpoint = torch.load(model_path, map_location=device)
+        model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
+        logger.info(f"Loaded model from {model_path}")
+        return checkpoint.get("global_step", 0)
+
+    # If file doesn't exist, try fallback logic
+    base_dir = os.path.dirname(model_path)
+    base_name = os.path.splitext(os.path.basename(model_path))[0]  # autoencoder_simple
+
+    # Try exact match first
+    exact_match = os.path.join(base_dir, f"{base_name}.pth")
+    if os.path.exists(exact_match):
+        checkpoint = torch.load(exact_match, map_location=device)
+        model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
+        logger.warning(f"⚠️ Falling back to exact checkpoint: {exact_match}")
+        return checkpoint.get("global_step", 0)
+
+    # Try matching variants like _latest, _final
+    pattern = os.path.join(base_dir, f"{base_name}_*.pth")
+    candidates = glob.glob(pattern)
+    if candidates:
+        # Prefer latest or final first
+        preferred = [c for c in candidates if "latest" in c or "final" in c]
+        fallback_path = max(preferred or candidates, key=os.path.getmtime)
+
+        checkpoint = torch.load(fallback_path, map_location=device)
+        model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
+        logger.warning(f"⚠️ Falling back to available checkpoint: {fallback_path}")
+        return checkpoint.get("global_step", 0)
+
+    logger.error(f"Model path does not exist: {model_path}")
+    raise FileNotFoundError(model_path)

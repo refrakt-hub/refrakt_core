@@ -9,9 +9,6 @@ from refrakt_core.schema.loss_output import LossOutput
 class ArtifactDumper:
     """
     Logs and saves model outputs and losses for visualization, analysis, or explainability.
-
-    Stores per-batch outputs (logits, embeddings, attention maps, reconstructions),
-    targets, predictions, filenames, and optional loss info.
     """
 
     def __init__(
@@ -21,11 +18,18 @@ class ArtifactDumper:
         base_path: str = "./artifacts",
         auto_flush: bool = False,
         metadata: Optional[Dict[str, Any]] = None,
+        logger: Optional[Any] = None,  # <--- new
+        log_every: int = 1
+
     ):
         self.enabled = enabled
         self.model_name = model_name
         self.base_path = base_path
         self.auto_flush = auto_flush
+        self.logger = logger 
+        self.log_every = log_every  # ✅ store it
+
+
         self.buffer: Dict[str, Dict[str, Any]] = {}
         self.metadata: Dict[str, Any] = metadata or {}
         os.makedirs(self.base_path, exist_ok=True)
@@ -40,30 +44,26 @@ class ArtifactDumper:
         if not self.enabled:
             return
 
+        # Skip if batch_id doesn't meet log frequency
+        if isinstance(batch_id, int) and batch_id % self.log_every != 0:
+            return
+
         record = {}
+        for field in [
+            "logits", "embeddings", "image", "reconstruction",
+            "targets", "attention_maps", "loss_components", "extra"
+        ]:
+            value = getattr(output, field, None)
+            if value is not None:
+                if field == "loss_components" and isinstance(value, dict):
+                    record[field] = {k: v.detach().cpu() if torch.is_tensor(v) else v
+                                    for k, v in value.items()}
+                elif torch.is_tensor(value):
+                    record[field] = value.detach().cpu()
+                else:
+                    record[field] = value
 
-        if output.logits is not None:
-            logits = output.logits.detach().cpu()
-            record["logits"] = logits
-            record["probs"] = F.softmax(logits, dim=1)
-            record["preds"] = torch.argmax(logits, dim=1)
-
-        if output.embeddings is not None:
-            record["embeddings"] = output.embeddings.detach().cpu()
-
-        if output.reconstruction is not None:
-            record["reconstruction"] = output.reconstruction.detach().cpu()
-
-        if output.attention_maps is not None:
-            record["attention_maps"] = output.attention_maps.detach().cpu()
-
-        if output.generated_image is not None:
-            record["generated"] = output.generated_image.detach().cpu()
-
-        if output.custom is not None:
-            record["custom"] = output.custom.detach().cpu()
-
-        if targets is not None:
+        if targets is not None and "targets" not in record:
             record["targets"] = targets.detach().cpu()
 
         if filenames is not None:
@@ -72,7 +72,17 @@ class ArtifactDumper:
         self.buffer[str(batch_id)] = record
 
         if self.auto_flush:
-            self.save(filename=f"batch_{batch_id}.pt")
+            self.save(filename=f"batch_{batch_id}_{self.model_name}.pt")
+
+        
+    def should_log_step(self, step: int) -> bool:
+        if not hasattr(self, "_logged_steps"):
+            self._logged_steps = set()
+        if step in self._logged_steps:
+            return False
+        self._logged_steps.add(step)
+        return True
+
 
     def log_loss(self, loss: Union[LossOutput, Dict[str, torch.Tensor]], batch_id: Union[int, str]):
         if not self.enabled:
@@ -87,21 +97,42 @@ class ArtifactDumper:
 
         self.buffer[str(batch_id)] = record
 
+    def log_scalar_dict(self, scalar_dict: Dict[str, float], step: int, prefix: str = ""):
+        if not self.enabled:
+            return
+
+        if self.logger:
+            # Don't apply prefix here - let log_metrics handle it
+            self.logger.log_metrics(scalar_dict, step=step, prefix=prefix if prefix else None)
+            
     def save(self, filename: Optional[str] = None):
         if not self.enabled:
             return
 
+        from pathlib import Path
+
         if filename is None:
             filename = f"artifacts_{self.model_name or 'model'}.pt"
 
+        filename_path = Path(filename)
+
+        if filename_path.is_absolute():
+            full_path = filename_path
+        elif any(part == "artifacts" for part in filename_path.parts):
+            # Strip redundant 'artifacts' prefix
+            while filename_path.parts[0] == "artifacts":
+                filename_path = filename_path.relative_to("artifacts")
+            full_path = Path(self.base_path) / filename_path
+        else:
+            full_path = Path(self.base_path) / filename_path
+        full_path.parent.mkdir(parents=True, exist_ok=True)
         save_data = {
             "metadata": self.metadata,
             "outputs": self.buffer,
         }
-
-        full_path = os.path.join(self.base_path, filename)
-        torch.save(save_data, full_path)
-
+        if hasattr(self, "scalar_logs"):
+            save_data["scalar_logs"] = self.scalar_logs
+        torch.save(save_data, str(full_path))
 
     def reset(self):
         self.buffer = {}

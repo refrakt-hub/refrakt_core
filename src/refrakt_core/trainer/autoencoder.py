@@ -1,13 +1,4 @@
-"""
-Trainer module for autoencoder models.
-
-This trainer is responsible for handling the training and validation logic
-of autoencoder-based models using PyTorch.
-"""
-
-from types import SimpleNamespace
-from typing import Any, Callable, Dict, Iterable, Optional, Union
-
+from typing import Any, Callable, Dict, Optional, Union
 import torch
 from torch.nn import Module
 from torch.optim import Optimizer
@@ -17,90 +8,100 @@ from tqdm import tqdm
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.wrappers.losses.mae import MAELossWrapper
 
 
 @register_trainer("autoencoder")
 class AETrainer(BaseTrainer):
-    """
-    Autoencoder Trainer.
-
-    Handles training and evaluation loops for autoencoder models.
-
-    Args:
-        model (Module): The PyTorch model to be trained.
-        train_loader (DataLoader): DataLoader for training data.
-        val_loader (DataLoader): DataLoader for validation data.
-        loss_fn (Callable): Loss function.
-        optimizer_cls (Callable[..., Optimizer]): Optimizer class (e.g., torch.optim.Adam).
-        optimizer_args (Optional[Dict[str, Any]]): Arguments for optimizer instantiation.
-        device (str): Device to use ("cuda" or "cpu").
-        scheduler (Optional[Any]): Learning rate scheduler.
-        **kwargs: Additional arguments forwarded to BaseTrainer.
-    """
-
     def __init__(
         self,
         model: Module,
         train_loader: DataLoader,
         val_loader: DataLoader,
-        loss_fn: Callable[[ModelOutput, torch.Tensor], torch.Tensor],
+        loss_fn: Callable[[ModelOutput, torch.Tensor], LossOutput],
         optimizer_cls: Callable[..., Optimizer],
         optimizer_args: Optional[Dict[str, Any]] = None,
         device: str = "cuda",
         scheduler: Optional[Any] = None,
+        artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
-        model_name = kwargs.pop("model_name", None)
-        variant = kwargs.pop("model_variant", None)
+        variant = kwargs.pop("model_variant", "simple")
+        kwargs["model_name"] = f"autoencoder_{variant}"
+        super().__init__(model, train_loader, val_loader, device, artifact_dumper=artifact_dumper, **kwargs)
 
-        if model_name is not None:
-            kwargs["model_name"] = model_name
-        elif variant is not None:
-            kwargs["model_name"] = f"autoencoder_{variant}"
-        else:
-            kwargs["model_name"] = "autoencoder_simple"
-
-        super().__init__(model, train_loader, val_loader, device, **kwargs)
-        
         self.loss_fn = loss_fn
         self.scheduler = scheduler
+        self.log_every = getattr(artifact_dumper, "log_every", 1) if artifact_dumper else None  # Changed to 1 for every step
+        self.global_step = 0
 
         if optimizer_args is None:
             optimizer_args = {"lr": 1e-3}
 
+        self.logger = self._get_logger()
         self.optimizer = optimizer_cls(self.model.parameters(), **optimizer_args)
 
-    def train(self, num_epochs: int) -> None:
-        best_loss = float('inf')
-        
+    def train(self, num_epochs: int) -> Dict[str, float]:
+        best_loss = float("inf")
+
         for epoch in range(num_epochs):
             self.model.train()
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
 
-            for batch in loop:
-                inputs = self._extract_inputs(batch)
-                inputs = inputs.to(self.device)
-
+            for step, batch in enumerate(loop):
+                inputs = self._extract_inputs(batch).to(self.device)
+                
+                # Reshape inputs if they're flattened
+                if inputs.dim() == 2 and hasattr(self.model, 'expected_input_dim'):
+                    # Only reshape if model specifies expected dimensions
+                    inputs = inputs.view(-1, *self.model.expected_input_dim)
+                    
                 self.optimizer.zero_grad()
-                output: ModelOutput = self.model(inputs)
-                loss = self.loss_fn(output, inputs)
-                loss.backward()
+                output = self.model(inputs)
+                
+                # In train() method, after getting output:
+                if not isinstance(output, ModelOutput):
+                    output = self._unwrap_output(output)
+                    
+                # In the train() method, replace the loss computation with:
+                loss_output = self.loss_fn(output, inputs if not isinstance(self.loss_fn, MAELossWrapper) else None)
+                    
+                loss_output.total.backward()
                 self.optimizer.step()
 
-                loop.set_postfix({"loss": loss.item()})
+                # Log training metrics at every step
+                if self.artifact_dumper:
+                    self.artifact_dumper.log_scalar_dict(
+                        loss_output.summary(), 
+                        step=self.global_step, 
+                        prefix="train"
+                    )
 
-            if self.scheduler:
-                self.scheduler.step()
-                lr = self.optimizer.param_groups[0]["lr"]
-                print(f"Epoch {epoch + 1} complete. Learning rate: {lr:.6f}")
+                    if isinstance(output, ModelOutput):
+                        self.artifact_dumper.log_scalar_dict(
+                            output.summary(), 
+                            step=self.global_step, 
+                            prefix="train"
+                        )
 
-            current_loss = self.evaluate()
-            if current_loss < best_loss:
-                best_loss = current_loss
+                self.global_step += 1
+                loop.set_postfix({"loss": loss_output.total.item()})
+
+            # Validation - no visualization, just metrics
+            val_loss = self.evaluate()
+            
+            if val_loss < best_loss:
+                best_loss = val_loss
                 self.save(suffix="best_model")
-                print(f"New best model saved with loss: {best_loss:.4f}")
+                print(f"New best model saved with loss: {val_loss:.4f}")
 
             self.save(suffix="latest")
+
+        return {
+            "best_val_loss": best_loss,
+            "total_steps": self.global_step
+        }
 
     def evaluate(self) -> float:
         self.model.eval()
@@ -108,21 +109,52 @@ class AETrainer(BaseTrainer):
 
         with torch.no_grad():
             loop = tqdm(self.val_loader, desc="Validating", leave=False)
-            for batch in loop:
-                inputs = self._extract_inputs(batch)
-                inputs = inputs.to(self.device)
 
-                output: ModelOutput = self.model(inputs)
-                loss = self.loss_fn(output, inputs)
-                total_loss += loss.item()
+            for val_step, batch in enumerate(loop):
+                # Use a separate step counter for validation to avoid conflicts
+                val_global_step = self.global_step + val_step + 1000000  # Large offset to avoid conflicts
 
-        avg_val_loss = total_loss / len(self.val_loader)
-        print(f"Validation Loss: {avg_val_loss:.4f}")
-        return avg_val_loss
-    
+                inputs = self._extract_inputs(batch).to(self.device)
+
+                if inputs.dim() == 2 and hasattr(self.model, 'expected_input_dim'):
+                    # Only reshape if model specifies expected dimensions
+                    inputs = inputs.view(-1, *self.model.expected_input_dim)
+                    
+                output = self.model(inputs)
+                loss_output: LossOutput = self.loss_fn(output, inputs)
+                total_loss += loss_output.total.item()
+
+                # Log validation metrics at every step with unique step counter
+                if self.artifact_dumper:
+                    self.artifact_dumper.log_scalar_dict(
+                        loss_output.summary(),
+                        step=val_global_step,
+                        prefix="val"
+                    )
+
+        avg_loss = total_loss / len(self.val_loader)
+        print(f"Validation Loss: {avg_loss:.4f}")
+        return avg_loss
+
+    def _unwrap_output(self, output: Union[ModelOutput, Dict, torch.Tensor]) -> ModelOutput:
+        if output is None:
+            raise ValueError("[_unwrap_output] Received None as output!")
+
+        if isinstance(output, ModelOutput):
+            return output
+        elif isinstance(output, dict):
+            return ModelOutput(**output)
+        else:
+            return ModelOutput(reconstruction=output)
+
     def _extract_inputs(self, batch: Union[torch.Tensor, Dict, list, tuple]) -> torch.Tensor:
         if isinstance(batch, (list, tuple)):
             return batch[0]
         if isinstance(batch, dict):
-            return batch.get("image", next(iter(batch.values())))
+            return batch.get("image") or batch.get("input")
         return batch
+
+    def _get_logger(self):
+        if self.artifact_dumper and hasattr(self.artifact_dumper, "logger"):
+            return self.artifact_dumper.logger
+        return None

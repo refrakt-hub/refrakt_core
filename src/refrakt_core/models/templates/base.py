@@ -121,7 +121,7 @@ class BaseModel(nn.Module, ABC):
         self.device = device
         return super().to(device)  # type: ignore[return-value]
     
-    def dummy_forward(self, x: Tensor) -> torch.Tensor:
+    def dummy_forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Optional: Override this in models that need special input logic for tracing/graph logging.
         Default: Assumes single input is sufficient (for simple models).

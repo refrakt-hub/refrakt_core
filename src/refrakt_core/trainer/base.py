@@ -38,8 +38,10 @@ class BaseTrainer(ABC):
         self.val_loader = val_loader
         self.save_dir: str = kwargs.pop("save_dir", "checkpoints/")
         self.model_name: str = kwargs.pop("model_name", "model")
+        self.artifact_dumper = kwargs.pop("artifact_dumper", None)  # Capture artifact_dumper
         self.optimizer: Optional[Union[Optimizer, Dict[str, Optimizer]]] = None
         self.scheduler: Optional[Union[Any, Dict[str, Any]]] = None
+        self.global_step: int = 0
 
     @abstractmethod
     def train(self, num_epochs: int) -> None:
@@ -86,7 +88,9 @@ class BaseTrainer(ABC):
         checkpoint: Dict[str, Any] = {
             "model_state_dict": self.model.state_dict(),
             "model_name": self.model_name,
+            "global_step": self.global_step,  # ✅ save step
         }
+
 
         if self.optimizer is not None:
             if isinstance(self.optimizer, dict):
@@ -113,19 +117,44 @@ class BaseTrainer(ABC):
     def load(self, path: Optional[str] = None, suffix: str = "final") -> None:
         """
         Load model, optimizer, and scheduler state from disk.
+        Tries to load base model first (without suffix), falls back to suffixed version if needed.
+        Special handling for 'best_model' suffix remains unchanged.
 
         Args:
             path (Optional[str]): Custom file path to load the checkpoint.
-            suffix (str): Suffix to generate default checkpoint name if path is None.
+            suffix (str): Suffix to fall back to if base model isn't found.
         """
-        if path is None:
-            path = self.get_checkpoint_path(suffix)
-
         try:
-            torch.serialization.add_safe_globals([ListConfig])
-            checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+        # Handle explicit path case
+            if path is not None:
+                checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+            else:
+                # Special case for 'best_model' - no fallback
+                if suffix == "best_model":
+                    path = self.get_checkpoint_path(suffix)
+                    checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+                else:
+                    # Try base model first
+                    base_path = os.path.join(self.save_dir, f"{self.model_name}.pth")
+                    fallback_path = self.get_checkpoint_path(suffix)
+                    
+                    # Debug print to verify paths
+                    print(f"[DEBUG] Checking for base model at: {base_path}")
+                    print(f"[DEBUG] Fallback path: {fallback_path}")
+                    
+                    if os.path.exists(base_path):
+                        path = base_path
+                        print(f"[INFO] Loading base model from: {path}")
+                    else:
+                        path = fallback_path
+                        print(f"[INFO] Base model not found, falling back to: {path}")
+                    
+                    checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+
+            # Rest of the loading logic remains the same...
             self.model.load_state_dict(checkpoint["model_state_dict"])
 
+            # === Load optimizer state ===
             if self.optimizer is not None and "optimizer_state_dict" in checkpoint:
                 optimizer_state = checkpoint["optimizer_state_dict"]
                 if isinstance(self.optimizer, dict):
@@ -135,6 +164,7 @@ class BaseTrainer(ABC):
                 else:
                     self.optimizer.load_state_dict(optimizer_state)
 
+            # === Load scheduler state ===
             if self.scheduler is not None and "scheduler_state_dict" in checkpoint:
                 scheduler_state = checkpoint["scheduler_state_dict"]
                 if isinstance(self.scheduler, dict):
@@ -144,6 +174,11 @@ class BaseTrainer(ABC):
                 else:
                     self.scheduler.load_state_dict(scheduler_state)
 
-            print(f"[INFO] Model loaded from: {path}")
+            # Load global_step if available
+            self.global_step = checkpoint.get("global_step", 0)
+
+            print(f"[INFO] Successfully loaded from: {path}")
+
         except (OSError, RuntimeError, KeyError) as e:
             print(f"[ERROR] Failed to load model: {e}")
+            raise

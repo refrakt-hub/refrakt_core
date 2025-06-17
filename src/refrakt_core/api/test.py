@@ -1,5 +1,6 @@
 """The test module for Refrakt."""
 
+import os
 import sys
 import traceback
 from typing import Optional
@@ -22,67 +23,106 @@ from refrakt_core.registry.trainer_registry import get_trainer
 from refrakt_core.schema.artifact import ArtifactDumper
 from refrakt_core.schema.model_output import ModelOutput
 
+import warnings
+warnings.filterwarnings("ignore")
 
 def test(cfg, model_path=None, logger=None):
-    # === Load config and logger ===
-    config = _load_config(cfg)
-    logger = logger or get_global_logger()
-    logger.log_config(OmegaConf.to_container(config, resolve=True))
+    try:
+        # === Load config and logger ===
+        config = _load_config(cfg)
+        runtime_cfg = config.get("runtime", {})
+        log_types = runtime_cfg.get("log_type", [])
+        log_dir = runtime_cfg.get("log_dir", "./logs")
+        mode = runtime_cfg.get("mode", "test")
+        console = runtime_cfg.get("console", True)
+        debug = runtime_cfg.get("debug", False)
 
-    # === Set up modules and device ===
-    modules = {"get_model": get_model, 
-               "get_loss": get_loss, 
-               "get_trainer": get_trainer}
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+        if logger is None:
+            logger = RefraktLogger(
+                model_name=config.model.name,
+                log_dir=log_dir,
+                log_types=log_types,
+                console=console,
+                debug=debug,
+            )
+        logger.log_config(OmegaConf.to_container(config, resolve=True))
 
-    # === Dataset & Model ===
-    dataloader = _build_test_loader(config)
-    model = build_model(config, modules=modules, device=device)
-    loss_fn = build_loss(config, modules=modules, device=device)
-    _load_model_checkpoint(model, model_path, device, logger)
+        # === Set up modules and device ===
+        modules = {
+            "get_model": get_model,
+            "get_loss": get_loss,
+            "get_trainer": get_trainer
+        }
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # === Artifact dumper ===
-    artifact_dumper = ArtifactDumper(enabled=True, base_path="./artifacts/test")
+        # === Dataset, Model, Loss ===
+        dataloader = _build_test_loader(config)
+        model = build_model(config, modules=modules, device=device)
+        loss_fn = build_loss(config, modules=modules, device=device)
+        global_step = _load_model_checkpoint(model, model_path, device, logger)
+        
+        # === Artifact dumper ===
+        artifact_log_every = config.get("artifacts", {}).get("log_every", 1)
+        artifact_enabled = config.get("artifacts", {}).get("enabled", True)
+        artifact_dumper = ArtifactDumper(
+            enabled=artifact_enabled,
+            base_path=os.path.join("./artifacts", mode.strip("/")),
+            model_name=config.model.name,
+            log_every=artifact_log_every, 
+            logger=logger
+        )
 
-    # === Trainer ===
-    trainer = initialize_trainer(
-        cfg=config,
-        model=model,
-        train_loader=None,
-        val_loader=dataloader,
-        loss_fn=loss_fn,
-        optimizer=None,
-        scheduler=None,
-        device=device,
-        modules=modules,
-        save_dir=None,
-    )
-    trainer.logger = logger
-
-    # Attach artifact dumper to trainer if supported
-    if hasattr(trainer, "artifact_dumper"):
+        # === Trainer ===
+        trainer = initialize_trainer(
+            cfg=config,
+            model=model,
+            train_loader=None,
+            val_loader=dataloader,
+            loss_fn=loss_fn,
+            optimizer=None,
+            scheduler=None,
+            device=device,
+            modules=modules,
+            save_dir=None,
+        )
+        trainer.global_step = global_step
+        trainer.logger = logger
         trainer.artifact_dumper = artifact_dumper
+        
 
-    # === Evaluate and log outputs ===
-    logger.info("Running evaluation...")
-    model.eval()
-    eval_results = trainer.evaluate()
+        # === Evaluation Phase ===
+        logger.info("Running evaluation...")
+        model.eval()
+        eval_results = trainer.evaluate()
+        
+        if hasattr(logger, 'wandb') and hasattr(logger.wandb, 'step'):
+            logger.wandb.step = 0
 
-    # Dump model outputs for posthoc visualization
-    with torch.no_grad():
-        for i, batch in enumerate(dataloader):
-            inputs = batch["input"] if isinstance(batch, dict) else batch[0]
-            inputs = inputs.to(device)
-            output = model(inputs)
-            if isinstance(output, ModelOutput):
-                artifact_dumper.log_output(output, batch_id=i)
+        # === Log model outputs per batch ===
+        with torch.no_grad():
+            for i, batch in enumerate(dataloader):
+                inputs = batch["input"] if isinstance(batch, dict) else batch[0]
+                inputs = inputs.to(device)
+                output = model(inputs)
 
-    artifact_dumper.save(f"{trainer.model.__class__.__name__}_outputs.pt")
+                if isinstance(output, ModelOutput):
+                    artifact_dumper.log_output(output, batch_id=i)
+                else:
+                    logger.warning(f"Model output at batch {i} is not a ModelOutput instance.")
 
-    logger.info("Evaluation completed.")
-    return {
-        "model": trainer.model,
-        "evaluation_results": eval_results,
-        "config": config,
-        "artifacts_path": f"./artifacts/test/{trainer.model.__class__.__name__}_outputs.pt"
-    }
+        artifact_path = f"./artifacts/{mode}/{trainer.model.__class__.__name__}_outputs.pt"
+        artifact_dumper.save(artifact_path)
+
+        logger.info("✅ Evaluation completed.")
+        return {
+            "model": trainer.model,
+            "evaluation_results": eval_results,
+            "config": config,
+            "artifacts_path": artifact_path,
+        }
+
+    except Exception as e:
+        logger = logger or get_global_logger()
+        logger.error(f"\n❌ Evaluation failed: {str(e)}")
+        logger.error(traceback.format_exc())
+        return None
