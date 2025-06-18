@@ -1,11 +1,12 @@
 """The test module for Refrakt."""
 
 import os
-import sys
+import glob
 import traceback
 from typing import Optional
 
 import torch
+from datetime import datetime
 from omegaconf import OmegaConf
 
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
@@ -25,8 +26,7 @@ from refrakt_core.schema.model_output import ModelOutput
 
 import warnings
 warnings.filterwarnings("ignore")
-
-def test(cfg, model_path=None, logger=None):
+def test(cfg, model_path: Optional[str] = None, logger=None):
     try:
         # === Load config and logger ===
         config = _load_config(cfg)
@@ -36,6 +36,11 @@ def test(cfg, model_path=None, logger=None):
         mode = runtime_cfg.get("mode", "test")
         console = runtime_cfg.get("console", True)
         debug = runtime_cfg.get("debug", False)
+
+        # Resolve model name for checkpoint consistency
+        if config.model.name == "autoencoder":
+            variant = config.model.params.get("type", "simple")
+            config.model.name = f"autoencoder_{variant}"
 
         if logger is None:
             logger = RefraktLogger(
@@ -59,8 +64,7 @@ def test(cfg, model_path=None, logger=None):
         dataloader = _build_test_loader(config)
         model = build_model(config, modules=modules, device=device)
         loss_fn = build_loss(config, modules=modules, device=device)
-        global_step = _load_model_checkpoint(model, model_path, device, logger)
-        
+
         # === Artifact dumper ===
         artifact_log_every = config.get("artifacts", {}).get("log_every", 1)
         artifact_enabled = config.get("artifacts", {}).get("enabled", True)
@@ -68,8 +72,8 @@ def test(cfg, model_path=None, logger=None):
             enabled=artifact_enabled,
             base_path=os.path.join("./artifacts", mode.strip("/")),
             model_name=config.model.name,
-            log_every=artifact_log_every, 
-            logger=logger
+            log_every=artifact_log_every,
+            logger=logger,
         )
 
         # === Trainer ===
@@ -85,20 +89,35 @@ def test(cfg, model_path=None, logger=None):
             modules=modules,
             save_dir=None,
         )
-        trainer.global_step = global_step
+
+        # === Load Checkpoint ===
         trainer.logger = logger
         trainer.artifact_dumper = artifact_dumper
         
+        if model_path is None:
+            model_name = config.model.name
+            default_path = f"./checkpoints/{model_name}.pth"
+            if not os.path.exists(default_path):
+                # Try fallback variant: autoencoder_*.pth
+                fallback_paths = glob.glob(f"./checkpoints/{model_name}_*.pth")
+                if fallback_paths:
+                    model_path = max(fallback_paths, key=os.path.getmtime)
+                    logger.warning(f"Fallback checkpoint selected: {model_path}")
+                else:
+                    raise FileNotFoundError(f"No checkpoint found for: {model_name}")
+            else:
+                model_path = default_path
+        trainer.load(path=model_path, suffix="latest")
 
         # === Evaluation Phase ===
-        logger.info("Running evaluation...")
-        model.eval()
+        logger.info("🧪 Running evaluation...")
         eval_results = trainer.evaluate()
-        
+
+        # === Log model outputs per batch ===
         if hasattr(logger, 'wandb') and hasattr(logger.wandb, 'step'):
             logger.wandb.step = 0
 
-        # === Log model outputs per batch ===
+        model.eval()
         with torch.no_grad():
             for i, batch in enumerate(dataloader):
                 inputs = batch["input"] if isinstance(batch, dict) else batch[0]
@@ -110,7 +129,7 @@ def test(cfg, model_path=None, logger=None):
                 else:
                     logger.warning(f"Model output at batch {i} is not a ModelOutput instance.")
 
-        artifact_path = f"./artifacts/{mode}/{trainer.model.__class__.__name__}_outputs.pt"
+        artifact_path = f"./artifacts/{mode}/{model}_outputs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pt"
         artifact_dumper.save(artifact_path)
 
         logger.info("✅ Evaluation completed.")

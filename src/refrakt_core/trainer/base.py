@@ -125,7 +125,19 @@ class BaseTrainer(ABC):
             suffix (str): Suffix to fall back to if base model isn't found.
         """
         try:
-        # Handle explicit path case
+            import typing
+            from collections import defaultdict
+            from omegaconf.nodes import AnyNode
+            from omegaconf import ListConfig, DictConfig
+            from omegaconf.base import ContainerMetadata, Metadata
+            from torch.serialization import add_safe_globals
+
+            # 🔐 Allow OmegaConf configs to be unpickled safely
+            add_safe_globals([ListConfig, \
+                    DictConfig, ContainerMetadata, \
+                    typing.Any, list, dict, defaultdict, \
+                    int, float, AnyNode, Metadata])
+            
             if path is not None:
                 checkpoint = torch.load(path, map_location=self.device, weights_only=False)
             else:

@@ -15,6 +15,19 @@ def _build_test_loader(config):
     return build_dataloader(dataset, config.dataloader)
 
 def _load_model_checkpoint(model, model_path, device, logger):
+    import typing
+    from collections import defaultdict
+    from omegaconf.nodes import AnyNode
+    from omegaconf import ListConfig, DictConfig
+    from omegaconf.base import ContainerMetadata, Metadata
+    from torch.serialization import add_safe_globals
+
+    # 🔐 Allow OmegaConf configs to be unpickled safely
+    add_safe_globals([ListConfig, \
+            DictConfig, ContainerMetadata, \
+            typing.Any, list, dict, defaultdict, \
+            int, float, AnyNode, Metadata])
+    
     if model_path is None:
         logger.warning("No model checkpoint provided — using random init weights")
         return 0
