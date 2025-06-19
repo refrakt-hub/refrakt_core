@@ -73,6 +73,63 @@ class ArtifactDumper:
 
         if self.auto_flush:
             self.save(filename=f"batch_{batch_id}_{self.model_name}.pt")
+            
+    def log_full_output(
+        self,
+        output: ModelOutput,
+        loss: Optional[LossOutput] = None,
+        step: Optional[int] = None,
+        batch_id: Optional[Union[int, str]] = None,
+        prefix: str = "train",
+        filenames: Optional[List[str]] = None
+    ):
+        if not self.enabled:
+            return
+
+        # Respect log_every
+        if isinstance(batch_id, int) and batch_id % self.log_every != 0:
+            return
+
+        batch_key = str(batch_id) if batch_id is not None else f"step_{step}"
+        record = {}
+
+        # === Log from ModelOutput ===
+        for field in [
+            "logits", "embeddings", "image", "reconstruction",
+            "targets", "attention_maps", "loss_components", "extra"
+        ]:
+            value = getattr(output, field, None)
+            if value is not None:
+                if field == "loss_components" and isinstance(value, dict):
+                    record[field] = {k: v.detach().cpu() if torch.is_tensor(v) else v for k, v in value.items()}
+                elif torch.is_tensor(value):
+                    record[field] = value.detach().cpu()
+                else:
+                    record[field] = value
+
+        if filenames is not None:
+            record["filenames"] = filenames
+
+        # === Log from LossOutput ===
+        if loss is not None:
+            record["loss_total"] = float(loss.total.item())
+            record["loss_components_full"] = {k: float(v.item()) for k, v in loss.components.items()}
+
+        self.buffer[batch_key] = record
+
+        # === Push scalar metrics to logger (W&B, TensorBoard) ===
+        if self.logger and step is not None:
+            scalar_dict = {}
+            if hasattr(output, "summary") and callable(output.summary):
+                scalar_dict.update(output.summary())
+            if loss and hasattr(loss, "summary"):
+                scalar_dict.update(loss.summary())
+            if scalar_dict:
+                self.logger.log_metrics(scalar_dict, step=step, prefix=prefix)
+
+        # === Save to disk if auto_flush ===
+        if self.auto_flush:
+            self.save(filename=f"batch_{batch_key}_{self.model_name}.pt")
 
         
     def should_log_step(self, step: int) -> bool:

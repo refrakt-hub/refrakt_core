@@ -8,21 +8,29 @@ from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.registry.loss_registry import register_loss
 from refrakt_core.losses.dino import DINOLoss
 
-@register_loss("dino", mode="embedding")
-class DINOLossWrapper(nn.Module):
-    def __init__(self, loss_params: Optional[Dict] = None):
-        super().__init__()
-        loss_params = loss_params or {}
-        self.loss_fn = DINOLoss(**loss_params)
-        self.required_fields = ["student_output", "teacher_output"]
+from refrakt_core.losses.templates.base import BaseLoss
 
-    def forward(self, output: ModelOutput, target=None) -> LossOutput:
-        student = output.embeddings
-        teacher = output.extra.get("teacher_output")
+@register_loss("dino_wrapped", mode="embedding")
+class DINOLossWrapper(BaseLoss):
+    def __init__(
+        self,
+        out_dim: int = 1024,
+        teacher_temp: float = 0.04,
+        student_temp: float = 0.1,
+        center_momentum: float = 0.9
+    ) -> None:
+        super().__init__(name="DINOLossWrapper")
+        from .dino import DINOLoss  # Import original loss
+        self.loss_fn = DINOLoss(
+            out_dim=out_dim,
+            teacher_temp=teacher_temp,
+            student_temp=student_temp,
+            center_momentum=center_momentum
+        )
         
-        if student is None or teacher is None:
-            missing = [f for f in self.required_fields if locals()[f] is None]
-            raise ValueError(f"Missing required fields: {missing}")
-
-        loss = self.loss_fn(student, teacher)
-        return LossOutput(total=loss, components={"dino": loss})
+    def forward(self, student_out: torch.Tensor, teacher_out: torch.Tensor) -> LossOutput:
+        loss = self.loss_fn(student_out, teacher_out)
+        return LossOutput(
+            total=loss,
+            components={"dino": loss}
+        )

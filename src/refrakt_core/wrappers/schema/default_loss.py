@@ -13,22 +13,19 @@ class DefaultLossWrapper(nn.Module):
         self.loss_fn = loss_fn
         self.is_mae = isinstance(loss_fn, MAELossWrapper)
         self.is_vae = isinstance(loss_fn, VAELossWrapper)
-
+        
     def forward(
         self,
         output: Union[torch.Tensor, ModelOutput, Dict],
         target: Optional[torch.Tensor] = None,
         **kwargs: Any
     ) -> LossOutput:
-        # MAE case - doesn't need target
         if self.is_mae:
             return self.loss_fn(output)
-        
-        # VAE case - uses target if available
+
         if self.is_vae:
             return self.loss_fn(output, target if target is not None else output.reconstruction)
-        
-        # Standard case - extract appropriate output
+
         if isinstance(output, ModelOutput):
             if hasattr(output, "logits") and output.logits is not None:
                 output_tensor = output.logits
@@ -41,7 +38,12 @@ class DefaultLossWrapper(nn.Module):
         else:
             output_tensor = output
 
-        # For reconstruction losses, use output as target if none provided
         effective_target = target if target is not None else output_tensor
-        total_loss = self.loss_fn(output_tensor, effective_target)
-        return LossOutput(total=total_loss, components={"loss": total_loss})
+        result = self.loss_fn(output_tensor, effective_target)
+
+        if isinstance(result, LossOutput):
+            return result
+        elif isinstance(result, torch.Tensor):
+            return LossOutput(total=result, components={"loss": result})
+        else:
+            raise TypeError(f"[DefaultLossWrapper] Unexpected loss_fn return type: {type(result)}")

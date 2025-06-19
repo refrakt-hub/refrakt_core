@@ -39,17 +39,25 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
 
         # Resolve model name for checkpoint consistency
         if config.model.name == "autoencoder":
-            variant = config.model.params.get("type", "simple")
-            config.model.name = f"autoencoder_{variant}"
+            variant = config.model.params.get("variant", "simple")
+            if variant not in {"simple", "vae"}:
+                raise ValueError(f"Unsupported autoencoder variant: {variant!r}")
+
+            resolved_model_name = f"autoencoder_{variant}"  # ✅ use for checkpoints only
+            print(f"[Resolved] Using model checkpoint name: {resolved_model_name}")
+        else:
+            resolved_model_name = config.model.name
+
 
         if logger is None:
             logger = RefraktLogger(
-                model_name=config.model.name,
+                model_name=resolved_model_name,
                 log_dir=log_dir,
                 log_types=log_types,
                 console=console,
                 debug=debug,
             )
+            
         logger.log_config(OmegaConf.to_container(config, resolve=True))
 
         # === Set up modules and device ===
@@ -62,7 +70,12 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
 
         # === Dataset, Model, Loss ===
         dataloader = _build_test_loader(config)
-        model = build_model(config, modules=modules, device=device)
+        
+        model_cls = get_model(config.model.name)
+        model = build_model(config, modules={
+            "get_model": get_model, 
+            "model": model_cls}, device=device)
+        
         loss_fn = build_loss(config, modules=modules, device=device)
 
         # === Artifact dumper ===
@@ -70,8 +83,8 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
         artifact_enabled = config.get("artifacts", {}).get("enabled", True)
         artifact_dumper = ArtifactDumper(
             enabled=artifact_enabled,
-            base_path=os.path.join("./artifacts", mode.strip("/")),
-            model_name=config.model.name,
+            base_path="./artifacts",
+            model_name=resolved_model_name,
             log_every=artifact_log_every,
             logger=logger,
         )
@@ -89,24 +102,38 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
             modules=modules,
             save_dir=None,
         )
+        trainer.model_name = resolved_model_name
 
         # === Load Checkpoint ===
         trainer.logger = logger
         trainer.artifact_dumper = artifact_dumper
         
-        if model_path is None:
-            model_name = config.model.name
-            default_path = f"./checkpoints/{model_name}.pth"
-            if not os.path.exists(default_path):
-                # Try fallback variant: autoencoder_*.pth
-                fallback_paths = glob.glob(f"./checkpoints/{model_name}_*.pth")
-                if fallback_paths:
-                    model_path = max(fallback_paths, key=os.path.getmtime)
-                    logger.warning(f"Fallback checkpoint selected: {model_path}")
-                else:
-                    raise FileNotFoundError(f"No checkpoint found for: {model_name}")
+        # model_name = config.model.name
+        # default_path = f"./checkpoints/{resolved_model_name}.pth"
+        # print(f"[DEBUG] Default checkpoint path: {default_path}")
+        # print(f"[DEBUG] Provided model path: {model_path}")
+        # if model_path is None:
+        #     if os.path.exists(default_path):
+        #         model_path = default_path
+        #     else:
+        #         fallback_paths = glob.glob(f"./checkpoints/{resolved_model_name}_*.pth")
+        #         if fallback_paths:
+        #             model_path = max(fallback_paths, key=os.path.getmtime)
+        #             logger.warning(f"[Fallback] Using latest available checkpoint: {model_path}")
+        #         else:
+        #             raise FileNotFoundError(f"No checkpoint found for model: {resolved_model_name}")
+        # print(f"[DEBUG] Final model path: {model_path}")
+        
+        if not os.path.exists(model_path):
+            base_path = os.path.splitext(model_path)[0]
+            candidates = glob.glob(f"{base_path}_*.pth")
+            if candidates:
+                model_path = max(candidates, key=os.path.getmtime)
+                logger.warning(f"Using available checkpoint: {model_path}")
             else:
-                model_path = default_path
+                raise FileNotFoundError(f"No model found at {model_path}")
+
+        logger.info(f"Loading model from {model_path}")
         trainer.load(path=model_path, suffix="latest")
 
         # === Evaluation Phase ===
@@ -129,7 +156,7 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
                 else:
                     logger.warning(f"Model output at batch {i} is not a ModelOutput instance.")
 
-        artifact_path = f"./artifacts/{mode}/{model}_outputs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pt"
+        artifact_path = f"./artifacts/{config.model.name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_outputs.pt"
         artifact_dumper.save(artifact_path)
 
         logger.info("✅ Evaluation completed.")

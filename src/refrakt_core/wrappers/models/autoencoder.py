@@ -6,33 +6,26 @@ from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.registry.model_registry import MODEL_REGISTRY
 from refrakt_core.registry.wrapper_registry import register_wrapper
 
-
 @register_wrapper("autoencoder")
 class AutoencoderWrapper(nn.Module):
-    def __init__(self, model_name: str, model_params: dict):
+    def __init__(self, model: nn.Module, variant: str = "simple"):
         super().__init__()
-        self.variant = model_params.get("variant") or model_params.get("type") or "simple"
-
-        if model_name not in MODEL_REGISTRY:
-            raise ValueError(f"[AutoencoderWrapper] Model '{model_name}' not found in registry.")
-        self.backbone = MODEL_REGISTRY[model_name](**model_params)
+        self.backbone = model
+        self.variant = variant
 
     def forward(self, x):
         output = self.backbone(x)
-        model_out = None
-        
+
         if self.variant == "vae":
-            
-            model_out = ModelOutput(
+            return ModelOutput(
                 reconstruction=output["recon"],
                 extra={
                     "mu": output["mu"],
                     "logvar": output["logvar"],
                 }
             )
-
         elif self.variant == "mae":
-            model_out = ModelOutput(
+            return ModelOutput(
                 reconstruction=output["recon"],
                 extra={
                     "mask": output["mask"],
@@ -40,12 +33,7 @@ class AutoencoderWrapper(nn.Module):
                 }
             )
         else:
-            model_out = ModelOutput(reconstruction=output)
+            return ModelOutput(reconstruction=output)
 
-        if model_out.reconstruction is None:
-            raise RuntimeError("[AutoencoderWrapper] reconstruction is None in ModelOutput!")
-
-        return model_out
-    
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x).reconstruction

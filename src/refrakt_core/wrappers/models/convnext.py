@@ -17,12 +17,9 @@ class ConvNeXtWrapper(nn.Module):
         model_params (dict): Parameters for the base model (e.g. in_channels, num_classes).
     """
 
-    def __init__(self, model_name: str, model_params: dict):
+    def __init__(self, model: nn.Module):
         super().__init__()
-        if model_name not in MODEL_REGISTRY:
-            raise ValueError(f"[ConvNeXtWrapper] Model '{model_name}' not registered in MODEL_REGISTRY.")
-
-        self.backbone = MODEL_REGISTRY[model_name](**model_params)
+        self.backbone = model
 
     def forward(self, x):
         logits = self.backbone(x)

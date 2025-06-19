@@ -27,8 +27,8 @@ class AETrainer(BaseTrainer):
         artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
-        variant = kwargs.pop("model_variant", "simple")
-        kwargs["model_name"] = f"autoencoder_{variant}"
+        # variant = kwargs.pop("model_variant", "simple")
+        # kwargs["model_name"] = f"autoencoder_{variant}"
         super().__init__(model, train_loader, val_loader, device, artifact_dumper=artifact_dumper, **kwargs)
 
         self.loss_fn = loss_fn

@@ -4,6 +4,8 @@ from .resnet import ResNetWrapper
 from .srgan import SRGANWrapper
 from .autoencoder import AutoencoderWrapper
 from .mae import MAEWrapper
+from .dino import DINOWrapper
+from .simclr import SimCLRWrapper
 
 __all__ = [
     "ConvNeXtWrapper",
@@ -12,4 +14,6 @@ __all__ = [
     "SRGANWrapper",
     "AutoencoderWrapper",
     "MAEWrapper",
+    "DINOWrapper",
+    "SimCLRWrapper",
 ]

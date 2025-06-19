@@ -40,8 +40,12 @@ def train(
     try:
         cfg = OmegaConf.load(config_path)
 
-        variant = cfg.model.params.get("type", "simple")
-
+        if cfg.model.name == "autoencoder":
+            variant = cfg.model.params.get("variant", "simple")
+            resolved_model_name = f"autoencoder_{variant}"
+        else:
+            resolved_model_name = cfg.model.name
+            
         # === Logger Setup ===
         if logger is None:
             runtime_cfg = cfg.get("runtime", {})
@@ -52,7 +56,7 @@ def train(
                 raise ValueError(f"❌ Unsupported log_type(s): {unknown}. Supported: {valid_log_types}")
 
             logger = RefraktLogger(
-                model_name=cfg.model.name,
+                model_name=resolved_model_name,
                 log_dir=runtime_cfg.get("log_dir", "./logs"),
                 log_types=log_types,
                 console=runtime_cfg.get("console", True),
@@ -78,37 +82,29 @@ def train(
 
         # === Model ===
         logger.info("Building model...")
-        model = build_model(cfg, modules={"get_model": get_model}, device=device)
+        model_cls = get_model(cfg.model.name)
+        model = build_model(cfg, modules={
+            "get_model": get_model, 
+            "model": model_cls
+        }, device=device)
+
 
         # === Log Model Graph ===
+        import torch.nn.functional as F
         logger.info("Logging model graph...")
         try:
-            # Get first batch
-            example_batch = next(iter(train_loader))
+            if cfg.model.name == "dino":
+                raise NotImplementedError("Graph logging for DINO is not yet supported")
 
-            # Handle multiple batch formats
-            if isinstance(example_batch, (tuple, list)):
-                sample_input = example_batch[0]  # usually (inputs, targets)
-            elif isinstance(example_batch, dict):
-                sample_input = example_batch.get("input") or example_batch.get("image") or example_batch
+            sample_batch = next(iter(train_loader))
+            if isinstance(sample_batch, (tuple, list)):
+                sample_input = sample_batch[0]
             else:
-                sample_input = example_batch
-
-            # Move input to same device as model
-            if isinstance(sample_input, torch.Tensor):
-                sample_input = sample_input.to(next(model.parameters()).device)
-            elif isinstance(sample_input, dict):
-                sample_input = {k: v.to(next(model.parameters()).device) for k, v in sample_input.items()}
-
-            # Forward once to get output
-            with torch.no_grad():
-                output = model(sample_input)
-
-            # Call logger (uses .logits or .reconstruction or first tensor automatically)
-            logger.log_model_graph(model, sample_input, model_output=output)
-
+                sample_input = sample_batch
+            sample_input = sample_input.to(device)
+            logger.log_model_graph(model, sample_input)
         except Exception as e:
-            logger.warning(f"[RefraktLogger] Skipping model graph logging: {e}")
+            logger.error(f"Model graph logging failed: {str(e)}")
 
         def count_parameters(model):
             return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -197,17 +193,19 @@ def train(
         trainer_params["logger"] = logger
 
         # === Artifact Dumper ===
-        artifact_log_every = cfg.get("artifacts", {}).get("log_every", 1)
-        runtime_mode = cfg.get("runtime", {}).get("mode", "train")
+        # artifact_log_every = cfg.get("artifacts", {}).get("log_every", 1)
+        # runtime_mode = cfg.get("runtime", {}).get("mode", "train")
         artifact_dumper = ArtifactDumper(
             enabled=True,
-            model_name=cfg.model.name,
-            base_path=os.path.join("./artifacts", runtime_mode.strip("/")),
+            model_name=resolved_model_name,
+            base_path="./artifacts",
+            log_every=1,
             logger=logger
         )
-        artifact_dumper.log_every = artifact_log_every
+        # artifact_dumper.log_every = artifact_log_every
         trainer_params["artifact_dumper"] = artifact_dumper
 
+    
         # === Trainer Init ===
         if cfg.trainer.name != "gan":
             trainer = trainer_cls(
@@ -234,29 +232,27 @@ def train(
                 scheduler=scheduler,
                 **trainer_params,
             )
+        trainer.model_name = resolved_model_name
+
 
         # === Train ===
         logger.info(f"\nStarting training for {num_epochs} epochs...")
         final_metrics = trainer.train(num_epochs=num_epochs)
-
+        print("[DEBUG] final_metrics:", final_metrics)
+        
         logger.info("Saving model now...")
-        if model_path is None:
-            variant = cfg.model.params.get("type", "simple") if cfg.model.name == "autoencoder" else None
-            if variant:
-                model_path = f"{cfg.model.name}_{variant}.pth"  # e.g., autoencoder_vae.pth
-            else:
-                model_path = f"{cfg.model.name}.pth"
-
+        print("[DEBUG] model_path:", model_path)
         trainer.save(path=model_path)
 
         config_save_path = os.path.join(
-            trainer.save_dir or os.path.join("./artifacts", runtime_mode), 
-            f"{trainer.model.__class__.__name__}.yaml"
+            trainer.save_dir or os.path.join("./artifacts", "yaml"),
+            f"{resolved_model_name}.yaml"
         )
         OmegaConf.save(cfg, config_save_path)
         logger.info(f"Saved config to {config_save_path}")
 
         # Log final metrics
+        print("\nFinal Metrics:", final_metrics)
         if logger:
             logger.log_metrics(final_metrics, step=trainer.global_step, prefix="final")
 

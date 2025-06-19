@@ -32,11 +32,11 @@ class AutoEncoder(BaseAutoEncoder):
         input_dim: int = 784,
         hidden_dim: int = 8,
         mode: str | None = None,           # preferred name
-        type: str | None = None,           # noqa: A002  (keep for backward-compat)
+        variant: str | None = None,           # noqa: A002  (keep for backward-compat)
         model_name: str = "autoencoder",
     ) -> None:
         # allow either keyword; prefer `mode`
-        chosen = (mode or type or "simple").lower()
+        chosen = (mode or variant or "simple").lower()
         if chosen not in {"simple", "vae"}:
             raise ValueError(f"Unsupported autoencoder mode/type: {chosen!r}")
 
@@ -44,7 +44,7 @@ class AutoEncoder(BaseAutoEncoder):
 
         # expose both attributes so that legacy code & new code work
         self.mode: str = chosen
-        self.type: str = chosen
+        self.variant: str = chosen
 
         self.input_dim: int = input_dim
         self.hidden_dim: int = hidden_dim

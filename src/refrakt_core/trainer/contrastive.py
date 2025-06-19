@@ -1,13 +1,6 @@
-"""
-Trainer module for contrastive learning models.
-
-Implements the training and evaluation logic for models using contrastive objectives,
-such as SimCLR or other self-supervised frameworks.
-"""
-
 from typing import Any, Callable, Dict, Optional, Union
-
 import torch
+from torch.amp.grad_scaler import GradScaler
 from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
@@ -15,138 +8,220 @@ from tqdm import tqdm
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.trainer.base import BaseTrainer
+from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.schema.loss_output import LossOutput
 
 
 @register_trainer("contrastive")
 class ContrastiveTrainer(BaseTrainer):
-    """
-    Trainer class for contrastive learning tasks.
-
-    This trainer handles training models using paired views (e.g., SimCLR-style) and 
-    a contrastive loss function.
-
-    Args:
-        model (Module): The contrastive model.
-        train_loader (DataLoader): Training data loader.
-        val_loader (DataLoader): Validation data loader.
-        loss_fn (Callable): Contrastive loss function (e.g., NT-Xent).
-        optimizer_cls (Callable[..., Optimizer]): Optimizer class (e.g., torch.optim.Adam).
-        optimizer_args (Optional[Dict[str, Any]]): Arguments to pass to the optimizer.
-        device (str): Device string ("cuda" or "cpu").
-        scheduler (Optional[Any]): Optional scheduler.
-        **kwargs: Extra arguments forwarded to BaseTrainer.
-    """
-
     def __init__(
         self,
         model: Module,
         train_loader: DataLoader,
-        val_loader: DataLoader,
-        loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-        optimizer_cls: Callable[..., Optimizer],
+        val_loader: Optional[DataLoader] = None,
+        loss_fn: Optional[Callable[[torch.Tensor, torch.Tensor], LossOutput]] = None,
+        optimizer_cls: Optional[Callable[..., Optimizer]] = None,
         optimizer_args: Optional[Dict[str, Any]] = None,
         device: str = "cuda",
         scheduler: Optional[Any] = None,
+        artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(model, train_loader, val_loader, device, **kwargs)
+        super().__init__(
+            model, train_loader, val_loader, device, 
+            artifact_dumper=artifact_dumper, **kwargs
+        )
+        
+        if loss_fn is None:
+            raise ValueError("loss_fn is required for ContrastiveTrainer")
         self.loss_fn = loss_fn
-        self.scheduler = scheduler
-        self.extra_params = kwargs
 
+        if optimizer_cls is None:
+            optimizer_cls = torch.optim.Adam
         if optimizer_args is None:
             optimizer_args = {"lr": 1e-3}
 
         self.optimizer = optimizer_cls(self.model.parameters(), **optimizer_args)
+        self.scheduler = scheduler
+        self.scaler = GradScaler(enabled=(self.device.type == "cuda"))
+        
+        self.global_step = 0
+        self.grad_log_interval = kwargs.get("grad_log_interval", 100)
+        self.param_log_interval = kwargs.get("param_log_interval", 500)
+        self.log_every = getattr(self.artifact_dumper, "log_every", 10) if self.artifact_dumper else None
 
-    def train(self, num_epochs: int) -> None:
-        """
-        Train the model for a given number of epochs.
+    def _unpack_views(self, batch: Union[torch.Tensor, Dict[str, torch.Tensor], list, tuple]) -> list[torch.Tensor]:
+        if isinstance(batch, (tuple, list)) and len(batch) == 2:
+            if all(isinstance(b, torch.Tensor) for b in batch):
+                return [batch[0].to(self.device).float(), batch[1].to(self.device).float()]
+        if isinstance(batch, torch.Tensor) and batch.ndim == 5 and batch.size(1) == 2:
+            return [batch[:, 0].to(self.device).float(), batch[:, 1].to(self.device).float()]
+        if isinstance(batch, dict):
+            return [batch["view1"].to(self.device).float(), batch["view2"].to(self.device).float()]
+        if isinstance(batch, (list, tuple)):
+            view1_batch, view2_batch = [], []
+            for item in batch:
+                if isinstance(item, (tuple, list)):
+                    view1_batch.append(item[0])
+                    view2_batch.append(item[1])
+                elif isinstance(item, dict):
+                    view1_batch.append(item["view1"])
+                    view2_batch.append(item["view2"])
+            return [
+                torch.stack(view1_batch).to(self.device).float(),
+                torch.stack(view2_batch).to(self.device).float(),
+            ]
+        raise TypeError(f"Unsupported batch type: {type(batch)}")
 
-        Args:
-            num_epochs (int): Number of training epochs.
-        """
-        best_accuracy = 0.0
+    def _get_logger(self):
+        return getattr(self.artifact_dumper, "logger", None)
+
+    def train(self, num_epochs: int) -> Dict[str, float]:
+        best_loss = float('inf')
+
         for epoch in range(num_epochs):
             self.model.train()
-            loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
-            epoch_loss = 0.0
+            total_loss = 0.0
+            loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}", leave=True)
 
-            for batch in loop:
-                view1, view2 = self._unpack_views(batch)
-                view1 = view1.to(self.device)
-                view2 = view2.to(self.device)
+            for batch_id, batch in enumerate(loop):
+                try:
+                    view1, view2 = self._unpack_views(batch)
+                    view1 = view1.to(self.device)
+                    view2 = view2.to(self.device)
 
-                self.optimizer.zero_grad()
-                z1 = self.model(view1)
-                z2 = self.model(view2)
+                    with torch.autocast(device_type=self.device.type):
+                        # Get model outputs
+                        out1 = self.model(view1)
+                        out2 = self.model(view2)
+                        
+                        # Handle tensor vs ModelOutput
+                        z1 = out1.embeddings if isinstance(out1, ModelOutput) else out1
+                        z2 = out2.embeddings if isinstance(out2, ModelOutput) else out2
+                        
+                        # Calculate loss
+                        loss_output = self.loss_fn(z1, z2)
+                        if isinstance(loss_output, torch.Tensor):
+                            loss_output = LossOutput(total=loss_output)
+                        loss = loss_output.total
 
-                loss = self.loss_fn(z1, z2)
-                loss.backward()
-                self.optimizer.step()
+                    self.optimizer.zero_grad(set_to_none=True)
+                    self.scaler.scale(loss).backward()
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
 
-                loop.set_postfix({"loss": loss.item()})
-                epoch_loss += loss.item()
+                    total_loss += loss.item()
+                    loop.set_postfix(loss=loss.item())
+                    self.global_step += 1
+
+                    # Logging
+                    if self.artifact_dumper and self.artifact_dumper.should_log_step(self.global_step):
+                        # Create ModelOutput if needed
+                        if not isinstance(out1, ModelOutput):
+                            out1 = ModelOutput(embeddings=out1)
+                        if not isinstance(out2, ModelOutput):
+                            out2 = ModelOutput(embeddings=out2)
+                            
+                        # Log both views
+                        self.artifact_dumper.log_full_output(
+                            output=out1,
+                            loss=loss_output,
+                            step=self.global_step,
+                            batch_id=batch_id,
+                            prefix="train/view1"
+                        )
+                        self.artifact_dumper.log_full_output(
+                            output=out2,
+                            loss=loss_output,
+                            step=self.global_step,
+                            batch_id=batch_id,
+                            prefix="train/view2"
+                        )
+
+                    logger = self._get_logger()
+                    if logger:
+                        if self.global_step % self.grad_log_interval == 0:
+                            logger.log_gradients(self.model, step=self.global_step, prefix="")
+                        if self.global_step % self.param_log_interval == 0:
+                            logger.log_parameters(self.model, step=self.global_step, prefix="")
+                            lr = self.optimizer.param_groups[0]["lr"]
+                            logger.log_metrics({"lr": lr}, step=self.global_step)
+
+                except (RuntimeError, ValueError, TypeError) as e:
+                    loop.write(f"[ERROR] Batch skipped due to error: {e}")
 
             if self.scheduler:
                 self.scheduler.step()
-                current_lr = self.optimizer.param_groups[0]["lr"]
-                print(f"Epoch {epoch + 1}: learning rate = {current_lr:.6f}")
 
-            current_accuracy = self.evaluate()
-            if current_accuracy > best_accuracy:
-                best_accuracy = current_accuracy
+            current_loss = self.evaluate()
+            if current_loss is not None and current_loss < best_loss:
+                best_loss = current_loss
                 self.save(suffix="best_model")
-                print(f"New best model saved with accuracy: {best_accuracy * 100:.2f}%")
+                print(f"New best model saved with loss: {best_loss:.4f}")
 
             self.save(suffix="latest")
-            avg_epoch_loss = epoch_loss / len(self.train_loader)
-            print(f"Epoch {epoch + 1} Train Loss: {avg_epoch_loss:.4f}")
+            avg_loss = total_loss / len(self.train_loader)
+            print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.4f}")
 
-    def evaluate(self) -> float:
-        """
-        Evaluate the model using validation set.
+        return {
+            "train/loss": avg_loss,
+            "val/loss": best_loss if best_loss < float("inf") else None
+        }
 
-        Returns:
-            float: Average validation loss.
-        """
+    def evaluate(self) -> Optional[float]:
+        if self.val_loader is None:
+            print("No validation loader provided")
+            return None
+
         self.model.eval()
         total_loss = 0.0
-        num_batches = len(self.val_loader)
+        loop = tqdm(self.val_loader, desc="Evaluating", leave=True)
 
         with torch.no_grad():
-            loop = tqdm(self.val_loader, desc="Validating", leave=False)
-            for batch in loop:
-                view1, view2 = self._unpack_views(batch)
-                view1 = view1.to(self.device)
-                view2 = view2.to(self.device)
+            for batch_id, batch in enumerate(loop):
+                try:
+                    view1, view2 = self._unpack_views(batch)
+                    view1 = view1.to(self.device)
+                    view2 = view2.to(self.device)
 
-                z1 = self.model(view1)
-                z2 = self.model(view2)
+                    out1 = self.model(view1)
+                    out2 = self.model(view2)
+                    
+                    z1 = out1.embeddings if isinstance(out1, ModelOutput) else out1
+                    z2 = out2.embeddings if isinstance(out2, ModelOutput) else out2
+                    
+                    loss_output = self.loss_fn(z1, z2)
+                    if isinstance(loss_output, torch.Tensor):
+                        loss_output = LossOutput(total=loss_output)
+                    loss = loss_output.total
+                    
+                    total_loss += loss.item()
+                    loop.set_postfix(val_loss=loss.item())
 
-                loss = self.loss_fn(z1, z2)
-                total_loss += loss.item()
+                    if self.artifact_dumper and self.artifact_dumper.should_log_step(self.global_step):
+                        if not isinstance(out1, ModelOutput):
+                            out1 = ModelOutput(embeddings=out1)
+                        if not isinstance(out2, ModelOutput):
+                            out2 = ModelOutput(embeddings=out2)
+                            
+                        self.artifact_dumper.log_full_output(
+                            output=out1,
+                            loss=loss_output,
+                            step=self.global_step,
+                            batch_id=f"val_{batch_id}",
+                            prefix="val/view1"
+                        )
+                        self.artifact_dumper.log_full_output(
+                            output=out2,
+                            loss=loss_output,
+                            step=self.global_step,
+                            batch_id=f"val_{batch_id}",
+                            prefix="val/view2"
+                        )
 
-                loop.set_postfix({"loss": loss.item()})
+                except (RuntimeError, ValueError, TypeError) as e:
+                    loop.write(f"[ERROR] Validation batch skipped due to error: {e}")
 
-        avg_val_loss = total_loss / num_batches
+        avg_val_loss = total_loss / len(self.val_loader)
         print(f"Validation Loss: {avg_val_loss:.4f}")
         return avg_val_loss
-
-    def _unpack_views(
-        self, batch: Union[Dict[str, torch.Tensor], tuple, list]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Unpack two views from the input batch.
-
-        Args:
-            batch (Union[Dict, list, tuple]): Input batch.
-
-        Returns:
-            tuple: Two tensors representing different augmentations of the same image.
-        """
-        if isinstance(batch, (list, tuple)):
-            return batch[0], batch[1]
-        if isinstance(batch, dict):
-            return batch["view1"], batch["view2"]
-        raise TypeError("Unsupported batch format for contrastive learning")

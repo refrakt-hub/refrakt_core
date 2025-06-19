@@ -1,5 +1,4 @@
 from typing import Any, Callable, Dict, Optional, Union
-
 import torch
 from torch.nn import Module
 from torch.optim import Optimizer
@@ -64,7 +63,6 @@ class SupervisedTrainer(BaseTrainer):
         best_accuracy = 0.0
         logger = self._get_logger()
         
-        # Log initial parameters
         if logger and self.global_step == 0:
             logger.log_parameters(self.model, step=self.global_step, prefix="init_")
 
@@ -81,25 +79,19 @@ class SupervisedTrainer(BaseTrainer):
                 loss_output: LossOutput = self.loss_fn(output, targets)
                 loss_output.total.backward()
                 
-                # Log gradients and parameters periodically
                 if logger and self.global_step % self.grad_log_interval == 0:
-                    logger.log_gradients(self.model, step=self.global_step, prefix="grads/")
-                    
+                    logger.log_gradients(self.model, step=self.global_step, prefix="")
                 if logger and self.global_step % self.param_log_interval == 0:
-                    logger.log_parameters(self.model, step=self.global_step, prefix="params/")
-                    
-                    # Log learning rate
+                    logger.log_parameters(self.model, step=self.global_step, prefix="")
                     lr = self.optimizer.param_groups[0]['lr']
                     logger.log_metrics({"lr": lr}, step=self.global_step)
                 
                 self.optimizer.step()
                 
-                # Log loss components
                 loss_summary = loss_output.summary()
                 if self.artifact_dumper:
-                    self.artifact_dumper.log_scalar_dict(loss_summary, step=self.global_step, prefix="train/loss")
+                    self.artifact_dumper.log_scalar_dict(loss_summary, step=self.global_step, prefix="train")
                 
-                # Log additional metrics
                 if isinstance(output, ModelOutput) and hasattr(output, "summary"):
                     output_summary = output.summary()
                     if self.artifact_dumper:
@@ -107,15 +99,28 @@ class SupervisedTrainer(BaseTrainer):
                 
                 loop.set_postfix({"loss": loss_output.total.item()})
 
-                # Artifact logging
+                # === Artifact logging ===
                 if self.artifact_dumper and self.artifact_dumper.should_log_step(self.global_step):
-                    self.artifact_dumper.log_output(output, batch_id=self.global_step, targets=targets)
-                    
-                    # Log input samples (first batch of each epoch)
+                    # wrap everything inside a ModelOutput
+                    full_output = output
+                    if not isinstance(output, ModelOutput):
+                        full_output = ModelOutput(logits=output)
+                    full_output.targets = targets
+                    full_output.image = inputs
+
+                    self.artifact_dumper.log_full_output(
+                        full_output,
+                        loss=loss_output,
+                        step=self.global_step,
+                        batch_id=f"step{self.global_step}"
+                    )
+
                     if step == 0:
-                        self.artifact_dumper.log_output(
-                            ModelOutput(image=inputs), 
-                            batch_id=f"epoch{epoch}_inputs"
+                        self.artifact_dumper.log_full_output(
+                            full_output,
+                            loss=loss_output,
+                            step=self.global_step,
+                            batch_id=f"epoch{epoch}_step{step}"
                         )
 
                 self.global_step += 1
@@ -132,11 +137,9 @@ class SupervisedTrainer(BaseTrainer):
 
             self.save(suffix="latest")
 
-        # Log final parameters
         if logger:
             logger.log_parameters(self.model, step=self.global_step, prefix="final_")
             
-        # Return final metrics
         return {
             "best_accuracy": best_accuracy,
             "final_loss": loss_output.total.item() if loss_output else 0.0,
@@ -165,7 +168,6 @@ class SupervisedTrainer(BaseTrainer):
         acc = correct / total if total > 0 else 0.0
         print(f"\nValidation Accuracy: {acc * 100:.2f}%")
 
-        # Log validation accuracy
         if self.artifact_dumper:
             self.artifact_dumper.log_scalar_dict(
                 {"accuracy": acc}, 
@@ -183,7 +185,6 @@ class SupervisedTrainer(BaseTrainer):
         raise TypeError("Unsupported batch format")
     
     def _get_logger(self):
-        """Helper to get logger from artifact dumper or extra params"""
         if self.artifact_dumper and hasattr(self.artifact_dumper, 'logger'):
             return self.artifact_dumper.logger
         return self.extra_params.get('logger')

@@ -76,7 +76,9 @@ class ResNet(BaseClassifier):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x: Tensor, return_features: bool = False) -> Union[Tensor, Tensor]:
+    def forward(self, x: Tensor, return_features: bool = False, **kwargs) -> Union[Tensor, Tensor]:
+        # print("[DEBUG ResNet] return_features:", return_features)
+
         x = self.conv1(x)
         x = self.maxpool(x)
         x = self.layer0(x)

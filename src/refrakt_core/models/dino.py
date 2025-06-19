@@ -101,7 +101,8 @@ class DINOModel(BaseModel):
         for param in self.teacher_head.parameters():
             param.requires_grad = False
 
-    def forward(self, x: Tensor, teacher: bool = False) -> Tensor:
+    def forward(self, x: Tensor, teacher: bool = False, **kwargs) -> Tensor:
+
         """
         Forward pass through student or teacher head.
 
@@ -112,8 +113,12 @@ class DINOModel(BaseModel):
         Returns:
             Tensor: Projected feature of shape (B, out_dim)
         """
-        features = self.backbone(x)
+        features = self.backbone(x, return_features=True)
         return self.teacher_head(features) if teacher else self.student_head(features)
+
+    def forward_for_graph(self, x: Tensor) -> Tensor:
+        features = self.backbone(x, return_features=True)
+        return self.student_head(features)
 
     @torch.no_grad()
     def update_teacher(self, momentum: float = 0.996) -> None:
@@ -153,7 +158,7 @@ class DINOBackboneWrapper(nn.Module):
         kwargs["return_features"] = True
         return self.backbone(x, **kwargs)
 
-
+    
 @register_model("dino")
 class DINOModelWrapper(DINOModel):
     """
@@ -161,7 +166,7 @@ class DINOModelWrapper(DINOModel):
     Instantiates and integrates with the DINO training setup. 
     """
 
-    def __init__(self, backbone="resnet18", out_dim=65536):
+    def __init__(self, backbone="resnet18", out_dim=2048, **kwargs):
         backbone_map = {
             "resnet18": ResNet18,
             "resnet50": ResNet50,
@@ -182,3 +187,4 @@ class DINOModelWrapper(DINOModel):
 
         wrapped = DINOBackboneWrapper(backbone_instance)
         super().__init__(backbone=wrapped, model_name="dino", out_dim=out_dim)
+        self._model_config = kwargs  # Store additional config

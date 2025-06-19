@@ -6,6 +6,7 @@ from .msn import MSNLossWrapper
 from .ntxent import NTXentLossWrapper
 from .perceptual import PerceptualLossWrapper
 from .vae import VAELossWrapper
+from .ntxent import NTXentLossWrapper
 
 __all__ = [
     "CrossEntropyLossWrapper",
@@ -16,4 +17,5 @@ __all__ = [
     "NTXentLossWrapper",
     "PerceptualLossWrapper",
     "VAELossWrapper",
+    "NTXentLossWrapper",
 ]

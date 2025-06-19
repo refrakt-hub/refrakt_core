@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional, Union
 
 import torch
 from PIL import Image
+from datetime import datetime
 from omegaconf import OmegaConf
 
 from refrakt_core.schema.model_output import ModelOutput
@@ -18,6 +19,8 @@ from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.core.utils import import_modules
 from refrakt_core.api.builders.transform_builder import build_transform
 from refrakt_core.logging import get_global_logger
+from refrakt_core.registry.model_registry import get_model
+
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -55,9 +58,19 @@ def inference(
         mode = runtime_cfg.get("mode", "inference")
         console = runtime_cfg.get("console", True)
         debug = runtime_cfg.get("debug", False)
+        
+        if config.model.name == "autoencoder":
+            variant = config.model.params.get("variant", "simple")
+            if variant not in {"simple", "vae"}:
+                raise ValueError(f"Unsupported autoencoder variant: {variant!r}")
+
+            resolved_model_name = f"autoencoder_{variant}"  # ✅ use for checkpoints only
+            print(f"[Resolved] Using model checkpoint name: {resolved_model_name}")
+        else:
+            resolved_model_name = config.model.name
 
         logger = logger or RefraktLogger(
-            model_name=config.model.name,
+            model_name=resolved_model_name,
             log_dir=log_dir,
             log_types=log_types,
             console=console,
@@ -72,7 +85,10 @@ def inference(
         logger.info(f"Using device: {device}")
 
         # Model Loading
-        model = build_model(config, modules, device)
+        model_cls = get_model(config.model.name)
+        model = build_model(config, modules={
+            "get_model": get_model, 
+            "model": model_cls}, device=device)
         
         # Handle model checkpoint with variant suffix
         if not os.path.exists(model_path):
@@ -124,8 +140,8 @@ def inference(
         from refrakt_core.schema.artifact import ArtifactDumper
         artifact_dumper = ArtifactDumper(
             enabled=True,  # Always enabled for inference
-            base_path=os.path.join("./artifacts", mode.strip("/")),
-            model_name=config.model.name,
+            base_path="./artifacts",
+            model_name=resolved_model_name,
             log_every=1,  # Log every batch
             logger=logger
         )
@@ -177,7 +193,7 @@ def inference(
                 else:
                     raise TypeError(f"Unknown output type: {type(output)}")
 
-        artifact_path = os.path.join(artifact_dumper.base_path, f"{model.__class__.__name__}_outputs.pt")
+        artifact_path = os.path.join(artifact_dumper.base_path, f"{config.model.name}", f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_inference.pt")
         artifact_dumper.save(artifact_path)
 
         logger.info("✅ Inference completed successfully.")
