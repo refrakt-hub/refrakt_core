@@ -60,22 +60,15 @@ python -m refrakt_core.api.train \
 
 ## CLI Usage
 ```bash
-usage: refrakt [-h] --config CONFIG --mode {train,test,inference,pipeline}
+usage: refrakt [-h] --config CONFIG
                [--log_dir LOG_DIR]
-               [--log_type [{tensorboard,wandb} ...]]
-               [--console]
-               [--model_path MODEL_PATH]
                [--debug]
 ```
 
 | Flag       | Description                                                 |
 | ---------- | ----------------------------------------------------------- |
 | `--config` | Path to YAML config file                                    |
-| `--mode`   | Execution mode: `train`, `test`, `inference`, or `pipeline` |
-| `--log_dir`    | Path to log directory (e.g., `./runs`)              |
 | `--log_type`   | Logging backend: `tensorboard`, `wandb`, or both    |
-| `--console`    | Print logs to console as well                       |
-| `--model_path` | Path to model weights/checkpoint for inference/test |
 | `--debug`      | Enable debug mode with extra verbosity              |
 
 
