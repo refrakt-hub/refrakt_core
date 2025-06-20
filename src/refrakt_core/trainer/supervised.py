@@ -76,6 +76,7 @@ class SupervisedTrainer(BaseTrainer):
 
                 self.optimizer.zero_grad()
                 output = self.model(inputs)
+                
                 loss_output: LossOutput = self.loss_fn(output, targets)
                 loss_output.total.backward()
                 

@@ -13,7 +13,7 @@ from refrakt_core.registry.loss_registry import register_loss
 from refrakt_core.losses.templates.base import BaseLoss
 
 
-@register_loss("cross_entropy", mode="logits")
+@register_loss("ce_wrapped", mode="logits")
 class CrossEntropyLossWrapper(BaseLoss):
     """
     Wrapper for CrossEntropyLoss that uses ModelOutput and returns LossOutput.

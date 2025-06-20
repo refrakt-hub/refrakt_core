@@ -11,18 +11,8 @@ from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.registry.trainer_registry import register_trainer
 
-
 @register_trainer("msn")
 class MSNTrainer(BaseTrainer):
-    """
-    Trainer for Masked Siamese Networks (MSN) models.
-    
-    Handles the unique training requirements of MSN models, including:
-    - Processing of masked and unmasked patches
-    - Custom loss functions for siamese networks
-    - Specialized artifact logging for visualizations
-    """
-    
     def __init__(
         self,
         model: Module,
@@ -36,52 +26,70 @@ class MSNTrainer(BaseTrainer):
         artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
-        variant = kwargs.pop("model_variant", "msn")
-        kwargs["model_name"] = f"msn_{variant}"
-        super().__init__(model, train_loader, val_loader, device, **kwargs)
-
+        # Initialize with artifact_dumper in base class
+        super().__init__(
+            model, 
+            train_loader, 
+            val_loader, 
+            device, 
+            artifact_dumper=artifact_dumper,
+            **kwargs
+        )
         self.loss_fn = loss_fn
         self.scheduler = scheduler
         self.artifact_dumper = artifact_dumper
         self.extra_params = kwargs
 
-        from omegaconf import DictConfig, OmegaConf
-        if isinstance(optimizer_args, DictConfig):
-            optimizer_args = OmegaConf.to_container(optimizer_args, resolve=True)
+        # Optimizer is built using passed class and arguments
+        self.optimizer = optimizer_cls(
+            self.model.parameters(), 
+            **(optimizer_args or {"lr": 1e-3})
+        )
+        
+        # Logging setup
+        self.log_every = getattr(artifact_dumper, "log_every", 10) if artifact_dumper else None
+        self.global_step = 0
 
-        self.optimizer = optimizer_cls(self.model.parameters(), **(optimizer_args or {"lr": 1e-3}))
-        self.log_every = getattr(self.artifact_dumper, "log_every", 10) if self.artifact_dumper else None
-
-    def train(self, num_epochs: int) -> None:
-        best_loss = float("inf")
+    def train(self, num_epochs: int) -> Dict[str, float]:
+        best_loss = float('inf')
+        metrics = {}
 
         for epoch in range(num_epochs):
             self.model.train()
-            loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
+            loop = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
 
             for step, batch in enumerate(loop):
-                # MSN models typically require both masked and unmasked inputs
-                inputs = self._prepare_msn_inputs(batch).to(self.device)
-
+                # Prepare inputs (handles both dict and tuple formats)
+                inputs = self._prepare_msn_inputs(batch)
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+                
+                # Forward pass
                 self.optimizer.zero_grad()
-                raw_outputs = self.model(inputs)
-                model_output = self._build_model_output(raw_outputs, inputs)
-
-                # MSN loss typically uses predictions and targets from siamese branches
-                loss_output: LossOutput = self.loss_fn(model_output)
+                output = self.model(inputs)
+                
+                # Compute loss
+                loss_output: LossOutput = self.loss_fn(output)
                 loss_output.total.backward()
                 self.optimizer.step()
-
+                
+                # Update progress
                 loop.set_postfix({"loss": loss_output.total.item()})
-
-                # Artifact logging for visualization
+                
+                # Log artifacts
                 if self.artifact_dumper and self.log_every and step % self.log_every == 0:
-                    self.artifact_dumper.log_output(model_output, batch_id=f"train_ep{epoch}_step{step}")
-                    self.artifact_dumper.log_loss(loss_output, batch_id=f"train_ep{epoch}_step{step}")
+                    self.artifact_dumper.log_full_output(
+                        output,
+                        loss=loss_output,
+                        step=self.global_step,
+                        batch_id=f"train_ep{epoch}_step{step}"
+                    )
+                
+                self.global_step += 1
 
             if self.scheduler:
                 self.scheduler.step()
 
+            # Validation and checkpointing
             val_loss = self.evaluate()
             if val_loss < best_loss:
                 best_loss = val_loss
@@ -90,55 +98,54 @@ class MSNTrainer(BaseTrainer):
 
             self.save(suffix="latest")
 
+        metrics = {
+            "best_val_loss": best_loss,
+            "global_step": self.global_step
+        }
+        
         if self.artifact_dumper:
             self.artifact_dumper.save(filename=f"msn_final_epoch{num_epochs}.pt")
+        
+        return metrics
 
     def evaluate(self) -> float:
         self.model.eval()
         total_loss = 0.0
+        count = 0
 
         with torch.no_grad():
-            for step, batch in enumerate(tqdm(self.val_loader, desc="Validating", leave=False)):
-                inputs = self._prepare_msn_inputs(batch).to(self.device)
-
-                raw_outputs = self.model(inputs)
-                model_output = self._build_model_output(raw_outputs, inputs)
+            for batch in tqdm(self.val_loader, desc="Validating", leave=False):
+                inputs = self._prepare_msn_inputs(batch)
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
                 
-                loss_output: LossOutput = self.loss_fn(model_output)
+                output = self.model(inputs)
+                loss_output: LossOutput = self.loss_fn(output)
+                
                 total_loss += loss_output.total.item()
+                count += 1
+                
+                # Log validation artifacts
+                if self.artifact_dumper and self.log_every and count % self.log_every == 0:
+                    self.artifact_dumper.log_full_output(
+                        output,
+                        loss=loss_output,
+                        step=self.global_step,
+                        batch_id=f"val_step{count}",
+                        prefix="val"
+                    )
 
-                if self.artifact_dumper and self.log_every and step % self.log_every == 0:
-                    self.artifact_dumper.log_output(model_output, batch_id=f"val_step{step}")
-                    self.artifact_dumper.log_loss(loss_output, batch_id=f"val_step{step}")
-
-        avg_loss = total_loss / len(self.val_loader)
+        avg_loss = total_loss / count if count > 0 else float('inf')
         print(f"Validation Loss: {avg_loss:.4f}")
         return avg_loss
 
-    def _prepare_msn_inputs(self, batch: Union[torch.Tensor, Dict]) -> torch.Tensor:
-        """Prepare inputs for MSN training, handling both masked and unmasked patches"""
-        if isinstance(batch, dict):
-            # MSN batches typically contain both masked and unmasked patches
-            return {k: v.to(self.device) for k, v in batch.items()}
-        return batch.to(self.device)
-
-    def _build_model_output(self, output: Union[Dict, torch.Tensor], inputs: Any) -> ModelOutput:
-        """Construct a standardized ModelOutput object from MSN model results"""
-        if isinstance(output, dict):
-            return ModelOutput(
-                embeddings=output.get("embeddings"),
-                targets=inputs.get("unmasked") if isinstance(inputs, dict) else inputs,
-                attention_maps=output.get("attention_maps"),
-                extra={
-                    "masked_embeddings": output.get("masked_embeddings"),
-                    "unmasked_embeddings": output.get("unmasked_embeddings"),
-                    "mask": output.get("mask"),
-                    "predicted_mask": output.get("predicted_mask"),
-                }
-            )
+    def _prepare_msn_inputs(self, batch: Any) -> Dict[str, torch.Tensor]:
+        """Convert batch to dictionary format expected by MSNWrapper"""
+        if isinstance(batch, dict) and 'anchor' in batch and 'target' in batch:
+            return batch
+        elif isinstance(batch, (tuple, list)) and len(batch) == 2:
+            return {'anchor': batch[0], 'target': batch[1]}
+        elif isinstance(batch, torch.Tensor):
+            # Use same tensor for both anchor and target
+            return {'anchor': batch, 'target': batch}
         else:
-            return ModelOutput(
-                embeddings=output,
-                targets=inputs,
-                extra={"raw": output},
-            )
+            raise TypeError(f"Unsupported batch type: {type(batch)}")

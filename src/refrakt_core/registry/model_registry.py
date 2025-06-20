@@ -53,7 +53,8 @@ def get_model(name: str, *args: Any, **kwargs: Any) -> Any:
         raise ValueError(
             f"Model '{name}' not found. Available: {available_models}"
         )
-    return MODEL_REGISTRY[name](*args, **kwargs)
+    # return MODEL_REGISTRY[name](*args, **kwargs)
+    return MODEL_REGISTRY[name]
 
 
 def log_registry_id() -> None:

@@ -89,6 +89,6 @@ class MSNModel(BaseModel):
         # Normalize outputs
         z_anchor = F.normalize(z_anchor, dim=-1)
         z_target = F.normalize(z_target, dim=-1)
-        prototypes = F.normalize(self.prototypes.weight, dim=-1)
+        prototypes = F.normalize(self.prototypes, dim=-1)
 
         return z_anchor, z_target, prototypes

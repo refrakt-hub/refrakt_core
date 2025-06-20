@@ -95,3 +95,18 @@ class SuperResolutionDataset(Dataset[Dict[str, Tensor]]):
             raise ValueError("Transform must be provided for SuperResolutionDataset.")
 
         return {"lr": lr_tensor, "hr": hr_tensor}
+
+@register_dataset("msn_contrastive")
+class MSNCompatibleContrastiveDataset(Dataset):
+    def __init__(self, base_dataset: Dataset, transform: Optional[Callable] = None, **kwargs):
+        self.dataset = ContrastiveDataset(base_dataset=base_dataset, transform=transform)
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        anchor, target = self.dataset[idx]
+        return {
+            "anchor": anchor,
+            "target": target
+        }

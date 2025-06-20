@@ -6,6 +6,8 @@ from .autoencoder import AutoencoderWrapper
 from .mae import MAEWrapper
 from .dino import DINOWrapper
 from .simclr import SimCLRWrapper
+from .vit import ViTWrapper
+from .swin import SwinTransformerWrapper
 
 __all__ = [
     "ConvNeXtWrapper",
@@ -16,4 +18,6 @@ __all__ = [
     "MAEWrapper",
     "DINOWrapper",
     "SimCLRWrapper",
+    "ViTWrapper",
+    "SwinTransformerWrapper"
 ]

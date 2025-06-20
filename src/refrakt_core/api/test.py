@@ -147,7 +147,24 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
         model.eval()
         with torch.no_grad():
             for i, batch in enumerate(dataloader):
-                inputs = batch["input"] if isinstance(batch, dict) else batch[0]
+                if isinstance(batch, torch.Tensor):
+                    inputs = batch
+
+                elif isinstance(batch, dict):
+                    # ✅ Check common input keys
+                    inputs = (
+                        batch.get("input")
+                        or batch.get("image")
+                        or batch.get("lr")  # <- SRGAN uses "lr" as input
+                    )
+                    if inputs is None:
+                        raise ValueError(f"❌ Inference input could not be resolved from batch keys: {list(batch.keys())}")
+
+                elif isinstance(batch, (list, tuple)):
+                    inputs = batch[0]
+
+                else:
+                    raise TypeError(f"Unsupported batch type: {type(batch)}")
                 inputs = inputs.to(device)
                 output = model(inputs)
 

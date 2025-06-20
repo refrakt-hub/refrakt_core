@@ -162,15 +162,25 @@ def inference(
 
         with torch.no_grad():
             for i, batch in enumerate(data_loader):
-                # Handle different batch formats
                 if isinstance(batch, torch.Tensor):
                     inputs = batch
+
                 elif isinstance(batch, dict):
-                    inputs = batch.get("input") or batch.get("image") or batch[0]
+                    # ✅ Check common input keys
+                    inputs = (
+                        batch.get("input")
+                        or batch.get("image")
+                        or batch.get("lr")  # <- SRGAN uses "lr" as input
+                    )
+                    if inputs is None:
+                        raise ValueError(f"❌ Inference input could not be resolved from batch keys: {list(batch.keys())}")
+
                 elif isinstance(batch, (list, tuple)):
                     inputs = batch[0]
+
                 else:
-                    inputs = batch
+                    raise TypeError(f"Unsupported batch type: {type(batch)}")
+
 
                 inputs = inputs.to(device)
                 inputs = ensure_4d_tensor(inputs)

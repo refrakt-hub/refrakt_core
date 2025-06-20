@@ -149,11 +149,7 @@ class BaseTrainer(ABC):
                     # Try base model first
                     base_path = os.path.join(self.save_dir, f"{self.model_name}.pth")
                     fallback_path = self.get_checkpoint_path(suffix)
-                    
-                    # Debug print to verify paths
-                    print(f"[DEBUG] Checking for base model at: {base_path}")
-                    print(f"[DEBUG] Fallback path: {fallback_path}")
-                    
+                                        
                     if os.path.exists(base_path):
                         path = base_path
                         print(f"[INFO] Loading base model from: {path}")

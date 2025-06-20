@@ -2,10 +2,10 @@
 Wrapper for the MSN model that returns structured ModelOutput.
 """
 
+import torch
 from torch import nn
-from typing import Dict, Any, Tuple
+from typing import Dict
 from refrakt_core.schema.model_output import ModelOutput
-from refrakt_core.registry.model_registry import MODEL_REGISTRY
 from refrakt_core.registry.wrapper_registry import register_wrapper
 
 
@@ -15,26 +15,33 @@ class MSNWrapper(nn.Module):
     MSN Wrapper to return structured ModelOutput for training and logging.
 
     Args:
-        model_name (str): Should be 'msn'.
-        model_params (dict): Parameters for MSNModel (encoder_name, projector_dim, etc.)
+        model: Instance of MSNModel
     """
 
-    def __init__(self, model_name: str, model_params: Dict[str, Any]):
+    def __init__(self, model: nn.Module):
         super().__init__()
-        if model_name not in MODEL_REGISTRY:
-            raise ValueError(f"[MSNWrapper] Model '{model_name}' not registered.")
-        self.backbone = MODEL_REGISTRY[model_name](**model_params)
+        self.model = model
 
-    def forward(self, x_anchor, x_target) -> ModelOutput:
-        z_anchor, z_target, prototypes = self.backbone(x_anchor, x_target)
+    def forward(self, x: Dict[str, torch.Tensor]) -> ModelOutput:
+        """
+        Args:
+            x: Dictionary containing 'anchor' and 'target' inputs
+        
+        Returns:
+            ModelOutput with embeddings, extra fields, and targets
+        """
+        # Unpack inputs
+        x_anchor = x['anchor']
+        x_target = x['target']
+
+        # Forward pass through MSNModel
+        z_anchor, z_target, prototypes = self.model(x_anchor, x_target)
+        
         return ModelOutput(
             embeddings=z_anchor,
-            loss_components={
-                "z_target": z_target,
-                "prototypes": prototypes,
-            },
+            targets=x_target,
             extra={
-                "prototypes": prototypes.detach().cpu(),
-                "z_target": z_target.detach().cpu()
+                "z_target": z_target,
+                "prototypes": prototypes
             }
         )

@@ -48,18 +48,6 @@ class SRGAN(BaseGAN):
         loss_fn: Dict[str, torch.nn.Module],
         device: torch.device,
     ) -> Dict[str, float]:
-        """
-        Run a single training step for the SRGAN model.
-
-        Args:
-            batch: Dictionary with 'lr' and 'hr' images.
-            optimizer: Dictionary with 'generator' and 'discriminator' optimizers.
-            loss_fn: Dictionary with loss functions for generator and discriminator.
-            device: The device to run computations on.
-
-        Returns:
-            Dictionary with generator and discriminator losses.
-        """
         lr = batch["lr"].to(device)
         hr = batch["hr"].to(device)
 
@@ -75,16 +63,18 @@ class SRGAN(BaseGAN):
         real_pred = self.discriminator(hr)
         fake_pred = self.discriminator(sr.detach())
 
-        loss_real = loss_fn["discriminator"](real_pred, target_is_real=True)
-        loss_fake = loss_fn["discriminator"](fake_pred, target_is_real=False)
+        # FIX: Create ModelOutput with logits and target_is_real flag
+        real_output = ModelOutput(logits=real_pred, extra={"target_is_real": True})
+        fake_output = ModelOutput(logits=fake_pred, extra={"target_is_real": False})
+        
+        loss_real = loss_fn["discriminator"](real_output)
+        loss_fake = loss_fn["discriminator"](fake_output)
         d_loss = 0.5 * (loss_real + loss_fake)
 
         d_loss.backward()
         optimizer["discriminator"].step()
 
         return {"g_loss": g_loss.item(), "d_loss": d_loss.item()}
-    
-    
 
     def generate(self, input_data: Tensor) -> Tensor:
         """
@@ -112,11 +102,14 @@ class SRGAN(BaseGAN):
         Returns:
             Probability that the input is a real image.
         """
-        self.discriminator.eval()
-        with torch.no_grad():
-            if input_data.device != self.device:
-                input_data = input_data.to(self.device)
-            return self.discriminator(input_data)
+        # self.discriminator.eval()
+        # with torch.no_grad():
+        #     if input_data.device != self.device:
+        #         input_data = input_data.to(self.device)
+        #     return self.discriminator(input_data)
+        if input_data.device != self.device:
+            input_data = input_data.to(self.device)
+        return self.discriminator(input_data)
 
     def summary(self) -> Dict[str, object]:
         """

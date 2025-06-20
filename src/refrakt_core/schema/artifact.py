@@ -140,19 +140,21 @@ class ArtifactDumper:
         self._logged_steps.add(step)
         return True
 
-
-    def log_loss(self, loss: Union[LossOutput, Dict[str, torch.Tensor]], batch_id: Union[int, str]):
+    def log_loss(self, loss: Union[LossOutput, Dict[str, torch.Tensor]], step: Union[int, str], prefix: Optional[str] = None):
         if not self.enabled:
             return
 
-        record = self.buffer.get(str(batch_id), {})
+        key = f"{prefix}_{step}" if prefix else str(step)
+        record = self.buffer.get(key, {})
+
         if isinstance(loss, LossOutput):
             record["loss_total"] = float(loss.total)
             record["loss_components"] = {k: float(v.item()) for k, v in loss.components.items()}
         elif isinstance(loss, dict):
             record["loss_dict"] = {k: float(v.item()) for k, v in loss.items()}
 
-        self.buffer[str(batch_id)] = record
+        self.buffer[key] = record
+
 
     def log_scalar_dict(self, scalar_dict: Dict[str, float], step: int, prefix: str = ""):
         if not self.enabled:

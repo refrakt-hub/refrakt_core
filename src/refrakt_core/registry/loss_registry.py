@@ -65,6 +65,7 @@ def get_loss(name: str, *args: Any, **kwargs: Any) -> Any:
         )
 
     return LOSS_REGISTRY[name](*args, **kwargs)
+    # return LOSS_REGISTRY[name]
 
 def get_loss_mode(name: str) -> str:
     return LOSS_MODES.get(name, "logits")

@@ -35,6 +35,7 @@ def train(
 ):
     from refrakt_core.registry.loss_registry import get_loss
     from refrakt_core.registry.model_registry import get_model
+    from refrakt_core.registry.wrapper_registry import get_wrapper
     from refrakt_core.registry.trainer_registry import get_trainer
 
     try:
@@ -85,6 +86,7 @@ def train(
         model_cls = get_model(cfg.model.name)
         model = build_model(cfg, modules={
             "get_model": get_model, 
+            "get_wrapper": get_wrapper,
             "model": model_cls
         }, device=device)
 
@@ -101,7 +103,12 @@ def train(
                 sample_input = sample_batch[0]
             else:
                 sample_input = sample_batch
-            sample_input = sample_input.to(device)
+
+            # ✅ Safely move to device
+            if isinstance(sample_input, dict):
+                sample_input = {k: v.to(device) for k, v in sample_input.items()}
+            else:
+                sample_input = sample_input.to(device)
             logger.log_model_graph(model, sample_input)
         except Exception as e:
             logger.error(f"Model graph logging failed: {str(e)}")
@@ -220,28 +227,43 @@ def train(
                 **trainer_params,
             )
         else:
-            if not hasattr(model, "generator"):
-                raise ValueError("GAN trainer requires model to have a 'generator'")
+            # Build optimizer_cls dictionary for GAN
+            optimizer_cls = {}
+            optimizer_args = {}
+
+            for comp_name in ["generator", "discriminator"]:
+                comp_cfg = cfg.optimizer.get(comp_name)
+                if not comp_cfg:
+                    raise ValueError(f"Missing optimizer config for {comp_name}")
+
+                opt_name = comp_cfg["name"]
+                opt_cls = opt_map.get(opt_name.lower())
+                if not opt_cls:
+                    raise ValueError(f"Unsupported optimizer for {comp_name}: {opt_name}")
+
+                optimizer_cls[comp_name] = opt_cls
+                optimizer_args = comp_cfg["params"]
+
             trainer = trainer_cls(
                 model=model,
                 train_loader=train_loader,
                 val_loader=val_loader,
                 loss_fn=loss_fn,
-                optimizer=optimizer,
+                optimizer_cls=optimizer_cls,
+                optimizer_args=optimizer_args,
                 device=final_device,
                 scheduler=scheduler,
                 **trainer_params,
             )
+
         trainer.model_name = resolved_model_name
 
 
         # === Train ===
         logger.info(f"\nStarting training for {num_epochs} epochs...")
         final_metrics = trainer.train(num_epochs=num_epochs)
-        print("[DEBUG] final_metrics:", final_metrics)
         
         logger.info("Saving model now...")
-        print("[DEBUG] model_path:", model_path)
         trainer.save(path=model_path)
 
         config_save_path = os.path.join(

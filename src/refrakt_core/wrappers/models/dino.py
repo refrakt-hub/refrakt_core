@@ -16,9 +16,7 @@ class DINOWrapper(nn.Module):
             # Extract known model keys
             backbone = model.get("backbone", "resnet18")
             out_dim = model.get("out_dim", 65536)
-            
-            print(f"[DEBUG] DINOWrapper initializing with backbone={backbone}, out_dim={out_dim}")
-            
+                        
             # Create the DINO model with only the parameters it expects
             self.dino_model = DINOModelWrapper(backbone=backbone, out_dim=out_dim)
         elif isinstance(model, nn.Module):
@@ -34,8 +32,6 @@ class DINOWrapper(nn.Module):
             **filtered_kwargs
         }
         
-        print(f"[DEBUG] DINOWrapper initialized successfully")
-
     def forward(self, x: torch.Tensor, teacher: bool = False, **kwargs) -> ModelOutput:
         # Filter out any unexpected kwargs that might be passed from the training loop
         # Only pass the arguments that the DINO model's forward method expects
