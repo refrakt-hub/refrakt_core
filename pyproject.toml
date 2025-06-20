@@ -25,7 +25,9 @@ dependencies = [
     "tqdm", 
     "omegaconf", 
     "timm", 
-    "pydantic"
+    "pydantic", 
+    "scikit-learn", 
+    "cuml"
 ]
 
 [tool.black]
@@ -43,6 +45,10 @@ select = ["E", "F", "B", "I"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"refrakt_core.integrations.yaml" = ["*.yaml"]
+
 
 [project.scripts]
 refrakt = "refrakt_core.api.__main__:main"

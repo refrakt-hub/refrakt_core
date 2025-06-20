@@ -1,4 +1,4 @@
-"""The inference code for Refrakt (cleaned version)."""
+"""The inference code for Refrakt (with optional fusion head support)."""
 
 import os
 import sys
@@ -25,6 +25,7 @@ from refrakt_core.registry.model_registry import get_model
 import warnings
 warnings.filterwarnings("ignore")
 
+
 class CustomImageDataset(torch.utils.data.Dataset):
     def __init__(self, image_paths, transform=None, expected_channels: int = 3):
         self.image_paths = image_paths
@@ -42,13 +43,19 @@ class CustomImageDataset(torch.utils.data.Dataset):
         return img
 
 
+def load_fusion_head(path: str) -> Any:
+    import joblib  # or pickle depending on how fusion heads are saved
+    return joblib.load(path)
+
+
 def inference(
     cfg: Union[str, OmegaConf],
     model_path: str,
+    fusion_head_path: Optional[str] = None,
     data: Any = None,
     logger: Optional[RefraktLogger] = None,
 ) -> Dict[str, Any]:
-    """Run inference with a trained model and return raw outputs."""
+    """Run inference with a trained model and optionally a fusion head."""
 
     try:
         config = OmegaConf.load(cfg) if isinstance(cfg, str) else cfg
@@ -58,13 +65,13 @@ def inference(
         mode = runtime_cfg.get("mode", "inference")
         console = runtime_cfg.get("console", True)
         debug = runtime_cfg.get("debug", False)
-        
+
         if config.model.name == "autoencoder":
             variant = config.model.params.get("variant", "simple")
             if variant not in {"simple", "vae"}:
                 raise ValueError(f"Unsupported autoencoder variant: {variant!r}")
 
-            resolved_model_name = f"autoencoder_{variant}"  # ✅ use for checkpoints only
+            resolved_model_name = f"autoencoder_{variant}"  # use for checkpoints only
             print(f"[Resolved] Using model checkpoint name: {resolved_model_name}")
         else:
             resolved_model_name = config.model.name
@@ -80,17 +87,16 @@ def inference(
 
         modules = import_modules()
 
-        # Device selection
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using device: {device}")
 
-        # Model Loading
         model_cls = get_model(config.model.name)
-        model = build_model(config, modules={
-            "get_model": get_model, 
-            "model": model_cls}, device=device)
-        
-        # Handle model checkpoint with variant suffix
+        model = build_model(
+            config,
+            modules={"get_model": get_model, "model": model_cls},
+            device=device,
+        )
+
         if not os.path.exists(model_path):
             base_path = os.path.splitext(model_path)[0]
             candidates = glob.glob(f"{base_path}_*.pth")
@@ -104,6 +110,15 @@ def inference(
         checkpoint = torch.load(model_path, map_location=device)
         model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
         model.eval()
+
+        # Load fusion head if path provided and exists
+        fusion_head = None
+        if fusion_head_path:
+            if os.path.exists(fusion_head_path):
+                fusion_head = load_fusion_head(fusion_head_path)
+                logger.info(f"Loaded fusion head from {fusion_head_path}")
+            else:
+                logger.warning(f"Fusion head path does not exist: {fusion_head_path}")
 
         # Data Loader Setup
         custom_data = config.get("custom_data")
@@ -126,7 +141,7 @@ def inference(
                 dataset,
                 batch_size=config.dataloader.params.get("batch_size", 1),
                 shuffle=False,
-                num_workers=config.dataloader.params.get("num_workers", 0)
+                num_workers=config.dataloader.params.get("num_workers", 0),
             )
         elif data is None:
             logger.info("No data provided, using test dataset...")
@@ -136,19 +151,14 @@ def inference(
         else:
             data_loader = data
 
-        # Artifact Dumper (only for inference visualization)
         from refrakt_core.schema.artifact import ArtifactDumper
         artifact_dumper = ArtifactDumper(
-            enabled=True,  # Always enabled for inference
+            enabled=True,
             base_path="./artifacts",
             model_name=resolved_model_name,
-            log_every=1,  # Log every batch
-            logger=logger
+            log_every=1,
+            logger=logger,
         )
-
-        # Inference Phase
-        logger.info("Running inference...")
-        results = []
 
         def ensure_4d_tensor(tensor):
             if tensor.dim() == 2:  # Flattened [B, 784]
@@ -156,38 +166,45 @@ def inference(
             elif tensor.dim() == 4:
                 return tensor
             raise ValueError(f"Expected 2D or 4D tensor, got {tensor.shape}")
-        
-        if hasattr(logger, 'wandb') and hasattr(logger, 'step'): 
+
+        results = []
+
+        if hasattr(logger, 'wandb') and hasattr(logger, 'step'):
             logger.wandb.step = 0
 
         with torch.no_grad():
             for i, batch in enumerate(data_loader):
                 if isinstance(batch, torch.Tensor):
                     inputs = batch
-
                 elif isinstance(batch, dict):
-                    # ✅ Check common input keys
                     inputs = (
                         batch.get("input")
                         or batch.get("image")
-                        or batch.get("lr")  # <- SRGAN uses "lr" as input
+                        or batch.get("lr")
                     )
                     if inputs is None:
-                        raise ValueError(f"❌ Inference input could not be resolved from batch keys: {list(batch.keys())}")
-
+                        raise ValueError(f"Inference input could not be resolved from batch keys: {list(batch.keys())}")
                 elif isinstance(batch, (list, tuple)):
                     inputs = batch[0]
-
                 else:
                     raise TypeError(f"Unsupported batch type: {type(batch)}")
 
-
                 inputs = inputs.to(device)
                 inputs = ensure_4d_tensor(inputs)
-                
-                output = model(inputs)
-                
-                # Handle different output formats
+
+                output = model(inputs)  # Should be ModelOutput
+
+                # If fusion head is loaded, run fusion prediction on embeddings
+                if fusion_head is not None:
+                    if not isinstance(output, ModelOutput):
+                        raise TypeError("Model output must be ModelOutput for fusion inference")
+                    if output.embeddings is None:
+                        raise ValueError("Backbone output missing embeddings for fusion inference")
+                    embeddings_np = output.embeddings.detach().cpu().numpy()
+                    fusion_preds = fusion_head.predict(embeddings_np)
+                    output.extra["fusion_preds"] = fusion_preds
+
+                # Adjust reconstruction shape if present
                 if isinstance(output, ModelOutput):
                     if hasattr(output, "reconstruction") and output.reconstruction is not None:
                         output.reconstruction = ensure_4d_tensor(output.reconstruction)
@@ -203,7 +220,11 @@ def inference(
                 else:
                     raise TypeError(f"Unknown output type: {type(output)}")
 
-        artifact_path = os.path.join(artifact_dumper.base_path, f"{config.model.name}", f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_inference.pt")
+        artifact_path = os.path.join(
+            artifact_dumper.base_path,
+            f"{config.model.name}",
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_inference.pt",
+        )
         artifact_dumper.save(artifact_path)
 
         logger.info("✅ Inference completed successfully.")

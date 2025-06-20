@@ -4,7 +4,7 @@ import inspect
 
 from refrakt_core.registry.wrapper_registry import load_wrapper
 from refrakt_core.wrappers.schema.default_model import DefaultModelWrapper
-
+from refrakt_core.integrations.fusion.block import FusionBlock
 
 def build_model(cfg: OmegaConf, modules: Dict[str, Any], device: str) -> Any:
     import refrakt_core.models
@@ -60,6 +60,14 @@ def build_model(cfg: OmegaConf, modules: Dict[str, Any], device: str) -> Any:
             model_params=model_params,
             modules=modules
         ).to(device)
+        
+    fusion_cfg = cfg.model.get("fusion", None)
+    if fusion_cfg:
+        from refrakt_core.integrations.fusion.block import FusionBlock
+
+        print(f"[INFO] Wrapping model with FusionBlock using fusion config: {fusion_cfg}")
+        model = FusionBlock(backbone=model, fusion_cfg=fusion_cfg).to(device)
+        print("[SUCCESS] Model wrapped with FusionBlock.")
 
     print(f"[FINALIZED] Model: {model_name} with params: {model_params}")
     return model

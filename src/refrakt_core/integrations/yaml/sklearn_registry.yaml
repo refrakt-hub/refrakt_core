@@ -1,0 +1,3 @@
+random_forest: sklearn.ensemble.RandomForestClassifier
+logistic_regression: sklearn.linear_model.LogisticRegression
+svc: sklearn.svm.SVC

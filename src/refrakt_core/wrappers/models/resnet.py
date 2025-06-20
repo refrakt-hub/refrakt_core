@@ -5,20 +5,17 @@ from refrakt_core.registry.wrapper_registry import register_wrapper
 
 @register_wrapper("resnet")
 class ResNetWrapper(nn.Module):
-    """
-    Wrapper around a pre-initialized ResNet model to standardize its output.
-    
-    Args:
-        model (nn.Module): A ResNet model instance (e.g., ResNet18, ResNet50).
-    """
-
     def __init__(self, model: nn.Module):
         super().__init__()
-        self.backbone = model
+        self.backbone = nn.Sequential(*list(model.children())[:-1])
+        self.head = model.fc
 
     def forward(self, x):
-        logits = self.backbone(x)
-        return ModelOutput(logits=logits)
+        feats = self.backbone(x)
+        feats = torch.flatten(feats, 1)
+        logits = self.head(feats)
+
+        return ModelOutput(logits=logits, embeddings=feats)
 
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x).logits

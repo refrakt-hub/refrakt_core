@@ -1,4 +1,5 @@
-"""# trainer_builder.py"""
+# trainer_builder.py
+
 from typing import Any, Dict, Optional
 
 import torch
@@ -17,7 +18,7 @@ def initialize_trainer(
     modules: Dict,
     save_dir: Optional[str],
 ) -> Any:
-    """Initialize trainer based on configuration"""
+    """Initialize trainer based on configuration."""
     print("Initializing trainer...")
     trainer_cls = modules["get_trainer"](cfg.trainer.name)
     trainer_params = (
@@ -31,9 +32,10 @@ def initialize_trainer(
     final_device = device_param if device_param else device
     artifact_dumper = modules.get("artifact_dumper", None)
 
-    # Handle different trainer types
-    if cfg.trainer.name in ["supervised", "autoencoder", "msn"]:
-        # For standard trainers, pass optimizer class and arguments
+    trainer_name = cfg.trainer.name.lower()
+
+    # === Standard Trainer ===
+    if trainer_name in ["supervised", "autoencoder", "msn"]:
         opt_map = {
             "adam": torch.optim.Adam,
             "sgd": torch.optim.SGD,
@@ -55,10 +57,12 @@ def initialize_trainer(
             artifact_dumper=artifact_dumper,
             **trainer_params,
         )
-    elif cfg.trainer.name == "gan":
-        # For GAN trainer, pass optimizer instance
+
+    # === GAN Trainer ===
+    elif trainer_name == "gan":
         if "save_dir" in trainer_params:
             trainer_params.pop("save_dir")
+
         trainer = trainer_cls(
             model=model,
             train_loader=train_loader,
@@ -71,8 +75,35 @@ def initialize_trainer(
             save_dir=save_dir,
             **trainer_params,
         )
+
+    elif trainer_name == "fusion":
+        from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
+
+        fusion_cfg = cfg.model.get("fusion")
+        if fusion_cfg is None:
+            raise ValueError("[ERROR] 'model.fusion' block is required for FusionTrainer.")
+
+        if fusion_cfg.type != "sklearn":
+            raise ValueError(f"[ERROR] Unsupported fusion type: {fusion_cfg.type}")
+
+        fusion_head = SklearnWrapper(
+            fusion_cfg.model,
+            **OmegaConf.to_container(fusion_cfg.get("params", {}), resolve=True),
+        )
+
+        trainer = trainer_cls(
+            model=model,
+            fusion_head=fusion_head,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            device=final_device,
+            artifact_dumper=artifact_dumper,
+            **trainer_params,
+        )
+
+
+    # === Fallback Trainer ===
     else:
-        # Fallback for other trainer types
         trainer = trainer_cls(
             model=model,
             train_loader=train_loader,
