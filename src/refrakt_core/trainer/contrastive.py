@@ -3,13 +3,14 @@ import torch
 from torch.amp.grad_scaler import GradScaler
 from torch.nn import Module
 from torch.optim import Optimizer
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.utils.methods import unpack_views_from_batch
 
 
 @register_trainer("contrastive")
@@ -27,6 +28,8 @@ class ContrastiveTrainer(BaseTrainer):
         artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
+        if val_loader is None:
+            val_loader = DataLoader(TensorDataset())
         super().__init__(
             model, train_loader, val_loader, device, 
             artifact_dumper=artifact_dumper, **kwargs
@@ -50,79 +53,53 @@ class ContrastiveTrainer(BaseTrainer):
         self.param_log_interval = kwargs.get("param_log_interval", 500)
         self.log_every = getattr(self.artifact_dumper, "log_every", 10) if self.artifact_dumper else None
 
-    def _unpack_views(self, batch: Union[torch.Tensor, Dict[str, torch.Tensor], list, tuple]) -> list[torch.Tensor]:
-        if isinstance(batch, (tuple, list)) and len(batch) == 2:
-            if all(isinstance(b, torch.Tensor) for b in batch):
-                return [batch[0].to(self.device).float(), batch[1].to(self.device).float()]
-        if isinstance(batch, torch.Tensor) and batch.ndim == 5 and batch.size(1) == 2:
-            return [batch[:, 0].to(self.device).float(), batch[:, 1].to(self.device).float()]
-        if isinstance(batch, dict):
-            return [batch["view1"].to(self.device).float(), batch["view2"].to(self.device).float()]
-        if isinstance(batch, (list, tuple)):
-            view1_batch, view2_batch = [], []
-            for item in batch:
-                if isinstance(item, (tuple, list)):
-                    view1_batch.append(item[0])
-                    view2_batch.append(item[1])
-                elif isinstance(item, dict):
-                    view1_batch.append(item["view1"])
-                    view2_batch.append(item["view2"])
-            return [
-                torch.stack(view1_batch).to(self.device).float(),
-                torch.stack(view2_batch).to(self.device).float(),
-            ]
-        raise TypeError(f"Unsupported batch type: {type(batch)}")
+    def _unpack_views(self, batch):
+        return unpack_views_from_batch(batch, str(self.device))
 
     def _get_logger(self):
         return getattr(self.artifact_dumper, "logger", None)
 
-    def train(self, num_epochs: int) -> Dict[str, float]:
+    def train(self, num_epochs: int) -> None:
         best_loss = float('inf')
-
+        avg_loss = 0.0
         for epoch in range(num_epochs):
             self.model.train()
             total_loss = 0.0
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}", leave=True)
-
             for batch_id, batch in enumerate(loop):
                 try:
                     view1, view2 = self._unpack_views(batch)
                     view1 = view1.to(self.device)
                     view2 = view2.to(self.device)
-
                     with torch.autocast(device_type=self.device.type):
-                        # Get model outputs
                         out1 = self.model(view1)
                         out2 = self.model(view2)
-                        
-                        # Handle tensor vs ModelOutput
+                        if out1 is None or out2 is None:
+                            continue
                         z1 = out1.embeddings if isinstance(out1, ModelOutput) else out1
                         z2 = out2.embeddings if isinstance(out2, ModelOutput) else out2
-                        
-                        # Calculate loss
+                        if not isinstance(z1, torch.Tensor) or not isinstance(z2, torch.Tensor):
+                            continue
                         loss_output = self.loss_fn(z1, z2)
                         if isinstance(loss_output, torch.Tensor):
                             loss_output = LossOutput(total=loss_output)
                         loss = loss_output.total
-
+                    if loss is None:
+                        continue
+                    if isinstance(self.optimizer, dict) or self.optimizer is None:
+                        raise RuntimeError("ContrastiveTrainer expects a single optimizer, not a dict or None.")
                     self.optimizer.zero_grad(set_to_none=True)
                     self.scaler.scale(loss).backward()
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
-
                     total_loss += loss.item()
                     loop.set_postfix(loss=loss.item())
                     self.global_step += 1
-
-                    # Logging
                     if self.artifact_dumper and self.artifact_dumper.should_log_step(self.global_step):
-                        # Create ModelOutput if needed
                         if not isinstance(out1, ModelOutput):
                             out1 = ModelOutput(embeddings=out1)
                         if not isinstance(out2, ModelOutput):
                             out2 = ModelOutput(embeddings=out2)
-                            
-                        # Log both views
                         self.artifact_dumper.log_full_output(
                             output=out1,
                             loss=loss_output,
@@ -137,7 +114,6 @@ class ContrastiveTrainer(BaseTrainer):
                             batch_id=batch_id,
                             prefix="train/view2"
                         )
-
                     logger = self._get_logger()
                     if logger:
                         if self.global_step % self.grad_log_interval == 0:
@@ -146,27 +122,19 @@ class ContrastiveTrainer(BaseTrainer):
                             logger.log_parameters(self.model, step=self.global_step, prefix="")
                             lr = self.optimizer.param_groups[0]["lr"]
                             logger.log_metrics({"lr": lr}, step=self.global_step)
-
                 except (RuntimeError, ValueError, TypeError) as e:
                     loop.write(f"[ERROR] Batch skipped due to error: {e}")
-
-            if self.scheduler:
+            if self.scheduler and not isinstance(self.scheduler, dict):
                 self.scheduler.step()
-
             current_loss = self.evaluate()
             if current_loss is not None and current_loss < best_loss:
                 best_loss = current_loss
                 self.save(suffix="best_model")
                 print(f"New best model saved with loss: {best_loss:.4f}")
-
             self.save(suffix="latest")
-            avg_loss = total_loss / len(self.train_loader)
+            avg_loss = total_loss / len(self.train_loader) if len(self.train_loader) > 0 else 0.0
             print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.4f}")
-
-        return {
-            "train/loss": avg_loss,
-            "val/loss": best_loss if best_loss < float("inf") else None
-        }
+        return None
 
     def evaluate(self) -> Optional[float]:
         if self.val_loader is None:
@@ -183,13 +151,14 @@ class ContrastiveTrainer(BaseTrainer):
                     view1, view2 = self._unpack_views(batch)
                     view1 = view1.to(self.device)
                     view2 = view2.to(self.device)
-
                     out1 = self.model(view1)
                     out2 = self.model(view2)
-                    
+                    if out1 is None or out2 is None:
+                        continue
                     z1 = out1.embeddings if isinstance(out1, ModelOutput) else out1
                     z2 = out2.embeddings if isinstance(out2, ModelOutput) else out2
-                    
+                    if not isinstance(z1, torch.Tensor) or not isinstance(z2, torch.Tensor):
+                        continue
                     loss_output = self.loss_fn(z1, z2)
                     if isinstance(loss_output, torch.Tensor):
                         loss_output = LossOutput(total=loss_output)

@@ -18,7 +18,7 @@ from refrakt_core.registry.dataset_registry import register_dataset
 
 
 @register_dataset("contrastive")
-class ContrastiveDataset(Dataset[Tuple[Tensor, Tensor]]):
+class ContrastiveDataset(Dataset[Tuple[Tensor, Tensor, Any]]):
     """
     Dataset wrapper for contrastive learning methods like SimCLR and DINO.
 
@@ -44,7 +44,7 @@ class ContrastiveDataset(Dataset[Tuple[Tensor, Tensor]]):
     def __len__(self) -> int:
         return len(self.base_dataset)
 
-    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
+    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor, Any]:
         item = self.base_dataset[idx]
 
         # Handle tuple-based dataset
@@ -53,9 +53,11 @@ class ContrastiveDataset(Dataset[Tuple[Tensor, Tensor]]):
         if self.transform:
             view1 = self.transform(x)
             view2 = self.transform(x)
-            return view1, view2
+            label = item[1] if isinstance(item, tuple) and len(item) >= 2 else -1
+            # print(f"[DEBUG] Label: {label}")
+            return view1, view2, label
 
-        return x, x
+        return x, x, -1
 
 
 @register_dataset("super_resolution")

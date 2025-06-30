@@ -4,6 +4,7 @@ import os
 import sys
 import traceback
 import glob
+import re
 from typing import Any, Dict, Optional, Union
 
 import torch
@@ -18,8 +19,10 @@ from refrakt_core.api.builders.model_builder import build_model
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.core.utils import import_modules
 from refrakt_core.api.builders.transform_builder import build_transform
-from refrakt_core.logging import get_global_logger
+from refrakt_core.global_logging import get_global_logger
 from refrakt_core.registry.model_registry import get_model
+from refrakt_core.registry.wrapper_registry import get_wrapper
+from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
 
 
 import warnings
@@ -44,7 +47,7 @@ class CustomImageDataset(torch.utils.data.Dataset):
 
 
 def load_fusion_head(path: str) -> Any:
-    import joblib  # or pickle depending on how fusion heads are saved
+    import joblib
     return joblib.load(path)
 
 
@@ -71,7 +74,7 @@ def inference(
             if variant not in {"simple", "vae"}:
                 raise ValueError(f"Unsupported autoencoder variant: {variant!r}")
 
-            resolved_model_name = f"autoencoder_{variant}"  # use for checkpoints only
+            resolved_model_name = f"autoencoder_{variant}"
             print(f"[Resolved] Using model checkpoint name: {resolved_model_name}")
         else:
             resolved_model_name = config.model.name
@@ -91,11 +94,17 @@ def inference(
         logger.info(f"Using device: {device}")
 
         model_cls = get_model(config.model.name)
-        model = build_model(
-            config,
-            modules={"get_model": get_model, "model": model_cls},
-            device=device,
-        )
+        model = build_model(config, modules={
+            "get_model": get_model,
+            "get_wrapper": get_wrapper,
+            "model": model_cls
+        }, device=device)
+
+        # Log model structure for debugging
+        # print("\nModel state dict keys:")
+        # model_state = model.state_dict()
+        # for k in sorted(model_state.keys()):
+        #     print(f"  {k}: {model_state[k].shape}")
 
         if not os.path.exists(model_path):
             base_path = os.path.splitext(model_path)[0]
@@ -108,7 +117,21 @@ def inference(
 
         logger.info(f"Loading model from {model_path}")
         checkpoint = torch.load(model_path, map_location=device)
-        model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
+        state_dict = checkpoint.get("model_state_dict", checkpoint)
+        
+        # Load state dict directly without transformation
+        try:
+            model.load_state_dict(state_dict)
+            logger.info("Successfully loaded state dict")
+        except RuntimeError as e:
+            # Silently try loading with strict=False without logging warnings
+            try:
+                model.load_state_dict(state_dict, strict=False)
+                logger.info("Successfully loaded state dict (some keys ignored)")
+            except RuntimeError as e2:
+                logger.error(f"All attempts to load state dict failed: {str(e2)}")
+                raise
+        
         model.eval()
 
         # Load fusion head if path provided and exists
@@ -193,6 +216,30 @@ def inference(
                 inputs = ensure_4d_tensor(inputs)
 
                 output = model(inputs)  # Should be ModelOutput
+                
+                fusion_cfg = config.model.get("fusion")
+                if fusion_cfg and isinstance(output, ModelOutput) and output.embeddings is not None:
+                    fusion_model_key = fusion_cfg.model
+                    fusion_type = fusion_cfg.type
+                    fusion_path = os.path.join(config.trainer.params.save_dir, f"{config.model.name}_fusion.joblib")
+
+                    if os.path.exists(fusion_path):
+                        # logger.info(f"[FUSION] Loading fusion head from {fusion_path}")
+
+                        if fusion_type == "sklearn":
+                            fusion_head = SklearnWrapper.load(fusion_model_key, fusion_path)
+                        else:
+                            raise ValueError(f"[FUSION] Unsupported fusion type: {fusion_type}")
+
+                        # Run predictions using ML head
+                        fusion_preds = fusion_head.predict(output.embeddings.cpu().numpy())
+
+                        # Store predictions inside output.extra
+                        output.extra["fusion_preds"] = fusion_preds
+                        # logger.info("[FUSION] Fusion predictions stored in output.extra['fusion_preds']")
+                    else:
+                        logger.warning(f"[FUSION] Skipping — fusion head not found at {fusion_path}")
+
 
                 # If fusion head is loaded, run fusion prediction on embeddings
                 if fusion_head is not None:

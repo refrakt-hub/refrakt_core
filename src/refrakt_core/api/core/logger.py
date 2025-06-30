@@ -198,6 +198,10 @@ class RefraktLogger:
 
             if self.tb_writer:
                 try:
+                    if hasattr(model, '__class__') and 'FusionBlock' in model.__class__.__name__:
+                        self.info("Skipping TensorBoard graph logging for FusionBlock (complex model structure)")
+                        return
+                    
                     # Create a tracing module that wraps the original model
                     class TracingModel(nn.Module):
                         def __init__(self, model):
@@ -232,7 +236,7 @@ class RefraktLogger:
                     self.tb_writer.add_graph(tracing_model, input_tensor)
                     self.info("Logged model graph to TensorBoard.")
                 except Exception as e:
-                    self.error(f"TensorBoard model graph logging failed: {e}")
+                    self.warning(f"TensorBoard model graph logging failed: {e}")
 
             if self.wandb_run:
                 try:

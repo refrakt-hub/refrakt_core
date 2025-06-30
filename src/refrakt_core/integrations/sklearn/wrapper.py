@@ -16,8 +16,10 @@ Example usage:
     True
 """
 
+import joblib
 import importlib
-from typing import Union, Protocol, NoReturn, cast, Type
+from pathlib import Path
+from typing import Union, Protocol, NoReturn, cast, Type, Dict, Any, Optional
 
 from refrakt_core.integrations.sklearn.registry import load_sklearn_registry
 from refrakt_core.integrations.types import NDArrayF, ClassifierOutput
@@ -38,13 +40,15 @@ class SklearnWrapper:
         model: The instantiated sklearn model.
     """
 
-    def __init__(self, model: str, **params: Union[int, float, str, bool]):
+    def __init__(self, model: str, **params: Dict[str, Any]):
         """
         Initialize the wrapper by loading a model from the registry or full import path.
 
         Args:
             model (str): Model key (e.g., "random_forest") or full class path.
-            **params: Parameters for model instantiation.
+            **params: Parameters dictionary containing:
+                - Model parameters for instantiation
+                - Special keys like 'fusion_head' for wrapper configuration
 
         Raises:
             ValueError: If the model path is invalid.
@@ -60,17 +64,25 @@ class SklearnWrapper:
         except (ModuleNotFoundError, AttributeError) as e:
             raise ValueError(f"Invalid sklearn model '{model}': {e}")
 
-        model_instance = model_cls(**params)
-        self.model: SklearnEstimator = cast(SklearnEstimator, model_instance)
+        # Extract wrapper-specific parameters
+        wrapper_params = {}
+        model_params = dict(params)  # Make a copy to modify
+        
+        # Handle special parameters
+        if 'fusion_head' in model_params:
+            wrapper_params['fusion_head'] = model_params.pop('fusion_head')
 
-    def fit(self, X: NDArrayF, y: NDArrayF) -> SklearnEstimator:
+        model_instance = model_cls(**model_params)
+        self.model: SklearnEstimator = cast(SklearnEstimator, model_instance)
+        
+        # Store wrapper configuration
+        self.wrapper_config = wrapper_params
+
+    def fit(self, X: NDArrayF, y: NDArrayF) -> None:
         """
         Fit the wrapped model.
-
-        Returns:
-            SklearnEstimator: The fitted model instance.
         """
-        return self.model.fit(X, y)
+        self.model.fit(X, y)
 
     def predict(self, X: NDArrayF) -> ClassifierOutput:
         """
@@ -81,7 +93,7 @@ class SklearnWrapper:
         """
         return self.model.predict(X)
 
-    def predict_proba(self, X: NDArrayF) -> ClassifierOutput | NoReturn:
+    def predict_proba(self, X: NDArrayF) -> Optional[ClassifierOutput]:
         """
         Predict class probabilities, if supported.
 
@@ -99,3 +111,12 @@ class SklearnWrapper:
         Return a string representation of the model.
         """
         return str(self.model)
+    
+    def save(self, path: Union[str, Path]) -> None:
+        joblib.dump(self.model, path)
+
+    @classmethod
+    def load(cls, model: str, path: Union[str, Path]) -> "SklearnWrapper":
+        instance = cls.__new__(cls)
+        instance.model = joblib.load(path)
+        return instance

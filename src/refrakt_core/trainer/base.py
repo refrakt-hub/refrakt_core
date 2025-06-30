@@ -1,8 +1,9 @@
 """
 Base trainer class for machine learning models.
 
-Defines a standard interface for training, evaluation, saving, and loading of models.
-Subclasses must implement `train` and `evaluate` methods.
+This module defines the abstract base class for all trainers in Refrakt.
+It provides a standard interface for training, evaluation, saving, and loading of models.
+All custom trainers should inherit from BaseTrainer and implement the required methods.
 """
 
 import os
@@ -22,6 +23,18 @@ class BaseTrainer(ABC):
 
     Handles device setup, saving/loading checkpoints, and exposes an interface
     for training and evaluation to be implemented by subclasses.
+    
+    Attributes:
+        device (torch.device): The device on which the model runs.
+        model (Module): The model to be trained.
+        train_loader (DataLoader): DataLoader for training data.
+        val_loader (DataLoader): DataLoader for validation data.
+        save_dir (str): Directory to save checkpoints.
+        model_name (str): Name of the model for checkpointing.
+        artifact_dumper (Any): Optional artifact logger/dumper.
+        optimizer (Optional[Union[Optimizer, Dict[str, Optimizer]]]): Optimizer(s) for training.
+        scheduler (Optional[Union[Any, Dict[str, Any]]]): Scheduler(s) for learning rate.
+        global_step (int): Global training step counter.
     """
 
     def __init__(
@@ -32,13 +45,23 @@ class BaseTrainer(ABC):
         device: str = "cuda",
         **kwargs: Any,
     ) -> None:
+        """
+        Initialize the base trainer.
+
+        Args:
+            model (Module): The model to be trained.
+            train_loader (DataLoader): DataLoader for training data.
+            val_loader (DataLoader): DataLoader for validation data.
+            device (str, optional): Device to use (default: "cuda").
+            **kwargs: Additional keyword arguments (e.g., save_dir, model_name, artifact_dumper).
+        """
         self.device = torch.device(device)
         self.model = model.to(self.device)
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.save_dir: str = kwargs.pop("save_dir", "checkpoints/")
         self.model_name: str = kwargs.pop("model_name", "model")
-        self.artifact_dumper = kwargs.pop("artifact_dumper", None)  # Capture artifact_dumper
+        self.artifact_dumper = kwargs.pop("artifact_dumper", None)
         self.optimizer: Optional[Union[Optimizer, Dict[str, Optimizer]]] = None
         self.scheduler: Optional[Union[Any, Dict[str, Any]]] = None
         self.global_step: int = 0
@@ -47,6 +70,9 @@ class BaseTrainer(ABC):
     def train(self, num_epochs: int) -> None:
         """
         Train the model for the specified number of epochs.
+
+        Args:
+            num_epochs (int): Number of epochs to train.
         """
         pass
 
@@ -54,6 +80,9 @@ class BaseTrainer(ABC):
     def evaluate(self) -> Any:
         """
         Evaluate the model on validation or test data.
+
+        Returns:
+            Any: Evaluation metric(s) or results, as defined by the subclass.
         """
         pass
 
@@ -76,7 +105,7 @@ class BaseTrainer(ABC):
         Save model, optimizer, and scheduler state to disk.
 
         Args:
-            path (Optional[str]): Custom file path to save the checkpoint.
+            path (Optional[str]): Custom file path to save the checkpoint. If None, uses default path.
             suffix (str): Suffix to generate default checkpoint name if path is None.
         """
         if path is None:
@@ -88,7 +117,7 @@ class BaseTrainer(ABC):
         checkpoint: Dict[str, Any] = {
             "model_state_dict": self.model.state_dict(),
             "model_name": self.model_name,
-            "global_step": self.global_step,  # ✅ save step
+            "global_step": self.global_step,
         }
 
 
@@ -121,8 +150,13 @@ class BaseTrainer(ABC):
         Special handling for 'best_model' suffix remains unchanged.
 
         Args:
-            path (Optional[str]): Custom file path to load the checkpoint.
+            path (Optional[str]): Custom file path to load the checkpoint. If None, uses default path.
             suffix (str): Suffix to fall back to if base model isn't found.
+
+        Raises:
+            OSError: If loading fails due to file issues.
+            RuntimeError: If loading fails due to state issues.
+            KeyError: If expected keys are missing in the checkpoint.
         """
         try:
             import typing
@@ -132,7 +166,6 @@ class BaseTrainer(ABC):
             from omegaconf.base import ContainerMetadata, Metadata
             from torch.serialization import add_safe_globals
 
-            # 🔐 Allow OmegaConf configs to be unpickled safely
             add_safe_globals([ListConfig, \
                     DictConfig, ContainerMetadata, \
                     typing.Any, list, dict, defaultdict, \
@@ -141,12 +174,10 @@ class BaseTrainer(ABC):
             if path is not None:
                 checkpoint = torch.load(path, map_location=self.device, weights_only=False)
             else:
-                # Special case for 'best_model' - no fallback
                 if suffix == "best_model":
                     path = self.get_checkpoint_path(suffix)
                     checkpoint = torch.load(path, map_location=self.device, weights_only=False)
                 else:
-                    # Try base model first
                     base_path = os.path.join(self.save_dir, f"{self.model_name}.pth")
                     fallback_path = self.get_checkpoint_path(suffix)
                                         
@@ -159,10 +190,8 @@ class BaseTrainer(ABC):
                     
                     checkpoint = torch.load(path, map_location=self.device, weights_only=False)
 
-            # Rest of the loading logic remains the same...
             self.model.load_state_dict(checkpoint["model_state_dict"])
 
-            # === Load optimizer state ===
             if self.optimizer is not None and "optimizer_state_dict" in checkpoint:
                 optimizer_state = checkpoint["optimizer_state_dict"]
                 if isinstance(self.optimizer, dict):
@@ -172,7 +201,6 @@ class BaseTrainer(ABC):
                 else:
                     self.optimizer.load_state_dict(optimizer_state)
 
-            # === Load scheduler state ===
             if self.scheduler is not None and "scheduler_state_dict" in checkpoint:
                 scheduler_state = checkpoint["scheduler_state_dict"]
                 if isinstance(self.scheduler, dict):
@@ -182,7 +210,6 @@ class BaseTrainer(ABC):
                 else:
                     self.scheduler.load_state_dict(scheduler_state)
 
-            # Load global_step if available
             self.global_step = checkpoint.get("global_step", 0)
 
             print(f"[INFO] Successfully loaded from: {path}")

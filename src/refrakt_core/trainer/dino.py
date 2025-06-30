@@ -4,13 +4,14 @@ from torch import autocast
 from torch.amp.grad_scaler import GradScaler
 from torch.nn import Module
 from torch.optim import Optimizer
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.utils.methods import unpack_views_from_batch
 
 
 @register_trainer("dino")
@@ -28,6 +29,8 @@ class DINOTrainer(BaseTrainer):
         artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
+        if val_loader is None:
+            val_loader = DataLoader(TensorDataset())
         super().__init__(model, train_loader, val_loader, device, artifact_dumper=artifact_dumper, **kwargs)
         
         if loss_fn is None:
@@ -49,64 +52,43 @@ class DINOTrainer(BaseTrainer):
         self.log_every = getattr(self.artifact_dumper, "log_every", 10) if self.artifact_dumper else None
 
 
-    def _unpack_views(self, batch: Union[torch.Tensor, Dict[str, torch.Tensor], list, tuple]) -> list[torch.Tensor]:
-        if isinstance(batch, (tuple, list)) and len(batch) == 2:
-            if all(isinstance(b, torch.Tensor) for b in batch):
-                return [batch[0].to(self.device).float(), batch[1].to(self.device).float()]
-        if isinstance(batch, torch.Tensor) and batch.ndim == 5 and batch.size(1) == 2:
-            return [batch[:, 0].to(self.device).float(), batch[:, 1].to(self.device).float()]
-        if isinstance(batch, dict):
-            return [batch["view1"].to(self.device).float(), batch["view2"].to(self.device).float()]
-        if isinstance(batch, (list, tuple)):
-            view1_batch, view2_batch = [], []
-            for item in batch:
-                if isinstance(item, (tuple, list)):
-                    view1_batch.append(item[0])
-                    view2_batch.append(item[1])
-                elif isinstance(item, dict):
-                    view1_batch.append(item["view1"])
-                    view2_batch.append(item["view2"])
-            return [
-                torch.stack(view1_batch).to(self.device).float(),
-                torch.stack(view2_batch).to(self.device).float(),
-            ]
-        raise TypeError(f"Unsupported batch type: {type(batch)}")
+    def _unpack_views(self, batch):
+        return unpack_views_from_batch(batch, str(self.device))
 
     def _get_logger(self):
         return getattr(self.artifact_dumper, "logger", None)
 
-    def train(self, num_epochs: int) -> Dict[str, float]:
+    def train(self, num_epochs: int) -> None:
         best_loss = float('inf')
-
+        avg_loss = 0.0
         for epoch in range(num_epochs):
             self.model.train()
             total_loss = 0.0
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}", leave=True)
-
             for batch_id, batch in enumerate(loop):
                 try:
                     views = self._unpack_views(batch)
-
                     with autocast(device_type=self.device.type):
                         student_out = torch.stack(
                             [self.model(view, teacher=False).embeddings for view in views], dim=1
                         )
                         teacher_out = self.model(views[0], teacher=True).embeddings.unsqueeze(1)
-
+                        if student_out is None or teacher_out is None:
+                            continue
                         loss_output = self.loss_fn(student_out, teacher_out)
                         loss = loss_output.total
-
+                    if loss is None:
+                        continue
+                    if isinstance(self.optimizer, dict) or self.optimizer is None:
+                        raise RuntimeError("DINOTrainer expects a single optimizer, not a dict or None.")
                     self.optimizer.zero_grad(set_to_none=True)
                     self.scaler.scale(loss).backward()
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                     self.model.update_teacher()
-
                     total_loss += loss.item()
                     loop.set_postfix(loss=loss.item())
                     self.global_step += 1
-
-                    # === Log everything (ModelOutput + LossOutput) ===
                     if self.artifact_dumper and self.artifact_dumper.should_log_step(self.global_step):
                         model_output = ModelOutput(
                             embeddings=student_out,
@@ -115,9 +97,8 @@ class DINOTrainer(BaseTrainer):
                                 "get_attention_maps", lambda x: None
                             )(views[0]) if hasattr(self.model, "dino_model") else None,
                             loss_components=loss_output.components,
-                            extra={"backbone": self.model.wrapper_config.get("backbone", "unknown")}
+                            extra={"backbone": getattr(self.model, "wrapper_config", {}).get("backbone", "unknown")}
                         )
-
                         self.artifact_dumper.log_full_output(
                             output=model_output,
                             loss=loss_output,
@@ -125,7 +106,6 @@ class DINOTrainer(BaseTrainer):
                             batch_id=batch_id,
                             prefix="train"
                         )
-
                     logger = self._get_logger()
                     if logger:
                         if self.global_step % self.grad_log_interval == 0:
@@ -134,27 +114,19 @@ class DINOTrainer(BaseTrainer):
                             logger.log_parameters(self.model, step=self.global_step, prefix="")
                             lr = self.optimizer.param_groups[0]["lr"]
                             logger.log_metrics({"lr": lr}, step=self.global_step)
-
                 except (RuntimeError, ValueError, TypeError) as e:
                     loop.write(f"[ERROR] Batch skipped due to error: {e}")
-
-            if self.scheduler:
+            if self.scheduler and not isinstance(self.scheduler, dict):
                 self.scheduler.step()
-
             current_loss = self.evaluate()
             if current_loss is not None and current_loss < best_loss:
                 best_loss = current_loss
                 self.save(suffix="best_model")
                 print(f"New best model saved with loss: {best_loss:.4f}")
-
             self.save(suffix="latest")
-            avg_loss = total_loss / len(self.train_loader)
+            avg_loss = total_loss / len(self.train_loader) if len(self.train_loader) > 0 else 0.0
             print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.4f}")
-
-        return {
-            "train/loss": avg_loss,
-            "val/loss": best_loss if best_loss < float("inf") else None
-        }
+        return None
 
     def evaluate(self) -> Optional[float]:
         if self.val_loader is None:

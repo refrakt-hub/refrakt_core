@@ -2,7 +2,7 @@
 
 from typing import Any, Callable, Dict, Type, Union, Optional
 
-from refrakt_core.logging import get_global_logger
+from refrakt_core.global_logging import get_global_logger
 
 LOSS_REGISTRY: Dict[str, Union[Type[Any], Callable[..., Any]]] = {}
 LOSS_MODES: Dict[str, str] = {}

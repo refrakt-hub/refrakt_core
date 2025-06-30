@@ -27,7 +27,8 @@ dependencies = [
     "timm", 
     "pydantic", 
     "scikit-learn", 
-    "cuml"
+    "cuml", 
+    "xgboost"
 ]
 
 [tool.black]

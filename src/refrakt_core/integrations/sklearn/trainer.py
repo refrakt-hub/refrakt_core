@@ -22,7 +22,12 @@ class FusionTrainer(BaseTrainer):
         artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(model, train_loader, val_loader, device, artifact_dumper)
+        super().__init__(model, 
+                         train_loader, 
+                         val_loader, device, 
+                         artifact_dumper=artifact_dumper, 
+                         **kwargs)
+
         self.fusion_head = fusion_head
         self.extra_params = kwargs
         self.global_step = 0
@@ -53,12 +58,15 @@ class FusionTrainer(BaseTrainer):
 
     def _extract_features_and_labels(self, loader: DataLoader) -> tuple[np.ndarray, np.ndarray]:
         features, labels = [], []
-
+        first = True
         with torch.no_grad():
             loop = tqdm(loader, desc="Extracting Features", leave=False)
 
             for batch in loop:
                 x, y = self._unpack_batch(batch)
+                if first:
+                    print(f"[DEBUG] y type: {type(y)}, y shape: {getattr(y, 'shape', None)}")
+                    first = False
                 x = x.to(self.device)
                 output = self.model(x)
 
@@ -67,12 +75,18 @@ class FusionTrainer(BaseTrainer):
 
                 emb = output.embeddings
                 features.append(emb.detach().cpu().numpy())
-                labels.append(y.detach().cpu().numpy())
+                y_cpu = y.detach().cpu()
+                if y_cpu.ndim > 1:
+                    y_cpu = y_cpu.view(-1)
+                labels.append(y_cpu.numpy())
 
         return np.concatenate(features), np.concatenate(labels)
 
     def _unpack_batch(self, batch: Union[tuple, list, Dict[str, torch.Tensor]]) -> tuple:
+        # Handle SimCLR-style batches: (img1, img2, label)
         if isinstance(batch, (tuple, list)):
+            if len(batch) == 3:
+                return batch[0], batch[2]  # img1, label
             return batch[0], batch[1]
         if isinstance(batch, dict):
             return batch["input"], batch["target"]

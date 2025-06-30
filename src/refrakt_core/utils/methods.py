@@ -7,7 +7,7 @@ import os
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any, Union
 
 from torch import nn
 import matplotlib
@@ -272,3 +272,33 @@ def extract_visual_tensor(outputs: Any) -> torch.Tensor:
             if key in outputs:
                 return outputs[key]
     return torch.tensor(outputs)  # Final fallback
+
+def unpack_views_from_batch(batch: Union[torch.Tensor, Dict[str, torch.Tensor], list, tuple], device: str) -> list[torch.Tensor]:
+    """
+    Unpack two augmented views from a batch for contrastive/self-supervised learning.
+    Handles various batch formats (tuple, list, dict, tensor).
+    """
+    if isinstance(batch, (tuple, list)):
+        if len(batch) == 2 and all(isinstance(b, torch.Tensor) for b in batch):
+            return [batch[0].to(device).float(), batch[1].to(device).float()]
+        if len(batch) == 3 and all(isinstance(b, torch.Tensor) for b in batch[:2]):
+            # Ignore label for contrastive training
+            return [batch[0].to(device).float(), batch[1].to(device).float()]
+    if isinstance(batch, torch.Tensor) and batch.ndim == 5 and batch.size(1) == 2:
+        return [batch[:, 0].to(device).float(), batch[:, 1].to(device).float()]
+    if isinstance(batch, dict):
+        return [batch["view1"].to(device).float(), batch["view2"].to(device).float()]
+    if isinstance(batch, (list, tuple)):
+        view1_batch, view2_batch = [], []
+        for item in batch:
+            if isinstance(item, (tuple, list)):
+                view1_batch.append(item[0])
+                view2_batch.append(item[1])
+            elif isinstance(item, dict):
+                view1_batch.append(item["view1"])
+                view2_batch.append(item["view2"])
+        return [
+            torch.stack(view1_batch).to(device).float(),
+            torch.stack(view2_batch).to(device).float(),
+        ]
+    raise TypeError(f"Unsupported batch type: {type(batch)}")

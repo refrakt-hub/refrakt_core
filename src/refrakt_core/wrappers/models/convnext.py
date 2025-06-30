@@ -2,6 +2,7 @@
 The ConvNeXt wrapper that dynamically loads the ConvNeXt model from the registry.
 """
 
+import torch
 from torch import nn
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.registry.model_registry import MODEL_REGISTRY
@@ -22,5 +23,17 @@ class ConvNeXtWrapper(nn.Module):
         self.backbone = model
 
     def forward(self, x):
-        logits = self.backbone(x)
-        return ModelOutput(logits=logits)
+        # Get features using the backbone's forward with return_features=True
+        embeddings = self.backbone(x, return_features=True)
+        # Get logits by applying fc layer to features
+        logits = self.backbone.fc(embeddings)
+        return ModelOutput(logits=logits, embeddings=embeddings)
+
+    def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Lightweight forward pass for graph tracing / visualization.
+        
+        Returns:
+            torch.Tensor: Only the logits.
+        """
+        return self.forward(x).logits

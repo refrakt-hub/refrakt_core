@@ -13,7 +13,7 @@ from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.builders.trainer_builder import initialize_trainer
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.logging import get_global_logger
+from refrakt_core.global_logging import get_global_logger
 from refrakt_core.api.utils.test_utils import _load_config, _build_test_loader, _load_model_checkpoint
 
 from refrakt_core.api.builders.model_builder import build_model
@@ -21,8 +21,12 @@ from refrakt_core.api.builders.loss_builder import build_loss
 from refrakt_core.registry.model_registry import get_model
 from refrakt_core.registry.loss_registry import get_loss
 from refrakt_core.registry.trainer_registry import get_trainer
+from refrakt_core.registry.wrapper_registry import get_wrapper
 from refrakt_core.schema.artifact import ArtifactDumper
 from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.integrations.sklearn.trainer import FusionTrainer
+from refrakt_core.integrations.fusion.builder import build_fusion_head
+from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -64,7 +68,8 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
         modules = {
             "get_model": get_model,
             "get_loss": get_loss,
-            "get_trainer": get_trainer
+            "get_trainer": get_trainer, 
+            "get_wrapper": get_wrapper
         }
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -73,8 +78,10 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
         
         model_cls = get_model(config.model.name)
         model = build_model(config, modules={
-            "get_model": get_model, 
-            "model": model_cls}, device=device)
+            "get_model": get_model,
+            "get_wrapper": get_wrapper,
+            "model": model_cls
+        }, device=device)
         
         loss_fn = build_loss(config, modules=modules, device=device)
 
@@ -93,7 +100,7 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
         trainer = initialize_trainer(
             cfg=config,
             model=model,
-            train_loader=None,
+            train_loader=dataloader,
             val_loader=dataloader,
             loss_fn=loss_fn,
             optimizer=None,
@@ -107,23 +114,7 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
         # === Load Checkpoint ===
         trainer.logger = logger
         trainer.artifact_dumper = artifact_dumper
-        
-        # model_name = config.model.name
-        # default_path = f"./checkpoints/{resolved_model_name}.pth"
-        # print(f"[DEBUG] Default checkpoint path: {default_path}")
-        # print(f"[DEBUG] Provided model path: {model_path}")
-        # if model_path is None:
-        #     if os.path.exists(default_path):
-        #         model_path = default_path
-        #     else:
-        #         fallback_paths = glob.glob(f"./checkpoints/{resolved_model_name}_*.pth")
-        #         if fallback_paths:
-        #             model_path = max(fallback_paths, key=os.path.getmtime)
-        #             logger.warning(f"[Fallback] Using latest available checkpoint: {model_path}")
-        #         else:
-        #             raise FileNotFoundError(f"No checkpoint found for model: {resolved_model_name}")
-        # print(f"[DEBUG] Final model path: {model_path}")
-        
+
         if not os.path.exists(model_path):
             base_path = os.path.splitext(model_path)[0]
             candidates = glob.glob(f"{base_path}_*.pth")
@@ -139,6 +130,35 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
         # === Evaluation Phase ===
         logger.info("🧪 Running evaluation...")
         eval_results = trainer.evaluate()
+        
+        fusion_cfg = config.model.get("fusion")
+        if fusion_cfg:
+            fusion_type = fusion_cfg.type
+            fusion_model_key = fusion_cfg.model
+            fusion_model_path = os.path.join(config.trainer.params.save_dir, f"{config.model.name}_fusion.joblib")
+
+            if os.path.exists(fusion_model_path):
+                logger.info(f"[FUSION] Found fusion head at {fusion_model_path}")
+
+                if fusion_type == "sklearn":
+                    fusion_head = SklearnWrapper.load(fusion_model_key, fusion_model_path)
+                else:
+                    raise ValueError(f"[FUSION] Unsupported fusion type: {fusion_type}")
+
+                fusion_trainer = FusionTrainer(
+                    model=model,
+                    fusion_head=fusion_head,
+                    train_loader=dataloader,   # ✅ we reuse val_loader for feature extraction
+                    val_loader=dataloader,     # ✅ same again for accuracy
+                    device=device,
+                    artifact_dumper=artifact_dumper,
+                    model_name=config.model.name
+                )
+
+                fusion_acc = fusion_trainer.evaluate()
+                logger.info(f"[FUSION] Validation accuracy (fusion head): {fusion_acc:.4f}")
+            else:
+                logger.warning(f"[FUSION] No fusion model found at: {fusion_model_path}")
 
         # === Log model outputs per batch ===
         if hasattr(logger, 'wandb') and hasattr(logger.wandb, 'step'):

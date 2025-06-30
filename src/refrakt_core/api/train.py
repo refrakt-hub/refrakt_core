@@ -12,8 +12,10 @@ from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.builders.model_builder import build_model
 from refrakt_core.api.builders.loss_builder import build_loss
-from refrakt_core.logging import get_global_logger
+from refrakt_core.global_logging import get_global_logger
 from refrakt_core.schema.artifact import ArtifactDumper
+from refrakt_core.integrations.fusion.builder import build_fusion_head
+from refrakt_core.integrations.sklearn.trainer import FusionTrainer
 
 import refrakt_core.models
 import refrakt_core.losses
@@ -262,10 +264,43 @@ def train(
         # === Train ===
         logger.info(f"\nStarting training for {num_epochs} epochs...")
         final_metrics = trainer.train(num_epochs=num_epochs)
-        
+
         logger.info("Saving model now...")
         trainer.save(path=model_path)
 
+        # === Fusion Support ===
+        if "fusion" in cfg.model:
+            logger.info("\n[FUSION] Welcome to True Fusion v1.")
+            logger.info("\n[FUSION] Fusion head config detected. Starting fusion head training...")
+
+            # Load fusion config
+            fusion_cfg = cfg.model.fusion
+            fusion_head = build_fusion_head(fusion_cfg)
+
+            # Train using frozen backbone
+            fusion_trainer = FusionTrainer(
+                model=model,
+                fusion_head=fusion_head,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                device=device,
+                artifact_dumper=artifact_dumper,
+                model_name=cfg.trainer.params.model_name,
+            )
+
+            fusion_metrics = fusion_trainer.train()
+
+            # Save the fusion model
+            fusion_save_path = os.path.join(cfg.trainer.params.save_dir, f"{cfg.trainer.params.model_name}_fusion.joblib")
+            if hasattr(fusion_head, "save"):
+                fusion_head.save(fusion_save_path)
+                logger.info(f"[FUSION] Fusion head saved to {fusion_save_path}")
+
+            # Log fusion metrics
+            if logger:
+                logger.log_metrics(fusion_metrics, step=trainer.global_step, prefix="fusion")
+
+        # === Save Config ===
         config_save_path = os.path.join(
             trainer.save_dir or os.path.join("./artifacts", "yaml"),
             f"{resolved_model_name}.yaml"
@@ -273,12 +308,13 @@ def train(
         OmegaConf.save(cfg, config_save_path)
         logger.info(f"Saved config to {config_save_path}")
 
-        # Log final metrics
+        # === Log Final Metrics ===
         print("\nFinal Metrics:", final_metrics)
         if logger:
             logger.log_metrics(final_metrics, step=trainer.global_step, prefix="final")
 
         logger.info("\n✅ Training completed successfully!")
+
 
     except Exception as e:
         logger = logger or get_global_logger()

@@ -2,7 +2,7 @@
 
 from typing import Any, Callable, Dict, Type
 
-from refrakt_core.logging import get_global_logger
+from refrakt_core.global_logging import get_global_logger
 
 DATASET_REGISTRY: Dict[str, Type[Any]] = {}
 _IMPORTED: bool = False

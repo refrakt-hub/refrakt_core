@@ -7,15 +7,17 @@ from refrakt_core.registry.wrapper_registry import register_wrapper
 class ResNetWrapper(nn.Module):
     def __init__(self, model: nn.Module):
         super().__init__()
-        self.backbone = nn.Sequential(*list(model.children())[:-1])
-        self.head = model.fc
+        # Keep the original model as is
+        self.backbone = model
 
     def forward(self, x):
-        feats = self.backbone(x)
-        feats = torch.flatten(feats, 1)
-        logits = self.head(feats)
-
+        # Get features using the backbone's forward with return_features=True
+        feats = self.backbone(x, return_features=True)
+        # Get logits by applying fc layer to features
+        logits = self.backbone.fc(feats)
         return ModelOutput(logits=logits, embeddings=feats)
 
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:
-        return self.forward(x).logits
+        # For tracing, directly use the backbone's forward method
+        # This avoids the wrapper complexity and ensures proper tensor shapes
+        return self.backbone(x)

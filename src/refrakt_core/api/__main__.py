@@ -16,7 +16,7 @@ def main():
     from omegaconf import OmegaConf
 
     from refrakt_core.api.core.logger import RefraktLogger
-    from refrakt_core.logging import set_global_logger
+    from refrakt_core.global_logging import set_global_logger
 
     cfg = OmegaConf.load(args.config)
     
