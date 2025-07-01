@@ -85,10 +85,23 @@ class FusionBlock(nn.Module):
                 extra={"fusion_preds": preds, "fusion_proba": proba}
             )
 
-        return ModelOutput(
-            embeddings=feats,
-            logits=getattr(base_output, 'logits', None)
-        )
+        # Propagate all ModelOutput fields if base_output is a ModelOutput
+        if isinstance(base_output, ModelOutput):
+            return ModelOutput(
+                embeddings=base_output.embeddings,
+                logits=base_output.logits,
+                image=base_output.image,
+                reconstruction=base_output.reconstruction,
+                targets=base_output.targets,
+                attention_maps=base_output.attention_maps,
+                loss_components=base_output.loss_components,
+                extra=base_output.extra
+            )
+        else:
+            return ModelOutput(
+                embeddings=feats,
+                logits=getattr(base_output, 'logits', None)
+            )
 
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:
         """
