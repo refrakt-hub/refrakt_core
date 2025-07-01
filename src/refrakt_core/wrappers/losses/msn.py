@@ -24,11 +24,14 @@ class MSNLossWrapper(nn.Module):
         )
 
     def forward(self, output: ModelOutput, target=None) -> LossOutput:
-        # Extract required components from ModelOutput
+        # Debug: print ModelOutput contents
+        print("DEBUG ModelOutput:", output)
         z_anchor = output.embeddings
         z_target = output.extra.get("z_target")
         prototypes = output.extra.get("prototypes")
-        
+        print("DEBUG z_anchor:", type(z_anchor), getattr(z_anchor, 'shape', None))
+        print("DEBUG z_target:", type(z_target), getattr(z_target, 'shape', None))
+        print("DEBUG prototypes:", type(prototypes), getattr(prototypes, 'shape', None))
         if None in (z_anchor, z_target, prototypes):
             raise ValueError("Missing required fields in ModelOutput")
         
@@ -39,5 +42,5 @@ class MSNLossWrapper(nn.Module):
         
         return LossOutput(
             total=total_loss,
-            components=components
+            components=dict(components)
         )
