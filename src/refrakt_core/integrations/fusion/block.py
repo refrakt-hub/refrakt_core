@@ -44,21 +44,34 @@ class FusionBlock(nn.Module):
         self.fusion_head.fit(feats, labels)
         self._trained = True
 
-    def forward(self, x: torch.Tensor, teacher: bool = False, **kwargs) -> ModelOutput:
-        if hasattr(self.backbone, 'forward'):
-            import inspect
-            sig = inspect.signature(self.backbone.forward)
-            if 'teacher' in sig.parameters:
-                base_output = self.backbone(x, teacher=teacher, **kwargs)
+    def forward(self, x: Union[torch.Tensor, Dict[str, torch.Tensor]], teacher: bool = False, **kwargs) -> ModelOutput:
+        # Handle dict input (for MSN)
+        if isinstance(x, dict):
+            base_output = self.backbone(x)
+            feats = base_output.embeddings if isinstance(base_output, ModelOutput) else base_output
+            # Only convert to numpy if feats is a tensor and not None
+            if feats is not None and isinstance(feats, torch.Tensor):
+                feats_np = feats.detach().cpu().numpy()
+            else:
+                feats_np = None
+        else:
+            # Standard tensor input
+            if hasattr(self.backbone, 'forward'):
+                import inspect
+                sig = inspect.signature(self.backbone.forward)
+                if 'teacher' in sig.parameters:
+                    base_output = self.backbone(x, teacher=teacher, **kwargs)
+                else:
+                    base_output = self.backbone(x)
             else:
                 base_output = self.backbone(x)
-        else:
-            base_output = self.backbone(x)
+            feats = base_output.embeddings if isinstance(base_output, ModelOutput) else base_output
+            if feats is not None and isinstance(feats, torch.Tensor):
+                feats_np = feats.detach().cpu().numpy()
+            else:
+                feats_np = None
 
-        feats = base_output.embeddings if isinstance(base_output, ModelOutput) else base_output
-        feats_np = feats.detach().cpu().numpy()
-
-        if not self.training and self._trained:
+        if not self.training and self._trained and feats_np is not None:
             preds = self.fusion_head.predict(feats_np)
             proba = None
             try:
@@ -68,7 +81,7 @@ class FusionBlock(nn.Module):
 
             return ModelOutput(
                 embeddings=feats,
-                logits=torch.tensor(preds, device=x.device),
+                logits=torch.tensor(preds, device=x["anchor"].device if isinstance(x, dict) else x.device),
                 extra={"fusion_preds": preds, "fusion_proba": proba}
             )
 
