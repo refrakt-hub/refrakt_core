@@ -1,4 +1,10 @@
-from typing import Any, Callable, Dict, Optional, Union
+"""
+AETrainer implementation for autoencoder-based unsupervised learning tasks.
+
+This module defines the AETrainer class, which handles training and evaluation
+of autoencoder models. It supports logging, artifact dumping, and checkpointing.
+"""
+from typing import Any, Callable, Dict, Optional, Union, TypeVar, cast
 import torch
 from torch.nn import Module
 from torch.optim import Optimizer
@@ -11,14 +17,21 @@ from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.wrappers.losses.mae import MAELossWrapper
 
+T = TypeVar("T", bound=torch.Tensor)
+
 
 @register_trainer("autoencoder")
 class AETrainer(BaseTrainer):
+    """
+    Trainer for autoencoder-based unsupervised learning tasks.
+
+    Handles training, evaluation, logging, and artifact dumping for autoencoder models.
+    """
     def __init__(
         self,
         model: Module,
-        train_loader: DataLoader,
-        val_loader: DataLoader,
+        train_loader: DataLoader[Any],
+        val_loader: DataLoader[Any],
         loss_fn: Callable[[ModelOutput, torch.Tensor], LossOutput],
         optimizer_cls: Callable[..., Optimizer],
         optimizer_args: Optional[Dict[str, Any]] = None,
@@ -27,6 +40,21 @@ class AETrainer(BaseTrainer):
         artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
+        """
+        Initialize the AETrainer.
+
+        Args:
+            model (Module): The autoencoder model to be trained.
+            train_loader (DataLoader): DataLoader for training data.
+            val_loader (DataLoader): DataLoader for validation data.
+            loss_fn (Callable): Loss function for autoencoder training.
+            optimizer_cls (Callable[..., Optimizer]): Optimizer class.
+            optimizer_args (Optional[Dict[str, Any]]): Arguments for the optimizer.
+            device (str, optional): Device to use (default: "cuda").
+            scheduler (Optional[Any], optional): Learning rate scheduler.
+            artifact_dumper (Optional[Any], optional): Artifact logger/dumper.
+            **kwargs: Additional keyword arguments.
+        """
         # variant = kwargs.pop("model_variant", "simple")
         # kwargs["model_name"] = f"autoencoder_{variant}"
         super().__init__(model, train_loader, val_loader, device, artifact_dumper=artifact_dumper, **kwargs)
@@ -40,9 +68,15 @@ class AETrainer(BaseTrainer):
             optimizer_args = {"lr": 1e-3}
 
         self.logger = self._get_logger()
-        self.optimizer = optimizer_cls(self.model.parameters(), **optimizer_args)
+        self.optimizer: Optional[Union[Optimizer, Dict[str, Optimizer]]] = optimizer_cls(self.model.parameters(), **optimizer_args)
 
-    def train(self, num_epochs: int) -> Dict[str, float]:
+    def train(self, num_epochs: int) -> None:
+        """
+        Train the autoencoder model for a specified number of epochs.
+
+        Args:
+            num_epochs (int): Number of epochs to train.
+        """
         best_loss = float("inf")
 
         for epoch in range(num_epochs):
@@ -50,14 +84,16 @@ class AETrainer(BaseTrainer):
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
 
             for step, batch in enumerate(loop):
-                inputs = self._extract_inputs(batch).to(self.device)
+                inputs = self._extract_inputs(batch)
+                inputs = inputs.to(self.device)
                 
                 # Reshape inputs if they're flattened
                 if inputs.dim() == 2 and hasattr(self.model, 'expected_input_dim'):
                     # Only reshape if model specifies expected dimensions
                     inputs = inputs.view(-1, *self.model.expected_input_dim)
                     
-                self.optimizer.zero_grad()
+                if self.optimizer is not None and isinstance(self.optimizer, Optimizer):
+                    self.optimizer.zero_grad()
                 output = self.model(inputs)
                 
                 # In train() method, after getting output:
@@ -65,10 +101,11 @@ class AETrainer(BaseTrainer):
                     output = self._unwrap_output(output)
                     
                 # In the train() method, replace the loss computation with:
-                loss_output = self.loss_fn(output, inputs if not isinstance(self.loss_fn, MAELossWrapper) else None)
+                loss_output = self.loss_fn(output, inputs)
                     
-                loss_output.total.backward()
-                self.optimizer.step()
+                loss_output.total.backward()  # type: ignore[no-untyped-call]
+                if self.optimizer is not None and isinstance(self.optimizer, Optimizer):
+                    self.optimizer.step()
 
                 # Log training metrics at every step
                 if self.artifact_dumper:
@@ -98,12 +135,15 @@ class AETrainer(BaseTrainer):
 
             self.save(suffix="latest")
 
-        return {
-            "best_val_loss": best_loss,
-            "total_steps": self.global_step
-        }
+        # Optionally, log final metrics or save final model here
 
     def evaluate(self) -> float:
+        """
+        Evaluate the autoencoder model on the validation set.
+
+        Returns:
+            float: Average validation loss.
+        """
         self.model.eval()
         total_loss = 0.0
 
@@ -114,7 +154,8 @@ class AETrainer(BaseTrainer):
                 # Use a separate step counter for validation to avoid conflicts
                 val_global_step = self.global_step + val_step + 1000000  # Large offset to avoid conflicts
 
-                inputs = self._extract_inputs(batch).to(self.device)
+                inputs = self._extract_inputs(batch)
+                inputs = inputs.to(self.device)
 
                 if inputs.dim() == 2 and hasattr(self.model, 'expected_input_dim'):
                     # Only reshape if model specifies expected dimensions
@@ -136,7 +177,19 @@ class AETrainer(BaseTrainer):
         print(f"Validation Loss: {avg_loss:.4f}")
         return avg_loss
 
-    def _unwrap_output(self, output: Union[ModelOutput, Dict, torch.Tensor]) -> ModelOutput:
+    def _unwrap_output(self, output: Union[ModelOutput, Dict[str, Any], torch.Tensor]) -> ModelOutput:
+        """
+        Convert output to ModelOutput if not already.
+
+        Args:
+            output (Union[ModelOutput, Dict[str, Any], torch.Tensor]): Model output.
+
+        Returns:
+            ModelOutput: Wrapped model output.
+
+        Raises:
+            ValueError: If output is None.
+        """
         if output is None:
             raise ValueError("[_unwrap_output] Received None as output!")
 
@@ -147,14 +200,42 @@ class AETrainer(BaseTrainer):
         else:
             return ModelOutput(reconstruction=output)
 
-    def _extract_inputs(self, batch: Union[torch.Tensor, Dict, list, tuple]) -> torch.Tensor:
+    def _extract_inputs(self, batch: Union[torch.Tensor, Dict[str, Any], list[Any], tuple[Any, ...]]) -> torch.Tensor:
+        """
+        Extract input tensor from a batch.
+
+        Args:
+            batch (Union[torch.Tensor, Dict[str, Any], list, tuple]): Batch from DataLoader.
+
+        Returns:
+            torch.Tensor: Input tensor.
+
+        Raises:
+            TypeError: If input tensor cannot be extracted.
+        """
         if isinstance(batch, (list, tuple)):
+            if len(batch) == 0 or not isinstance(batch[0], torch.Tensor):
+                raise TypeError("Batch is empty or does not contain a tensor as the first element.")
             return batch[0]
         if isinstance(batch, dict):
-            return batch.get("image") or batch.get("input")
-        return batch
+            image = batch.get("image")
+            if image is not None and isinstance(image, torch.Tensor):
+                return cast(torch.Tensor, image)
+            input_tensor = batch.get("input")
+            if input_tensor is not None and isinstance(input_tensor, torch.Tensor):
+                return cast(torch.Tensor, input_tensor)
+            raise TypeError("Batch dict does not contain a valid 'image' or 'input' tensor.")
+        if isinstance(batch, torch.Tensor):
+            return batch
+        raise TypeError(f"Unsupported batch type: {type(batch)}")
 
-    def _get_logger(self):
+    def _get_logger(self) -> Optional[Any]:
+        """
+        Retrieve the logger from the artifact dumper if available.
+
+        Returns:
+            Optional[Any]: Logger object if available, else None.
+        """
         if self.artifact_dumper and hasattr(self.artifact_dumper, "logger"):
             return self.artifact_dumper.logger
         return None

@@ -40,8 +40,8 @@ class BaseTrainer(ABC):
     def __init__(
         self,
         model: Module,
-        train_loader: DataLoader,
-        val_loader: DataLoader,
+        train_loader: DataLoader[Any],
+        val_loader: DataLoader[Any],
         device: str = "cuda",
         **kwargs: Any,
     ) -> None:

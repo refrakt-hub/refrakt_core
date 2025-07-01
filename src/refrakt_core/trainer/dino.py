@@ -1,4 +1,10 @@
-from typing import Any, Callable, Dict, Optional, Union
+"""
+DINOTrainer implementation for self-supervised DINO (Distillation with No Labels) learning tasks.
+
+This module defines the DINOTrainer class, which handles training and evaluation
+of models using the DINO objective. It supports logging, artifact dumping, and checkpointing.
+"""
+from typing import Any, Callable, Dict, Optional, Union, List
 import torch
 from torch import autocast
 from torch.amp.grad_scaler import GradScaler
@@ -16,11 +22,16 @@ from refrakt_core.utils.methods import unpack_views_from_batch
 
 @register_trainer("dino")
 class DINOTrainer(BaseTrainer):
+    """
+    Trainer for DINO (Distillation with No Labels) self-supervised learning tasks.
+
+    Handles training, evaluation, logging, and artifact dumping for DINO models.
+    """
     def __init__(
         self,
         model: Module,
-        train_loader: DataLoader,
-        val_loader: Optional[DataLoader] = None,
+        train_loader: DataLoader[Any],
+        val_loader: Optional[DataLoader[Any]] = None,
         loss_fn: Optional[Callable[[torch.Tensor, torch.Tensor], LossOutput]] = None,
         optimizer_cls: Optional[Callable[..., Optimizer]] = None,
         optimizer_args: Optional[Dict[str, Any]] = None,
@@ -29,6 +40,21 @@ class DINOTrainer(BaseTrainer):
         artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
+        """
+        Initialize the DINOTrainer.
+
+        Args:
+            model (Module): The model to be trained.
+            train_loader (DataLoader): DataLoader for training data.
+            val_loader (Optional[DataLoader], optional): DataLoader for validation data.
+            loss_fn (Callable, optional): Loss function for DINO learning.
+            optimizer_cls (Callable[..., Optimizer], optional): Optimizer class.
+            optimizer_args (Optional[Dict[str, Any]], optional): Arguments for the optimizer.
+            scheduler (Optional[Any], optional): Learning rate scheduler.
+            device (str, optional): Device to use (default: "cuda").
+            artifact_dumper (Optional[Any], optional): Artifact logger/dumper.
+            **kwargs: Additional keyword arguments.
+        """
         if val_loader is None:
             val_loader = DataLoader(TensorDataset())
         super().__init__(model, train_loader, val_loader, device, artifact_dumper=artifact_dumper, **kwargs)
@@ -51,14 +77,34 @@ class DINOTrainer(BaseTrainer):
         self.param_log_interval = kwargs.get("param_log_interval", 500)
         self.log_every = getattr(self.artifact_dumper, "log_every", 10) if self.artifact_dumper else None
 
+    def _unpack_views(self, batch: Any) -> List[torch.Tensor]:
+        """
+        Unpack multiple augmented views from a batch for DINO learning.
 
-    def _unpack_views(self, batch):
+        Args:
+            batch (Any): Batch from DataLoader.
+
+        Returns:
+            List[torch.Tensor]: List of augmented views.
+        """
         return unpack_views_from_batch(batch, str(self.device))
 
-    def _get_logger(self):
+    def _get_logger(self) -> Optional[Any]:
+        """
+        Retrieve the logger from the artifact dumper if available.
+
+        Returns:
+            Optional[Any]: Logger object if available, else None.
+        """
         return getattr(self.artifact_dumper, "logger", None)
 
     def train(self, num_epochs: int) -> None:
+        """
+        Train the model for a specified number of epochs.
+
+        Args:
+            num_epochs (int): Number of epochs to train.
+        """
         best_loss = float('inf')
         avg_loss = 0.0
         for epoch in range(num_epochs):
@@ -82,7 +128,7 @@ class DINOTrainer(BaseTrainer):
                     if isinstance(self.optimizer, dict) or self.optimizer is None:
                         raise RuntimeError("DINOTrainer expects a single optimizer, not a dict or None.")
                     self.optimizer.zero_grad(set_to_none=True)
-                    self.scaler.scale(loss).backward()
+                    self.scaler.scale(loss).backward()  # type: ignore[no-untyped-call]
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                     self.model.update_teacher()
@@ -129,6 +175,12 @@ class DINOTrainer(BaseTrainer):
         return None
 
     def evaluate(self) -> Optional[float]:
+        """
+        Evaluate the model on the validation set.
+
+        Returns:
+            Optional[float]: Average validation loss, or None if no validation loader.
+        """
         if self.val_loader is None:
             print("No validation loader provided")
             return None

@@ -44,3 +44,6 @@ class DefaultModelWrapper(nn.Module):
             )
 
         raise ValueError(f"Unsupported output type from model: {type(output)}")
+
+    def parameters(self, recurse: bool = True):
+        return self.model.parameters(recurse=recurse)

@@ -27,6 +27,11 @@ def build_model(cfg: OmegaConf, modules: Dict[str, Any], device: str) -> Any:
 
         # Step 1: Instantiate base model
         model_cls = get_model_fn(model_name)
+
+        # Patch for AutoEncoder: map 'type' to 'mode' if present
+        if model_name == "autoencoder" and "type" in model_params_dict:
+            model_params_dict["mode"] = model_params_dict.pop("type")
+
         raw_model = model_cls(**model_params_dict).to(device)
 
         # Step 2: Wrap model (if wrapper is specified)
@@ -40,6 +45,10 @@ def build_model(cfg: OmegaConf, modules: Dict[str, Any], device: str) -> Any:
             wrapper_args = {
                 k: v for k, v in model_params_dict.items() if k in valid_params
             }
+
+            # Special handling for autoencoder wrapper: set 'variant' from model_params_dict['mode'] if present
+            if wrapper_name == "autoencoder" and "mode" in model_params_dict:
+                wrapper_args["variant"] = model_params_dict["mode"]
 
             model = wrapper_cls(model=raw_model, **wrapper_args).to(device)
             print(f"[SUCCESS] Wrapped model '{model_name}' with '{wrapper_name}'")
