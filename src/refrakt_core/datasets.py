@@ -107,7 +107,11 @@ class MSNCompatibleContrastiveDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        anchor, target = self.dataset[idx]
+        item = self.dataset[idx]
+        if isinstance(item, (tuple, list)):
+            anchor, target = item[:2]
+        else:
+            anchor = target = item
         return {
             "anchor": anchor,
             "target": target
