@@ -16,6 +16,12 @@ class FusionBlock(nn.Module):
 
     def __init__(self, backbone: nn.Module, fusion_cfg: Dict):
         super().__init__()
+        # Check for generative models
+        generative_types = ("mae", "autoencoder", "vae", "srgan")
+        backbone_type = type(backbone).__name__.lower()
+        if any(gen_type in backbone_type for gen_type in generative_types):
+            raise NotImplementedError("Fusion is not yet supported for generative models (MAE, AE, VAE, SRGAN)")
+        
         self.backbone = backbone
         self.fusion_head: FusionHead = build_fusion_head(fusion_cfg)
         self._trained = False
