@@ -232,10 +232,12 @@ class SupervisedTrainer(BaseTrainer):
                 output = self.model(inputs)
                 loss_output = self.loss_fn(output, targets)
 
-                if output is not None:
+                if isinstance(output, ModelOutput) and output.logits is not None:
+                    preds = torch.argmax(output.logits, dim=1)
+                elif isinstance(output, torch.Tensor):
                     preds = torch.argmax(output, dim=1)
                 else:
-                    raise ValueError("Output is None in evaluate().")
+                    raise ValueError("Output does not have logits for argmax in evaluate().")
 
                 correct += (preds == targets).sum().item()
                 total += targets.size(0)
