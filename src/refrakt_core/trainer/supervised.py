@@ -127,9 +127,8 @@ class SupervisedTrainer(BaseTrainer):
                     if isinstance(self.optimizer, Optimizer):
                         self.optimizer.zero_grad()
                 output = self.model(inputs)
-                logits = output.logits if isinstance(output, ModelOutput) else output
 
-                loss = self.loss_fn(logits, targets)
+                loss = self.loss_fn(output, targets)
                 loss_output = LossOutput(total=loss, components={"main": loss})
 
                 assert isinstance(loss_output.total, torch.Tensor)
@@ -232,11 +231,13 @@ class SupervisedTrainer(BaseTrainer):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
 
                 output = self.model(inputs)
-                logits = output.logits if isinstance(output, ModelOutput) else output
-                if logits is not None:
-                    preds = torch.argmax(logits, dim=1)
+                loss = self.loss_fn(output, targets)
+                loss_output = LossOutput(total=loss, components={"main": loss})
+
+                if output is not None:
+                    preds = torch.argmax(output, dim=1)
                 else:
-                    raise ValueError("Logits are None in evaluate().")
+                    raise ValueError("Output is None in evaluate().")
 
                 correct += (preds == targets).sum().item()
                 total += targets.size(0)
