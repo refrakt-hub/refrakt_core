@@ -1,0 +1,5 @@
+random_forest: cuml.ensemble.RandomForestClassifier
+logistic_regression: cuml.linear_model.LogisticRegression
+svc: cuml.svm.SVC
+knn: cuml.neighbors.KNeighborsClassifier
+xgboost: cuml.experimental.xgboost.XGBClassifier 

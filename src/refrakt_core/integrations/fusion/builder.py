@@ -2,7 +2,7 @@
 
 from typing import Any, Dict
 
-# from refrakt_core.integrations.cuml.wrapper import CuMLWrapper
+from refrakt_core.integrations.cuml.wrapper import CuMLWrapper
 from refrakt_core.integrations.fusion.protocols import FusionHead
 from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
 
@@ -44,8 +44,13 @@ def build_fusion_head(cfg: Dict[str, Any]) -> FusionHead:
                 return wrapper
         return wrapper
 
-    # Future support:
-    # if head_type == "cuml":
-    #     return CuMLWrapper(model, **params)
+    if head_type == "cuml":
+        wrapper = CuMLWrapper(model, **model_params)
+        if fusion_head_config.get("path"):
+            try:
+                return CuMLWrapper.load(model, fusion_head_config["path"])
+            except (FileNotFoundError, ValueError):
+                return wrapper
+        return wrapper
 
     raise ValueError(f"[FusionBuilder] Unsupported fusion head type: {head_type}")
