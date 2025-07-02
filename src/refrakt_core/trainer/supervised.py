@@ -128,8 +128,7 @@ class SupervisedTrainer(BaseTrainer):
                         self.optimizer.zero_grad()
                 output = self.model(inputs)
 
-                loss = self.loss_fn(output, targets)
-                loss_output = LossOutput(total=loss, components={"main": loss})
+                loss_output = self.loss_fn(output, targets)
 
                 assert isinstance(loss_output.total, torch.Tensor)
                 loss_output.total.backward()  # type: ignore[no-untyped-call]
@@ -231,8 +230,7 @@ class SupervisedTrainer(BaseTrainer):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
 
                 output = self.model(inputs)
-                loss = self.loss_fn(output, targets)
-                loss_output = LossOutput(total=loss, components={"main": loss})
+                loss_output = self.loss_fn(output, targets)
 
                 if output is not None:
                     preds = torch.argmax(output, dim=1)
