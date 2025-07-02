@@ -3,6 +3,7 @@ import os
 import sys
 import gc
 import torch
+import io
 
 def main():
     try:
@@ -103,4 +104,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    stderr = sys.stderr
+    sys.stderr = io.StringIO()
+    try:
+        main()
+    finally:
+        sys.stderr = stderr
