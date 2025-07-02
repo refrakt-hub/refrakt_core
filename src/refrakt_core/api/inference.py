@@ -246,6 +246,11 @@ def inference(
                             fusion_head = SklearnWrapper.load(
                                 fusion_model_key, fusion_path
                             )
+                        elif fusion_type == "cuml":
+                            from refrakt_core.integrations.cuml.wrapper import CuMLWrapper
+                            fusion_head = CuMLWrapper.load(
+                                fusion_model_key, fusion_path
+                            )
                         else:
                             raise ValueError(
                                 f"[FUSION] Unsupported fusion type: {fusion_type}"

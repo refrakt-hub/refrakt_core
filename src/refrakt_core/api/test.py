@@ -23,6 +23,7 @@ from refrakt_core.global_logging import get_global_logger
 from refrakt_core.integrations.fusion.builder import build_fusion_head
 from refrakt_core.integrations.sklearn.trainer import FusionTrainer
 from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
+from refrakt_core.integrations.cuml.wrapper import CuMLWrapper
 from refrakt_core.registry.loss_registry import get_loss
 from refrakt_core.registry.model_registry import get_model
 from refrakt_core.registry.trainer_registry import get_trainer
@@ -152,6 +153,10 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
 
                 if fusion_type == "sklearn":
                     fusion_head = SklearnWrapper.load(
+                        fusion_model_key, fusion_model_path
+                    )
+                elif fusion_type == "cuml":
+                    fusion_head = CuMLWrapper.load(
                         fusion_model_key, fusion_model_path
                     )
                 else:
