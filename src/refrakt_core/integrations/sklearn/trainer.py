@@ -73,9 +73,6 @@ class FusionTrainer(BaseTrainer):
             for batch in loop:
                 x, y = self._unpack_batch(batch)
                 if first:
-                    print(
-                        f"[DEBUG] y type: {type(y)}, y shape: {getattr(y, 'shape', None)}"
-                    )
                     first = False
                 x = x.to(self.device)
                 output = self.model(x)
