@@ -8,7 +8,7 @@ Available dataset classes:
 
 import os
 from pathlib import Path
-from typing import Callable, Optional, Tuple, Union, Dict, Any
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 from PIL import Image
 from torch import Tensor, nn
@@ -27,11 +27,12 @@ class ContrastiveDataset(Dataset[Tuple[Tensor, Tensor, Any]]):
         transform (Optional[Callable]): A torchvision-style transform callable.
         train (Optional[bool]): Flag indicating training mode (unused, for compatibility).
     """
+
     def __init__(
         self,
         base_dataset: Dataset,
         transform: Optional[Callable[[Any], Tensor]] = None,
-        train: Optional[bool] = None
+        train: Optional[bool] = None,
     ) -> None:
         self.base_dataset = base_dataset
         self.transform = transform
@@ -71,12 +72,15 @@ class SuperResolutionDataset(Dataset[Dict[str, Tensor]]):
         transform (Optional[Callable]): Callable to apply joint transforms to (lr, hr) pair.
         train (Optional[bool]): Flag indicating training mode (unused, for compatibility).
     """
+
     def __init__(
         self,
         lr_dir: Union[str, Path],
         hr_dir: Union[str, Path],
-        transform: Optional[Callable[[Image.Image, Image.Image], Tuple[Tensor, Tensor]]] = None,
-        train: Optional[bool] = None
+        transform: Optional[
+            Callable[[Image.Image, Image.Image], Tuple[Tensor, Tensor]]
+        ] = None,
+        train: Optional[bool] = None,
     ) -> None:
         self.lr_dir = Path(lr_dir)
         self.hr_dir = Path(hr_dir)
@@ -98,10 +102,15 @@ class SuperResolutionDataset(Dataset[Dict[str, Tensor]]):
 
         return {"lr": lr_tensor, "hr": hr_tensor}
 
+
 @register_dataset("msn_contrastive")
 class MSNCompatibleContrastiveDataset(Dataset):
-    def __init__(self, base_dataset: Dataset, transform: Optional[Callable] = None, **kwargs):
-        self.dataset = ContrastiveDataset(base_dataset=base_dataset, transform=transform)
+    def __init__(
+        self, base_dataset: Dataset, transform: Optional[Callable] = None, **kwargs
+    ):
+        self.dataset = ContrastiveDataset(
+            base_dataset=base_dataset, transform=transform
+        )
 
     def __len__(self):
         return len(self.dataset)
@@ -112,7 +121,4 @@ class MSNCompatibleContrastiveDataset(Dataset):
             anchor, target = item[:2]
         else:
             anchor = target = item
-        return {
-            "anchor": anchor,
-            "target": target
-        }
+        return {"anchor": anchor, "target": target}

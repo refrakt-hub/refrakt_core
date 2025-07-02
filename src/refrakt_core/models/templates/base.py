@@ -15,7 +15,9 @@ class BaseModel(nn.Module, ABC):
     including methods for forward pass, prediction, and saving/loading model weights.
     """
 
-    def __init__(self, model_name: str = "base_model", model_type: str = "generic") -> None:
+    def __init__(
+        self, model_name: str = "base_model", model_type: str = "generic"
+    ) -> None:
         """
         Initialize the base model.
 
@@ -24,7 +26,9 @@ class BaseModel(nn.Module, ABC):
             model_type (str): Type/architecture of the model. Defaults to "generic".
         """
         super().__init__()
-        self._device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._device: torch.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
         self.model_name: str = model_name
         self.model_type: str = model_type
 
@@ -58,7 +62,11 @@ class BaseModel(nn.Module, ABC):
             output = self.forward(x)
 
             if self.model_type == "classifier":
-                return torch.softmax(output, dim=1) if kwargs.get("return_probs", False) else torch.argmax(output, dim=1)
+                return (
+                    torch.softmax(output, dim=1)
+                    if kwargs.get("return_probs", False)
+                    else torch.argmax(output, dim=1)
+                )
             if self.model_type == "autoencoder":
                 return output
             return output
@@ -120,7 +128,7 @@ class BaseModel(nn.Module, ABC):
         """
         self.device = device
         return super().to(device)  # type: ignore[return-value]
-    
+
     def dummy_forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Optional: Override this in models that need special input logic for tracing/graph logging.
@@ -134,7 +142,11 @@ class BaseModel(nn.Module, ABC):
         If only a single tensor is passed during a tracing context (e.g., W&B or TorchScript),
         we route it through dummy_forward.
         """
-        if len(args) == 1 and isinstance(args[0], torch.Tensor) and self._is_graph_tracing():
+        if (
+            len(args) == 1
+            and isinstance(args[0], torch.Tensor)
+            and self._is_graph_tracing()
+        ):
             return self.dummy_forward(args[0])
         return super().__call__(*args, **kwargs)
 
@@ -143,8 +155,10 @@ class BaseModel(nn.Module, ABC):
         Detects whether we're in a model graph tracing context like wandb.watch or torch.jit.
         """
         import inspect
+
         for frame in inspect.stack():
-            if any(keyword in frame.filename.lower() for keyword in ("wandb", "torch/jit")):
+            if any(
+                keyword in frame.filename.lower() for keyword in ("wandb", "torch/jit")
+            ):
                 return True
         return False
-            

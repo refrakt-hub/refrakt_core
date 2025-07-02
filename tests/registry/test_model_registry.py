@@ -20,14 +20,14 @@ def test_registry_contains_models():
     """Test that the registry contains the registered models."""
     # Check if models are available in the registry
     available_models = list(MODEL_REGISTRY.keys())
-    
+
     # If no models are registered, skip this test
     if not available_models:
         pytest.skip("No models found in registry - models may not be imported")
-    
+
     expected_models = [
         "autoencoder",
-        "convnext", 
+        "convnext",
         "resnet18",
         "resnet50",
         "resnet101",
@@ -85,6 +85,7 @@ def test_get_model_with_args():
 
 def test_model_instantiation():
     """Test model instantiation with parameters"""
+
     @register_model("test_model_params")
     class TestModelParams:
         def __init__(self, layers=3):

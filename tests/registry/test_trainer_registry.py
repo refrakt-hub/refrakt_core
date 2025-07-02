@@ -7,12 +7,14 @@ from refrakt_core.registry.trainer_registry import (TRAINER_REGISTRY,
 
 def test_trainer_registration():
     """Test trainer class retrieval"""
+
     @register_trainer("test_trainer")
     class TestTrainer:
         pass
 
     trainer_cls = get_trainer("test_trainer")
     assert trainer_cls is TestTrainer
+
 
 def test_trainer_not_found():
     """Test error for missing trainer"""

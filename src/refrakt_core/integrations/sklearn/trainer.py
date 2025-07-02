@@ -1,12 +1,13 @@
 from typing import Any, Dict, Optional, Union
+
+import numpy as np
+import torch
 from torch.nn import Module
 from torch.utils.data import DataLoader
-import torch
-import numpy as np
 from tqdm import tqdm
 
-from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.registry.trainer_registry import register_trainer
+from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
 
 
@@ -22,11 +23,14 @@ class FusionTrainer(BaseTrainer):
         artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(model, 
-                         train_loader, 
-                         val_loader, device, 
-                         artifact_dumper=artifact_dumper, 
-                         **kwargs)
+        super().__init__(
+            model,
+            train_loader,
+            val_loader,
+            device,
+            artifact_dumper=artifact_dumper,
+            **kwargs,
+        )
 
         self.fusion_head = fusion_head
         self.extra_params = kwargs
@@ -52,11 +56,15 @@ class FusionTrainer(BaseTrainer):
         print(f"\n[RESULT] Validation Accuracy: {acc * 100:.2f}%")
 
         if self.artifact_dumper:
-            self.artifact_dumper.log_scalar_dict({"fusion_accuracy": acc}, step=self.global_step, prefix="val")
+            self.artifact_dumper.log_scalar_dict(
+                {"fusion_accuracy": acc}, step=self.global_step, prefix="val"
+            )
 
         return acc
 
-    def _extract_features_and_labels(self, loader: DataLoader) -> tuple[np.ndarray, np.ndarray]:
+    def _extract_features_and_labels(
+        self, loader: DataLoader
+    ) -> tuple[np.ndarray, np.ndarray]:
         features, labels = [], []
         first = True
         with torch.no_grad():
@@ -65,13 +73,17 @@ class FusionTrainer(BaseTrainer):
             for batch in loop:
                 x, y = self._unpack_batch(batch)
                 if first:
-                    print(f"[DEBUG] y type: {type(y)}, y shape: {getattr(y, 'shape', None)}")
+                    print(
+                        f"[DEBUG] y type: {type(y)}, y shape: {getattr(y, 'shape', None)}"
+                    )
                     first = False
                 x = x.to(self.device)
                 output = self.model(x)
 
                 if not isinstance(output, ModelOutput) or output.embeddings is None:
-                    raise ValueError("Backbone must return `ModelOutput` with `embeddings` for fusion mode.")
+                    raise ValueError(
+                        "Backbone must return `ModelOutput` with `embeddings` for fusion mode."
+                    )
 
                 emb = output.embeddings
                 features.append(emb.detach().cpu().numpy())
@@ -82,7 +94,9 @@ class FusionTrainer(BaseTrainer):
 
         return np.concatenate(features), np.concatenate(labels)
 
-    def _unpack_batch(self, batch: Union[tuple, list, Dict[str, torch.Tensor]]) -> tuple:
+    def _unpack_batch(
+        self, batch: Union[tuple, list, Dict[str, torch.Tensor]]
+    ) -> tuple:
         # Handle SimCLR-style batches: (img1, img2, label)
         if isinstance(batch, (tuple, list)):
             if len(batch) == 3:

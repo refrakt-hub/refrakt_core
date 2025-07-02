@@ -36,7 +36,7 @@ class SRGAN(BaseGAN):
         self.scale_factor: int = scale_factor
         self.generator: Generator = Generator(scale_factor=scale_factor)
         self.discriminator: Discriminator = Discriminator()
-        
+
     @property
     def device(self):
         return next(self.generator.parameters()).device
@@ -66,7 +66,7 @@ class SRGAN(BaseGAN):
         # FIX: Create ModelOutput with logits and target_is_real flag
         real_output = ModelOutput(logits=real_pred, extra={"target_is_real": True})
         fake_output = ModelOutput(logits=fake_pred, extra={"target_is_real": False})
-        
+
         loss_real = loss_fn["discriminator"](real_output)
         loss_fake = loss_fn["discriminator"](fake_output)
         d_loss = 0.5 * (loss_real + loss_fake)
@@ -149,8 +149,7 @@ class SRGAN(BaseGAN):
         super().load_model(path)
         checkpoint = torch.load(path, map_location=self.device)
         self.scale_factor = checkpoint.get("scale_factor", self.scale_factor)
-    
-    
+
     def forward(self, x: Tensor) -> Tensor:
         """
         Forward pass through the generator.

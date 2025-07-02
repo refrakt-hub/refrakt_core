@@ -1,9 +1,10 @@
 # refrakt_core/integrations/fusion/builder.py
 
-from typing import Dict, Any
-from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
+from typing import Any, Dict
+
 # from refrakt_core.integrations.cuml.wrapper import CuMLWrapper
 from refrakt_core.integrations.fusion.protocols import FusionHead
+from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
 
 
 def build_fusion_head(cfg: Dict[str, Any]) -> FusionHead:
@@ -27,8 +28,10 @@ def build_fusion_head(cfg: Dict[str, Any]) -> FusionHead:
     params = cfg.get("params", {})
 
     model_params = dict(params)
-    fusion_head_config = model_params.pop("fusion_head", {}) if "fusion_head" in model_params else {}
-    
+    fusion_head_config = (
+        model_params.pop("fusion_head", {}) if "fusion_head" in model_params else {}
+    )
+
     if fusion_head_config is None:
         fusion_head_config = {}
 

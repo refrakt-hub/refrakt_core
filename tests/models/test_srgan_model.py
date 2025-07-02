@@ -11,6 +11,7 @@ from refrakt_core.models.srgan import SRGAN
 def device():
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 def test_generator_output_shape(device):
     model = SRGAN(scale_factor=4).to(device)
     model.generator.eval()
@@ -20,6 +21,7 @@ def test_generator_output_shape(device):
     expected_shape = (1, 3, 192, 192)
     assert output.shape == expected_shape
 
+
 def test_discriminator_output_shape(device):
     model = SRGAN(scale_factor=4).to(device)
     model.discriminator.eval()
@@ -28,6 +30,7 @@ def test_discriminator_output_shape(device):
         output = model.discriminator(input_tensor)
     assert output.shape == (1,)
 
+
 def test_generate_function(device):
     model = SRGAN(scale_factor=4).to(device)
     input_tensor = torch.randn(1, 3, 48, 48).to(device)
@@ -35,12 +38,14 @@ def test_generate_function(device):
     assert output.shape == (1, 3, 192, 192)
     assert (0 <= output).all() and (output <= 1).all()
 
+
 def test_discriminate_function(device):
     model = SRGAN(scale_factor=4).to(device)
     input_tensor = torch.randn(1, 3, 192, 192).to(device)
     output = model.discriminate(input_tensor)
     assert output.shape == (1,)
     assert (0 <= output).all() and (output <= 1).all()
+
 
 def test_model_save_and_load(device):
     model = SRGAN(scale_factor=4).to(device)

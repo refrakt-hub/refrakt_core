@@ -7,17 +7,18 @@ import os
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Dict, List, Tuple, Any, Union
+from typing import Any, Dict, List, Tuple, Union
 
-from torch import nn
 import matplotlib
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 import numpy as np
 import requests
 import torch
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+from torch import nn
 from torchvision import transforms
+
 matplotlib.use("Agg")
 
 
@@ -237,16 +238,19 @@ def random_patch_masking(x: torch.Tensor, mask_ratio=0.6, patch_size=16):
         x_masked[i] *= mask.unsqueeze(0)
     return x_masked
 
+
 def setup_device_and_model(model, device, logger):
     """Setup device and wrap model with DataParallel if multiple GPUs available."""
-    
+
     # Check GPU availability
     if torch.cuda.is_available():
         gpu_count = torch.cuda.device_count()
         logger.info(f"Found {gpu_count} GPU(s) available")
-        
+
         if gpu_count > 1:
-            logger.info(f"Using DataParallel with {gpu_count} GPUs: {[torch.cuda.get_device_name(i) for i in range(gpu_count)]}")
+            logger.info(
+                f"Using DataParallel with {gpu_count} GPUs: {[torch.cuda.get_device_name(i) for i in range(gpu_count)]}"
+            )
             model = nn.DataParallel(model)
             # Set primary device
             device = torch.device(f"cuda:{model.device_ids[0]}")
@@ -256,9 +260,10 @@ def setup_device_and_model(model, device, logger):
     else:
         logger.info("CUDA not available, using CPU")
         device = torch.device("cpu")
-    
+
     model = model.to(device)
     return model, device
+
 
 def extract_visual_tensor(outputs: Any) -> torch.Tensor:
     """
@@ -273,7 +278,10 @@ def extract_visual_tensor(outputs: Any) -> torch.Tensor:
                 return outputs[key]
     return torch.tensor(outputs)  # Final fallback
 
-def unpack_views_from_batch(batch: Union[torch.Tensor, Dict[str, torch.Tensor], list, tuple], device: str) -> list[torch.Tensor]:
+
+def unpack_views_from_batch(
+    batch: Union[torch.Tensor, Dict[str, torch.Tensor], list, tuple], device: str
+) -> list[torch.Tensor]:
     """
     Unpack two augmented views from a batch for contrastive/self-supervised learning.
     Handles various batch formats (tuple, list, dict, tensor).

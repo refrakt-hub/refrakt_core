@@ -1,7 +1,9 @@
 import torch
 from torch import nn
-from refrakt_core.schema.model_output import ModelOutput
+
 from refrakt_core.registry.wrapper_registry import register_wrapper
+from refrakt_core.schema.model_output import ModelOutput
+
 
 @register_wrapper("resnet")
 class ResNetWrapper(nn.Module):

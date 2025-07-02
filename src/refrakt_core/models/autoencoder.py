@@ -31,8 +31,8 @@ class AutoEncoder(BaseAutoEncoder):
         self,
         input_dim: int = 784,
         hidden_dim: int = 8,
-        mode: str | None = None,           # preferred name
-        variant: str | None = None,           # noqa: A002  (keep for backward-compat)
+        mode: str | None = None,  # preferred name
+        variant: str | None = None,  # noqa: A002  (keep for backward-compat)
         model_name: str = "autoencoder",
     ) -> None:
         # allow either keyword; prefer `mode`
@@ -50,43 +50,42 @@ class AutoEncoder(BaseAutoEncoder):
         self.hidden_dim: int = hidden_dim
         self.input_shape = (1, 28, 28) if input_dim == 784 else (input_dim,)
 
-
         # ── encoder / decoder ───────────────────────────────────────────────
         if self.input_dim == 784:
             self.encoder_layers = nn.Sequential(
-            nn.Linear(input_dim, 512), 
-            nn.ReLU(inplace=True),
-            nn.BatchNorm1d(512),
-            nn.Linear(512, 256),        
-            nn.ReLU(),
-            nn.BatchNorm1d(256),
-            nn.Linear(256, 128),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm1d(128),
-            nn.Linear(128, hidden_dim), 
-            nn.ReLU(inplace=True),
-            )
-            self.decoder_layers = nn.Sequential(
-                nn.Linear(hidden_dim, 128), 
-                nn.ReLU(inplace=True),
-                nn.BatchNorm1d(128),
-                nn.Linear(128, 256),        
-                nn.ReLU(inplace=True),
-                nn.BatchNorm1d(256),
-                nn.Linear(256, 512),        
+                nn.Linear(input_dim, 512),
                 nn.ReLU(inplace=True),
                 nn.BatchNorm1d(512),
-                nn.Linear(512, input_dim), 
+                nn.Linear(512, 256),
+                nn.ReLU(),
+                nn.BatchNorm1d(256),
+                nn.Linear(256, 128),
+                nn.ReLU(inplace=True),
+                nn.BatchNorm1d(128),
+                nn.Linear(128, hidden_dim),
+                nn.ReLU(inplace=True),
+            )
+            self.decoder_layers = nn.Sequential(
+                nn.Linear(hidden_dim, 128),
+                nn.ReLU(inplace=True),
+                nn.BatchNorm1d(128),
+                nn.Linear(128, 256),
+                nn.ReLU(inplace=True),
+                nn.BatchNorm1d(256),
+                nn.Linear(256, 512),
+                nn.ReLU(inplace=True),
+                nn.BatchNorm1d(512),
+                nn.Linear(512, input_dim),
                 nn.Sigmoid(),
             )
-            
+
             for m in self.modules():
                 if isinstance(m, nn.Linear):
                     nn.init.kaiming_normal_(m.weight)
                     nn.init.constant_(m.bias, 0)
-                    
-        else: 
-            in_channels = 1 if input_dim == 224*224 else 3
+
+        else:
+            in_channels = 1 if input_dim == 224 * 224 else 3
 
             self.encoder_layers = nn.Sequential(
                 nn.Conv2d(in_channels, 16, 3, stride=2, padding=1),
@@ -94,20 +93,22 @@ class AutoEncoder(BaseAutoEncoder):
                 nn.Conv2d(16, 32, 3, stride=2, padding=1),
                 nn.ReLU(),
                 nn.Flatten(),
-                nn.Linear(32*56*56, hidden_dim)
+                nn.Linear(32 * 56 * 56, hidden_dim),
             )
-            
+
             self.decoder_layers = nn.Sequential(
-                nn.Linear(hidden_dim, 32*56*56),
+                nn.Linear(hidden_dim, 32 * 56 * 56),
                 nn.Unflatten(1, (32, 56, 56)),
                 nn.ConvTranspose2d(32, 16, 3, stride=2, padding=1, output_padding=1),
                 nn.ReLU(),
-                nn.ConvTranspose2d(16, in_channels, 3, stride=2, padding=1, output_padding=1),
-                nn.Sigmoid()
+                nn.ConvTranspose2d(
+                    16, in_channels, 3, stride=2, padding=1, output_padding=1
+                ),
+                nn.Sigmoid(),
             )
 
         if self.mode == "vae":
-            self.mu    = nn.Linear(hidden_dim, hidden_dim)
+            self.mu = nn.Linear(hidden_dim, hidden_dim)
             self.sigma = nn.Linear(hidden_dim, hidden_dim)
 
     # ──────────────────────────────────────────────────────────────────────
@@ -133,7 +134,7 @@ class AutoEncoder(BaseAutoEncoder):
         if self.mode == "vae":
             mu, _ = self.encode(x)
             return mu
-        else: 
+        else:
             return self.encode(x)
 
     # def training_step(
@@ -177,16 +178,16 @@ class AutoEncoder(BaseAutoEncoder):
     def forward(self, x: Tensor) -> Union[Tensor, Dict[str, Tensor]]:
         # Store original shape
         original_shape = x.shape
-        
+
         # Flatten if needed (for linear models)
         if x.dim() > 2:
             x = x.view(x.size(0), -1)
-        
+
         if self.mode == "simple":
             encoded = self.encode(x)
             decoded = self.decode(encoded)
             return decoded.view(original_shape)  # Reshape to original input dimensions
-            
+
         # VAE forward
         mu, sigma = self.encode(x)
         z = self._reparameterize(mu, sigma)

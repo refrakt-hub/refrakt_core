@@ -11,10 +11,10 @@ def test_ResidualBlock():
     out = block(x)
     assert out.shape == x.shape
 
+
 def test_BottleneckBlock():
     downsample = nn.Sequential(
-        nn.Conv2d(64, 256, kernel_size=1, stride=1, bias=False),
-        nn.BatchNorm2d(256)
+        nn.Conv2d(64, 256, kernel_size=1, stride=1, bias=False), nn.BatchNorm2d(256)
     )
     block = BottleneckBlock(64, 64, downsample=downsample)  # 64 in, 256 out
     x = torch.randn(2, 64, 32, 32)

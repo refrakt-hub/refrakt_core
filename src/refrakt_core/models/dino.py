@@ -13,11 +13,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from refrakt_core.models.templates.base import BaseModel
-
-
-from torch import nn
 from refrakt_core.models.resnet import ResNet18, ResNet50, ResNet101, ResNet152
+from refrakt_core.models.templates.base import BaseModel
 from refrakt_core.registry.model_registry import register_model
 
 
@@ -94,15 +91,18 @@ class DINOModel(BaseModel):
     ) -> None:
         super().__init__(model_name=model_name, model_type="contrastive")
         self.backbone: nn.Module = backbone
-        self.student_head: DINOHead = DINOHead(in_dim=backbone.feature_dim, out_dim=out_dim)
-        self.teacher_head: DINOHead = DINOHead(in_dim=backbone.feature_dim, out_dim=out_dim)
+        self.student_head: DINOHead = DINOHead(
+            in_dim=backbone.feature_dim, out_dim=out_dim
+        )
+        self.teacher_head: DINOHead = DINOHead(
+            in_dim=backbone.feature_dim, out_dim=out_dim
+        )
         self.teacher_head.load_state_dict(self.student_head.state_dict())
 
         for param in self.teacher_head.parameters():
             param.requires_grad = False
 
     def forward(self, x: Tensor, teacher: bool = False, **kwargs) -> Tensor:
-
         """
         Forward pass through student or teacher head.
 
@@ -135,6 +135,7 @@ class DINOModel(BaseModel):
                 momentum * teacher_param.data + (1.0 - momentum) * student_param.data
             )
 
+
 class DINOBackboneWrapper(nn.Module):
     """
     Wraps a backbone model to expose features for DINO training.
@@ -158,12 +159,12 @@ class DINOBackboneWrapper(nn.Module):
         kwargs["return_features"] = True
         return self.backbone(x, **kwargs)
 
-    
+
 @register_model("dino")
 class DINOModelWrapper(DINOModel):
     """
     DINO model wrapper that supports ResNet backbones.
-    Instantiates and integrates with the DINO training setup. 
+    Instantiates and integrates with the DINO training setup.
     """
 
     def __init__(self, backbone="resnet18", out_dim=2048, **kwargs):

@@ -1,10 +1,13 @@
-from refrakt_core.schema.loss_output import LossOutput
-from refrakt_core.registry.loss_registry import register_loss
-from refrakt_core.losses.templates.base import BaseLoss
-from refrakt_core.losses.gan import GANLoss
-from typing import Optional, Dict
-from refrakt_core.schema.model_output import ModelOutput
+from typing import Dict, Optional
+
 from torch import nn
+
+from refrakt_core.losses.gan import GANLoss
+from refrakt_core.losses.templates.base import BaseLoss
+from refrakt_core.registry.loss_registry import register_loss
+from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.schema.model_output import ModelOutput
+
 
 @register_loss("gan_wrapped", mode="logits")
 class GANLossWrapper(BaseLoss):
@@ -17,7 +20,7 @@ class GANLossWrapper(BaseLoss):
     def forward(self, output: ModelOutput, target=None) -> LossOutput:
         logits = output.logits
         target_is_real = output.extra.get("target_is_real")
-        
+
         if logits is None or target_is_real is None:
             missing = [f for f in self.required_fields if f not in output.extra]
             raise ValueError(f"Missing required fields: {missing}")

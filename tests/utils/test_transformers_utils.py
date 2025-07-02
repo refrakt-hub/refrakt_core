@@ -10,6 +10,7 @@ def test_InputEmbeddings():
     out = embed(x)
     assert out.shape == (2, 10, 64)
 
+
 def test_PositionalEncoding():
     pe = PositionalEncoding(d_model=64, seq_len=20, dropout=0.1)
     x = torch.randn(2, 10, 64)

@@ -1,8 +1,6 @@
-from . import losses
-from . import models
-
-from .losses import * 
-from .models import * 
+from . import losses, models
+from .losses import *
+from .models import *
 
 __all__ = [
     "losses",

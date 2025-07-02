@@ -30,8 +30,6 @@ def test_custom_loss_registration():
     assert result.shape == ()
 
 
-
-
 def test_loss_not_found():
     """Test handling of unregistered loss"""
     with pytest.raises(ValueError) as excinfo:

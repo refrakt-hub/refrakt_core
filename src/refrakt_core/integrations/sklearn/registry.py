@@ -9,9 +9,10 @@ This registry enables shorthand model specification in config files
 while preserving dynamic import capability.
 """
 
-import yaml
 import importlib.resources as pkg_resources
 from typing import Dict, cast
+
+import yaml
 
 
 def load_sklearn_registry() -> Dict[str, str]:
@@ -33,7 +34,8 @@ def load_sklearn_registry() -> Dict[str, str]:
         >>> registry["svc"]
         'sklearn.svm.SVC'
     """
-    with pkg_resources.files("refrakt_core.integrations.yaml") \
-            .joinpath("sklearn_registry.yaml").open("r") as f:
+    with pkg_resources.files("refrakt_core.integrations.yaml").joinpath(
+        "sklearn_registry.yaml"
+    ).open("r") as f:
         content = cast(Dict[str, str], yaml.safe_load(f))
     return content

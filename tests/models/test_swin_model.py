@@ -9,9 +9,11 @@ from refrakt_core.models.swin import SwinTransformer
 def small_swin():
     return SwinTransformer(in_channels=3, num_classes=10)
 
+
 def test_swin_init(small_swin):
     assert isinstance(small_swin.embedding, torch.nn.Module)
     assert isinstance(small_swin.head, torch.nn.Linear)
+
 
 def test_swin_forward(small_swin):
     # Use 224x224 as this is the standard size for Swin Transformers

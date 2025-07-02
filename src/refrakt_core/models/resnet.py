@@ -56,11 +56,7 @@ class ResNet(BaseClassifier):
         self.fc: nn.Linear = nn.Linear(self.feature_dim, num_classes)
 
     def _make_layer(
-        self,
-        block: Type[nn.Module],
-        planes: int,
-        blocks: int,
-        stride: int = 1
+        self, block: Type[nn.Module], planes: int, blocks: int, stride: int = 1
     ) -> nn.Sequential:
         downsample: Optional[nn.Sequential] = None
         if stride != 1 or self.inplanes != planes:
@@ -76,7 +72,9 @@ class ResNet(BaseClassifier):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x: Tensor, return_features: bool = False, **kwargs) -> Union[Tensor, Tensor]:
+    def forward(
+        self, x: Tensor, return_features: bool = False, **kwargs
+    ) -> Union[Tensor, Tensor]:
         # print("[DEBUG ResNet] return_features:", return_features)
 
         x = self.conv1(x)
@@ -97,6 +95,7 @@ class ResNet(BaseClassifier):
 @register_model("resnet18")
 class ResNet18(ResNet):
     """ResNet-18 variant using basic residual blocks."""
+
     def __init__(self, in_channels: int = 3, num_classes: int = 10) -> None:
         super().__init__(
             block=ResidualBlock,
@@ -109,6 +108,7 @@ class ResNet18(ResNet):
 @register_model("resnet50")
 class ResNet50(ResNet):
     """ResNet-50 variant using bottleneck blocks."""
+
     def __init__(self, in_channels: int = 3, num_classes: int = 10) -> None:
         super().__init__(
             block=BottleneckBlock,
@@ -121,6 +121,7 @@ class ResNet50(ResNet):
 @register_model("resnet101")
 class ResNet101(ResNet):
     """ResNet-101 variant using bottleneck blocks."""
+
     def __init__(self, in_channels: int = 3, num_classes: int = 10) -> None:
         super().__init__(
             block=BottleneckBlock,
@@ -133,6 +134,7 @@ class ResNet101(ResNet):
 @register_model("resnet152")
 class ResNet152(ResNet):
     """ResNet-152 variant using bottleneck blocks."""
+
     def __init__(self, in_channels: int = 3, num_classes: int = 10) -> None:
         super().__init__(
             block=BottleneckBlock,

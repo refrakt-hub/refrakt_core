@@ -1,6 +1,8 @@
-from torch import nn, Tensor
+from torch import Tensor, nn
+
 from refrakt_core.registry.wrapper_registry import register_wrapper
 from refrakt_core.schema.model_output import ModelOutput
+
 
 @register_wrapper("mae")
 class MAEWrapper(nn.Module):
@@ -14,7 +16,9 @@ class MAEWrapper(nn.Module):
     def __init__(self, model: nn.Module, **kwargs):
         super().__init__()
         self.model = model
-        self.expected_input_dim = getattr(model, 'img_size', (3, 224, 224))  # fallback if not present
+        self.expected_input_dim = getattr(
+            model, "img_size", (3, 224, 224)
+        )  # fallback if not present
 
     def _unpatchify(self, patches: Tensor, target: Tensor) -> Tensor:
         """
@@ -23,9 +27,13 @@ class MAEWrapper(nn.Module):
         B, N, patch_dim = patches.shape
         _, _, target_dim = target.shape
         patch_size = int((target_dim // 3) ** 0.5)
-        H = W = int(N ** 0.5)
+        H = W = int(N**0.5)
 
-        return patches.reshape(B, H, W, patch_size, patch_size, 3).permute(0, 5, 1, 3, 2, 4).reshape(B, 3, H * patch_size, W * patch_size)
+        return (
+            patches.reshape(B, H, W, patch_size, patch_size, 3)
+            .permute(0, 5, 1, 3, 2, 4)
+            .reshape(B, 3, H * patch_size, W * patch_size)
+        )
 
     def forward(self, x: Tensor) -> ModelOutput:
         model_output = self.model(x)
@@ -37,8 +45,5 @@ class MAEWrapper(nn.Module):
 
         return ModelOutput(
             reconstruction=recon,
-            extra={
-                "mask": model_output["mask"],
-                "original_patches": patches
-            }
+            extra={"mask": model_output["mask"], "original_patches": patches},
         )

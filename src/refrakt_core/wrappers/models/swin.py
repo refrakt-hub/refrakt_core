@@ -1,7 +1,8 @@
 import torch
 from torch import nn
-from refrakt_core.schema.model_output import ModelOutput
+
 from refrakt_core.registry.wrapper_registry import register_wrapper
+from refrakt_core.schema.model_output import ModelOutput
 
 
 @register_wrapper("swin")
@@ -22,7 +23,7 @@ class SwinTransformerWrapper(nn.Module):
             x (Tensor): Input image batch of shape (B, C, H, W)
 
         Returns:
-            ModelOutput: 
+            ModelOutput:
                 - logits: final classification outputs (B, num_classes)
                 - embeddings: pre-logit pooled features (B, hidden_dim)
         """
@@ -39,10 +40,7 @@ class SwinTransformerWrapper(nn.Module):
         embeddings = x.mean(dim=1)  # global average over patch tokens
         logits = self.backbone.head(embeddings)
 
-        return ModelOutput(
-            logits=logits,
-            embeddings=embeddings
-        )
+        return ModelOutput(logits=logits, embeddings=embeddings)
 
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:
         """

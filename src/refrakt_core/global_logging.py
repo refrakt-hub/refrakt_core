@@ -1,8 +1,8 @@
 """
 Thread-safe singleton pattern for global Refrakt logger access and management.
 
-WARNING: 
-This file is not up to Pylint's standards. Safer methods will be implemented 
+WARNING:
+This file is not up to Pylint's standards. Safer methods will be implemented
 in the future.
 """
 
@@ -14,6 +14,7 @@ from typing import Optional
 _global_logger_instance = None
 _logger_lock: Lock = Lock()
 
+
 def get_global_logger() -> logging.Logger:
     """
     Get the global logger instance. Returns dummy if not initialized yet.
@@ -23,6 +24,7 @@ def get_global_logger() -> logging.Logger:
         # Return fallback logger silently
         return logging.getLogger("refrakt_null_logger")
     return _global_logger_instance
+
 
 # def get_global_logger() -> "RefraktLogger":
 #     """

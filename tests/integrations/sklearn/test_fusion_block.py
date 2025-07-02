@@ -3,7 +3,9 @@
 import torch
 import torch.nn as nn
 from sklearn.datasets import make_classification
+
 from refrakt_core.integrations.fusion.block import FusionBlock
+
 
 class DummyBackbone(nn.Module):
     def __init__(self):
@@ -13,8 +15,10 @@ class DummyBackbone(nn.Module):
     def forward(self, x):
         return self.fc(x)
 
+
 def test_fusion_block():
-    from torch.utils.data import TensorDataset, DataLoader
+    from torch.utils.data import DataLoader, TensorDataset
+
     X, y = make_classification(n_samples=100, n_features=20, random_state=42)
     X_tensor = torch.tensor(X, dtype=torch.float32)
     y_tensor = torch.tensor(y, dtype=torch.long)
@@ -22,7 +26,7 @@ def test_fusion_block():
     config = {
         "type": "sklearn",
         "model": "random_forest",
-        "params": {"n_estimators": 10}
+        "params": {"n_estimators": 10},
     }
 
     model = FusionBlock(DummyBackbone(), config)

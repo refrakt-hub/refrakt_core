@@ -50,7 +50,9 @@ class GANLoss(BaseLoss):
         if not isinstance(target_is_real, bool):
             raise TypeError("target_is_real must be a boolean.")
 
-        target: Tensor = torch.ones_like(pred) if target_is_real else torch.zeros_like(pred)
+        target: Tensor = (
+            torch.ones_like(pred) if target_is_real else torch.zeros_like(pred)
+        )
         target = target.to(pred.device)
         return self.loss(pred, target)
 

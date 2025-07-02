@@ -5,22 +5,23 @@ MSNLossWrapper: A wrapper class for the Masked Siamese Network (MSN) loss.
 from typing import Dict, Optional
 
 from torch import nn
-from refrakt_core.losses.templates.base import BaseLoss
+
 from refrakt_core.losses.msn import MSNLoss
-from refrakt_core.schema.model_output import ModelOutput
-from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.losses.templates.base import BaseLoss
 from refrakt_core.registry.loss_registry import register_loss
+from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.schema.model_output import ModelOutput
 
 
 @register_loss("msn_wrapped", mode="embedding")
 class MSNLossWrapper(nn.Module):
     def __init__(self, temp_anchor=0.1, temp_target=0.04, lambda_me_max=1.0, **kwargs):
         super().__init__()
-        
+
         self.loss_fn = MSNLoss(
             temp_anchor=temp_anchor,
             temp_target=temp_target,
-            lambda_me_max=lambda_me_max
+            lambda_me_max=lambda_me_max,
         )
 
     def forward(self, output: ModelOutput, target=None) -> LossOutput:
@@ -34,13 +35,10 @@ class MSNLossWrapper(nn.Module):
         # print("DEBUG prototypes:", type(prototypes), getattr(prototypes, 'shape', None))
         if None in (z_anchor, z_target, prototypes):
             raise ValueError("Missing required fields in ModelOutput")
-        
+
         # Compute loss and components
         total_loss, components = self.loss_fn.compute_with_components(
             z_anchor, z_target, prototypes
         )
-        
-        return LossOutput(
-            total=total_loss,
-            components=dict(components)
-        )
+
+        return LossOutput(total=total_loss, components=dict(components))

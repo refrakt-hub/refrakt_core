@@ -59,7 +59,9 @@ class MAE(BaseModel):
             in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
         )
         self.pos_embed_enc = nn.Parameter(
-            get_2d_sincos_pos_embed(embed_dim, int(self.num_patches**0.5), cls_token=False),
+            get_2d_sincos_pos_embed(
+                embed_dim, int(self.num_patches**0.5), cls_token=False
+            ),
             requires_grad=False,
         )
 
@@ -74,12 +76,17 @@ class MAE(BaseModel):
 
         # Decoder
         self.decoder_pos_embed = nn.Parameter(
-            get_2d_sincos_pos_embed(decoder_dim, int(self.num_patches**0.5), cls_token=False),
+            get_2d_sincos_pos_embed(
+                decoder_dim, int(self.num_patches**0.5), cls_token=False
+            ),
             requires_grad=False,
         )
         self.decoder_embed = nn.Linear(embed_dim, decoder_dim, bias=True)
         decoder_layer = nn.TransformerEncoderLayer(
-            decoder_dim, decoder_num_heads, dim_feedforward=decoder_dim * 4, batch_first=True
+            decoder_dim,
+            decoder_num_heads,
+            dim_feedforward=decoder_dim * 4,
+            batch_first=True,
         )
         self.decoder = nn.TransformerEncoder(decoder_layer, num_layers=decoder_depth)
         self.decoder_pred = nn.Linear(decoder_dim, self.patch_dim, bias=True)
@@ -155,7 +162,9 @@ class MAE(BaseModel):
 
         mask_tokens = self.mask_token.expand(batch_size, num_masked, -1)
 
-        full_tokens = torch.zeros(batch_size, self.num_patches, channels, device=imgs.device)
+        full_tokens = torch.zeros(
+            batch_size, self.num_patches, channels, device=imgs.device
+        )
         full_tokens.scatter_(
             1,
             ids_restore.unsqueeze(-1).expand(-1, -1, channels),

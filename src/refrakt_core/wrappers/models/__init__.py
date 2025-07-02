@@ -1,13 +1,13 @@
+from .autoencoder import AutoencoderWrapper
 from .convnext import ConvNeXtWrapper
+from .dino import DINOWrapper
+from .mae import MAEWrapper
 from .msn import MSNWrapper
 from .resnet import ResNetWrapper
-from .srgan import SRGANWrapper
-from .autoencoder import AutoencoderWrapper
-from .mae import MAEWrapper
-from .dino import DINOWrapper
 from .simclr import SimCLRWrapper
-from .vit import ViTWrapper
+from .srgan import SRGANWrapper
 from .swin import SwinTransformerWrapper
+from .vit import ViTWrapper
 
 __all__ = [
     "ConvNeXtWrapper",
@@ -19,5 +19,5 @@ __all__ = [
     "DINOWrapper",
     "SimCLRWrapper",
     "ViTWrapper",
-    "SwinTransformerWrapper"
+    "SwinTransformerWrapper",
 ]

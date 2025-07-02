@@ -1,35 +1,38 @@
 """The test module for Refrakt."""
 
-import os
 import glob
+import os
 import traceback
+import warnings
+from datetime import datetime
 from typing import Optional
 
 import torch
-from datetime import datetime
 from omegaconf import OmegaConf
 
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
+from refrakt_core.api.builders.loss_builder import build_loss
+from refrakt_core.api.builders.model_builder import build_model
 from refrakt_core.api.builders.trainer_builder import initialize_trainer
 from refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.api.utils.test_utils import (_build_test_loader,
+                                               _load_config,
+                                               _load_model_checkpoint)
 from refrakt_core.global_logging import get_global_logger
-from refrakt_core.api.utils.test_utils import _load_config, _build_test_loader, _load_model_checkpoint
-
-from refrakt_core.api.builders.model_builder import build_model
-from refrakt_core.api.builders.loss_builder import build_loss
-from refrakt_core.registry.model_registry import get_model
+from refrakt_core.integrations.fusion.builder import build_fusion_head
+from refrakt_core.integrations.sklearn.trainer import FusionTrainer
+from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
 from refrakt_core.registry.loss_registry import get_loss
+from refrakt_core.registry.model_registry import get_model
 from refrakt_core.registry.trainer_registry import get_trainer
 from refrakt_core.registry.wrapper_registry import get_wrapper
 from refrakt_core.schema.artifact import ArtifactDumper
 from refrakt_core.schema.model_output import ModelOutput
-from refrakt_core.integrations.sklearn.trainer import FusionTrainer
-from refrakt_core.integrations.fusion.builder import build_fusion_head
-from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
 
-import warnings
 warnings.filterwarnings("ignore")
+
+
 def test(cfg, model_path: Optional[str] = None, logger=None):
     try:
         # === Load config and logger ===
@@ -47,11 +50,12 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
             if variant not in {"simple", "vae"}:
                 raise ValueError(f"Unsupported autoencoder variant: {variant!r}")
 
-            resolved_model_name = f"autoencoder_{variant}"  # ✅ use for checkpoints only
+            resolved_model_name = (
+                f"autoencoder_{variant}"  # ✅ use for checkpoints only
+            )
             print(f"[Resolved] Using model checkpoint name: {resolved_model_name}")
         else:
             resolved_model_name = config.model.name
-
 
         if logger is None:
             logger = RefraktLogger(
@@ -61,28 +65,32 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
                 console=console,
                 debug=debug,
             )
-            
+
         logger.log_config(OmegaConf.to_container(config, resolve=True))
 
         # === Set up modules and device ===
         modules = {
             "get_model": get_model,
             "get_loss": get_loss,
-            "get_trainer": get_trainer, 
-            "get_wrapper": get_wrapper
+            "get_trainer": get_trainer,
+            "get_wrapper": get_wrapper,
         }
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # === Dataset, Model, Loss ===
         dataloader = _build_test_loader(config)
-        
+
         model_cls = get_model(config.model.name)
-        model = build_model(config, modules={
-            "get_model": get_model,
-            "get_wrapper": get_wrapper,
-            "model": model_cls
-        }, device=device)
-        
+        model = build_model(
+            config,
+            modules={
+                "get_model": get_model,
+                "get_wrapper": get_wrapper,
+                "model": model_cls,
+            },
+            device=device,
+        )
+
         loss_fn = build_loss(config, modules=modules, device=device)
 
         # === Artifact dumper ===
@@ -130,38 +138,46 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
         # === Evaluation Phase ===
         logger.info("🧪 Running evaluation...")
         eval_results = trainer.evaluate()
-        
+
         fusion_cfg = config.model.get("fusion")
         if fusion_cfg:
             fusion_type = fusion_cfg.type
             fusion_model_key = fusion_cfg.model
-            fusion_model_path = os.path.join(config.trainer.params.save_dir, f"{config.model.name}_fusion.joblib")
+            fusion_model_path = os.path.join(
+                config.trainer.params.save_dir, f"{config.model.name}_fusion.joblib"
+            )
 
             if os.path.exists(fusion_model_path):
                 logger.info(f"[FUSION] Found fusion head at {fusion_model_path}")
 
                 if fusion_type == "sklearn":
-                    fusion_head = SklearnWrapper.load(fusion_model_key, fusion_model_path)
+                    fusion_head = SklearnWrapper.load(
+                        fusion_model_key, fusion_model_path
+                    )
                 else:
                     raise ValueError(f"[FUSION] Unsupported fusion type: {fusion_type}")
 
                 fusion_trainer = FusionTrainer(
                     model=model,
                     fusion_head=fusion_head,
-                    train_loader=dataloader,   # ✅ we reuse val_loader for feature extraction
-                    val_loader=dataloader,     # ✅ same again for accuracy
+                    train_loader=dataloader,  # ✅ we reuse val_loader for feature extraction
+                    val_loader=dataloader,  # ✅ same again for accuracy
                     device=device,
                     artifact_dumper=artifact_dumper,
-                    model_name=config.model.name
+                    model_name=config.model.name,
                 )
 
                 fusion_acc = fusion_trainer.evaluate()
-                logger.info(f"[FUSION] Validation accuracy (fusion head): {fusion_acc:.4f}")
+                logger.info(
+                    f"[FUSION] Validation accuracy (fusion head): {fusion_acc:.4f}"
+                )
             else:
-                logger.warning(f"[FUSION] No fusion model found at: {fusion_model_path}")
+                logger.warning(
+                    f"[FUSION] No fusion model found at: {fusion_model_path}"
+                )
 
         # === Log model outputs per batch ===
-        if hasattr(logger, 'wandb') and hasattr(logger.wandb, 'step'):
+        if hasattr(logger, "wandb") and hasattr(logger.wandb, "step"):
             logger.wandb.step = 0
 
         model.eval()
@@ -178,7 +194,9 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
                         or batch.get("lr")  # <- SRGAN uses "lr" as input
                     )
                     if inputs is None:
-                        raise ValueError(f"❌ Inference input could not be resolved from batch keys: {list(batch.keys())}")
+                        raise ValueError(
+                            f"❌ Inference input could not be resolved from batch keys: {list(batch.keys())}"
+                        )
 
                 elif isinstance(batch, (list, tuple)):
                     inputs = batch[0]
@@ -191,7 +209,9 @@ def test(cfg, model_path: Optional[str] = None, logger=None):
                 if isinstance(output, ModelOutput):
                     artifact_dumper.log_output(output, batch_id=i)
                 else:
-                    logger.warning(f"Model output at batch {i} is not a ModelOutput instance.")
+                    logger.warning(
+                        f"Model output at batch {i} is not a ModelOutput instance."
+                    )
 
         artifact_path = f"./artifacts/{config.model.name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}_outputs.pt"
         artifact_dumper.save(artifact_path)

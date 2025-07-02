@@ -12,6 +12,7 @@ def test_SwinBlock():
 
     assert out.shape == x.shape
 
+
 def test_AlternateSwin():
     B, H, W, C = 2, 7, 7, 96
     x = torch.randn(B, H * W, C)  # (B, 49, 96)

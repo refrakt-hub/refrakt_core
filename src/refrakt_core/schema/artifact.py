@@ -1,9 +1,11 @@
 import os
+from typing import Any, Dict, List, Optional, Union
+
 import torch
 import torch.nn.functional as F
-from typing import Dict, Optional, Union, List, Any
-from refrakt_core.schema.model_output import ModelOutput
+
 from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.schema.model_output import ModelOutput
 
 
 class ArtifactDumper:
@@ -19,16 +21,14 @@ class ArtifactDumper:
         auto_flush: bool = False,
         metadata: Optional[Dict[str, Any]] = None,
         logger: Optional[Any] = None,  # <--- new
-        log_every: int = 1
-
+        log_every: int = 1,
     ):
         self.enabled = enabled
         self.model_name = model_name
         self.base_path = base_path
         self.auto_flush = auto_flush
-        self.logger = logger 
+        self.logger = logger
         self.log_every = log_every  # ✅ store it
-
 
         self.buffer: Dict[str, Dict[str, Any]] = {}
         self.metadata: Dict[str, Any] = metadata or {}
@@ -50,14 +50,22 @@ class ArtifactDumper:
 
         record = {}
         for field in [
-            "logits", "embeddings", "image", "reconstruction",
-            "targets", "attention_maps", "loss_components", "extra"
+            "logits",
+            "embeddings",
+            "image",
+            "reconstruction",
+            "targets",
+            "attention_maps",
+            "loss_components",
+            "extra",
         ]:
             value = getattr(output, field, None)
             if value is not None:
                 if field == "loss_components" and isinstance(value, dict):
-                    record[field] = {k: v.detach().cpu() if torch.is_tensor(v) else v
-                                    for k, v in value.items()}
+                    record[field] = {
+                        k: v.detach().cpu() if torch.is_tensor(v) else v
+                        for k, v in value.items()
+                    }
                 elif torch.is_tensor(value):
                     record[field] = value.detach().cpu()
                 else:
@@ -73,7 +81,7 @@ class ArtifactDumper:
 
         if self.auto_flush:
             self.save(filename=f"batch_{batch_id}_{self.model_name}.pt")
-            
+
     def log_full_output(
         self,
         output: ModelOutput,
@@ -81,7 +89,7 @@ class ArtifactDumper:
         step: Optional[int] = None,
         batch_id: Optional[Union[int, str]] = None,
         prefix: str = "train",
-        filenames: Optional[List[str]] = None
+        filenames: Optional[List[str]] = None,
     ):
         if not self.enabled:
             return
@@ -95,13 +103,22 @@ class ArtifactDumper:
 
         # === Log from ModelOutput ===
         for field in [
-            "logits", "embeddings", "image", "reconstruction",
-            "targets", "attention_maps", "loss_components", "extra"
+            "logits",
+            "embeddings",
+            "image",
+            "reconstruction",
+            "targets",
+            "attention_maps",
+            "loss_components",
+            "extra",
         ]:
             value = getattr(output, field, None)
             if value is not None:
                 if field == "loss_components" and isinstance(value, dict):
-                    record[field] = {k: v.detach().cpu() if torch.is_tensor(v) else v for k, v in value.items()}
+                    record[field] = {
+                        k: v.detach().cpu() if torch.is_tensor(v) else v
+                        for k, v in value.items()
+                    }
                 elif torch.is_tensor(value):
                     record[field] = value.detach().cpu()
                 else:
@@ -113,7 +130,9 @@ class ArtifactDumper:
         # === Log from LossOutput ===
         if loss is not None:
             record["loss_total"] = float(loss.total.item())
-            record["loss_components_full"] = {k: float(v.item()) for k, v in loss.components.items()}
+            record["loss_components_full"] = {
+                k: float(v.item()) for k, v in loss.components.items()
+            }
 
         self.buffer[batch_key] = record
 
@@ -131,7 +150,6 @@ class ArtifactDumper:
         if self.auto_flush:
             self.save(filename=f"batch_{batch_key}_{self.model_name}.pt")
 
-        
     def should_log_step(self, step: int) -> bool:
         if not hasattr(self, "_logged_steps"):
             self._logged_steps = set()
@@ -140,7 +158,12 @@ class ArtifactDumper:
         self._logged_steps.add(step)
         return True
 
-    def log_loss(self, loss: Union[LossOutput, Dict[str, torch.Tensor]], step: Union[int, str], prefix: Optional[str] = None):
+    def log_loss(
+        self,
+        loss: Union[LossOutput, Dict[str, torch.Tensor]],
+        step: Union[int, str],
+        prefix: Optional[str] = None,
+    ):
         if not self.enabled:
             return
 
@@ -149,21 +172,26 @@ class ArtifactDumper:
 
         if isinstance(loss, LossOutput):
             record["loss_total"] = float(loss.total)
-            record["loss_components"] = {k: float(v.item()) for k, v in loss.components.items()}
+            record["loss_components"] = {
+                k: float(v.item()) for k, v in loss.components.items()
+            }
         elif isinstance(loss, dict):
             record["loss_dict"] = {k: float(v.item()) for k, v in loss.items()}
 
         self.buffer[key] = record
 
-
-    def log_scalar_dict(self, scalar_dict: Dict[str, float], step: int, prefix: str = ""):
+    def log_scalar_dict(
+        self, scalar_dict: Dict[str, float], step: int, prefix: str = ""
+    ):
         if not self.enabled:
             return
 
         if self.logger:
             # Don't apply prefix here - let log_metrics handle it
-            self.logger.log_metrics(scalar_dict, step=step, prefix=prefix if prefix else None)
-            
+            self.logger.log_metrics(
+                scalar_dict, step=step, prefix=prefix if prefix else None
+            )
+
     def save(self, filename: Optional[str] = None):
         if not self.enabled:
             return
@@ -201,7 +229,10 @@ class ArtifactDumper:
 
     def summary(self) -> Dict[str, Any]:
         num_batches = len(self.buffer)
-        num_preds = sum(batch.get("logits", torch.empty(0)).shape[0] for batch in self.buffer.values())
+        num_preds = sum(
+            batch.get("logits", torch.empty(0)).shape[0]
+            for batch in self.buffer.values()
+        )
         return {
             "total_batches": num_batches,
             "total_predictions": num_preds,

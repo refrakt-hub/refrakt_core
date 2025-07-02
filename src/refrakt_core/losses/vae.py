@@ -11,6 +11,7 @@ from torch import Tensor, nn
 from refrakt_core.registry.loss_registry import register_loss
 from refrakt_core.schema.loss_output import LossOutput
 
+
 @register_loss("vae")
 class VAELoss(nn.Module):
     """
@@ -32,9 +33,7 @@ class VAELoss(nn.Module):
         self.normalize = True
 
     def forward(
-        self,
-        model_output: Union[Tensor, Dict[str, Tensor]],
-        target: Tensor
+        self, model_output: Union[Tensor, Dict[str, Tensor]], target: Tensor
     ) -> LossOutput:
         """
         Compute the VAE loss.
@@ -64,9 +63,8 @@ class VAELoss(nn.Module):
         # Reconstruction loss
         recon_flat = recon.view(recon.size(0), -1)
         target_flat = target.view(target.size(0), -1)
-        
-        num_elements = torch.prod(torch.tensor(recon.shape[1:]) * recon.shape[0])
 
+        num_elements = torch.prod(torch.tensor(recon.shape[1:]) * recon.shape[0])
 
         # Reconstruction loss using flattened tensors
         if self.recon_loss_type == "mse":
@@ -78,7 +76,9 @@ class VAELoss(nn.Module):
             if self.normalize:
                 recon_loss = recon_loss / num_elements
         else:
-            raise ValueError(f"Unsupported reconstruction loss type: '{self.recon_loss_type}'")
+            raise ValueError(
+                f"Unsupported reconstruction loss type: '{self.recon_loss_type}'"
+            )
 
         # Only return recon loss if not a VAE
         if mu is None or logvar is None:

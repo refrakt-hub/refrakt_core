@@ -1,6 +1,6 @@
 """
-Contains a set of transform classes for specific use-cases. 
-Available transforms are: 
+Contains a set of transform classes for specific use-cases.
+Available transforms are:
 - PairedTransform
 - FlattenTransform
 PatchifyTransform
@@ -21,6 +21,7 @@ class PairedTransform:
     """
     A transform class for SR-based training.
     """
+
     def __init__(self, crop_size: int = 96) -> None:
         self.crop_size = crop_size
 
@@ -46,6 +47,7 @@ class FlattenTransform:
     """
     A wrapper class that wraps around torch.flatten for a given tensor.
     """
+
     def __call__(self, x: Tensor) -> Tensor:
         return torch.flatten(x)
 
@@ -55,6 +57,7 @@ class PatchifyTransform:
     """
     A transform class for ViT / Swin-based training.
     """
+
     def __init__(self, patch_size: int) -> None:
         self.patch_size = patch_size
 

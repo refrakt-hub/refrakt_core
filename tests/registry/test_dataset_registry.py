@@ -15,6 +15,7 @@ def mock_logger():
         mock_logger.return_value = logger
         yield logger
 
+
 @patch("refrakt_core.registry.dataset_registry.get_global_logger")
 def test_register_dataset(mock_get_logger):
     mock_logger = MagicMock()
@@ -27,6 +28,7 @@ def test_register_dataset(mock_get_logger):
     assert "test_ds" in DATASET_REGISTRY
     assert DATASET_REGISTRY["test_ds"] is TestDataset
     mock_logger.debug.assert_called_with("Registering dataset: %s", "test_ds")
+
 
 @patch("refrakt_core.registry.dataset_registry.get_global_logger")
 def test_duplicate_registration(mock_get_logger):
@@ -49,6 +51,7 @@ def test_duplicate_registration(mock_get_logger):
 
 def test_get_dataset_success():
     """Test retrieval of registered dataset"""
+
     @register_dataset("valid_ds")
     class ValidDataset:
         def __init__(self, param):
@@ -57,10 +60,12 @@ def test_get_dataset_success():
     instance = get_dataset("valid_ds", "test_param")
     assert isinstance(instance, ValidDataset)
     assert instance.param == "test_param"
-        
+
+
 def test_get_dataset_torchvision_fallback():
     """Test torchvision dataset fallback"""
     from refrakt_core.registry.dataset_registry import get_dataset
+
     dataset = get_dataset("FakeData")  # or "CIFAR10", "MNIST"
     assert dataset is not None
 

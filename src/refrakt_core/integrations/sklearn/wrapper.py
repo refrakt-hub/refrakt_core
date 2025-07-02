@@ -16,13 +16,14 @@ Example usage:
     True
 """
 
-import joblib
 import importlib
 from pathlib import Path
-from typing import Union, Protocol, NoReturn, cast, Type, Dict, Any, Optional
+from typing import Any, Dict, NoReturn, Optional, Protocol, Type, Union, cast
+
+import joblib
 
 from refrakt_core.integrations.sklearn.registry import load_sklearn_registry
-from refrakt_core.integrations.types import NDArrayF, ClassifierOutput
+from refrakt_core.integrations.types import ClassifierOutput, NDArrayF
 
 
 class SklearnEstimator(Protocol):
@@ -67,14 +68,14 @@ class SklearnWrapper:
         # Extract wrapper-specific parameters
         wrapper_params = {}
         model_params = dict(params)  # Make a copy to modify
-        
+
         # Handle special parameters
-        if 'fusion_head' in model_params:
-            wrapper_params['fusion_head'] = model_params.pop('fusion_head')
+        if "fusion_head" in model_params:
+            wrapper_params["fusion_head"] = model_params.pop("fusion_head")
 
         model_instance = model_cls(**model_params)
         self.model: SklearnEstimator = cast(SklearnEstimator, model_instance)
-        
+
         # Store wrapper configuration
         self.wrapper_config = wrapper_params
 
@@ -111,7 +112,7 @@ class SklearnWrapper:
         Return a string representation of the model.
         """
         return str(self.model)
-    
+
     def save(self, path: Union[str, Path]) -> None:
         joblib.dump(self.model, path)
 

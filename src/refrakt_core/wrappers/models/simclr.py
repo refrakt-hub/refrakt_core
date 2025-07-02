@@ -1,7 +1,10 @@
-from refrakt_core.schema.model_output import ModelOutput
-from refrakt_core.registry.wrapper_registry import register_wrapper
-import torch
 from typing import Any, Dict
+
+import torch
+
+from refrakt_core.registry.wrapper_registry import register_wrapper
+from refrakt_core.schema.model_output import ModelOutput
+
 
 @register_wrapper("simclr")
 class SimCLRWrapper(torch.nn.Module):
@@ -14,8 +17,5 @@ class SimCLRWrapper(torch.nn.Module):
         embeddings = self.model(x)
         return ModelOutput(
             embeddings=embeddings,
-            extra={
-                "wrapper_type": "simclr",
-                **self.wrapper_config
-            }
+            extra={"wrapper_type": "simclr", **self.wrapper_config},
         )

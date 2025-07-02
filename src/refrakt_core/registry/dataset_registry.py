@@ -10,13 +10,14 @@ _IMPORTED: bool = False
 
 def register_dataset(name: str) -> Callable[[Type[Any]], Type[Any]]:
     """Register a dataset class with the given name.
-    
+
     Args:
         name: The name to register the dataset under.
-        
+
     Returns:
         A decorator function that registers the dataset class.
     """
+
     def decorator(cls: Type[Any]) -> Type[Any]:
         logger = get_global_logger()
         if name in DATASET_REGISTRY:
@@ -31,15 +32,15 @@ def register_dataset(name: str) -> Callable[[Type[Any]], Type[Any]]:
 
 def get_dataset(name: str, *args: Any, **kwargs: Any) -> Any:
     """Get dataset instance by name with optional arguments.
-    
+
     Args:
         name: The name of the dataset to retrieve.
         *args: Positional arguments to pass to the dataset constructor.
         **kwargs: Keyword arguments to pass to the dataset constructor.
-        
+
     Returns:
         An instance of the requested dataset.
-        
+
     Raises:
         ValueError: If the dataset is not found.
     """
@@ -60,9 +61,7 @@ def get_dataset(name: str, *args: Any, **kwargs: Any) -> Any:
             pass
 
         available_datasets = list(DATASET_REGISTRY.keys())
-        raise ValueError(
-            f"Dataset '{name}' not found. Available: {available_datasets}"
-        )
+        raise ValueError(f"Dataset '{name}' not found. Available: {available_datasets}")
 
     return DATASET_REGISTRY[name](*args, **kwargs)
 
@@ -71,4 +70,3 @@ def log_registry_id() -> None:
     """Log the registry ID for debugging purposes."""
     logger = get_global_logger()
     logger.debug("DATASET REGISTRY ID: %s", id(DATASET_REGISTRY))
-    

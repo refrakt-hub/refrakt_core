@@ -1,5 +1,13 @@
-# trainer_builder.py
+"""
+Trainer builder for Refrakt.
 
+This module provides utilities to construct and initialize trainers from configuration dictionaries.
+It supports standard, GAN, and fusion trainers, and ensures robust type checking and flexible parameter handling.
+
+Typical usage involves passing a configuration (OmegaConf), model, dataloaders, loss, optimizer, scheduler, and other components to build a trainer for training or evaluation.
+"""
+
+import typing
 from typing import Any, Dict, Optional
 
 import torch
@@ -15,35 +23,76 @@ def initialize_trainer(
     optimizer: Any,
     scheduler: Any,
     device: str,
-    modules: Dict,
+    modules: Dict[str, Any],
     save_dir: Optional[str],
 ) -> Any:
-    """Initialize trainer based on configuration."""
+    """
+    Initialize a trainer based on configuration and provided components.
+
+    This function supports standard, GAN, and fusion trainers, and ensures all parameters are type-checked and compatible with the training pipeline.
+    It handles special cases for GAN and fusion trainers, including artifact dumping and fusion head construction.
+
+    Args:
+        cfg (OmegaConf): Configuration specifying the trainer type and parameters.
+        model (Any): The model to be trained.
+        train_loader (Any): DataLoader for training data.
+        val_loader (Any): DataLoader for validation data.
+        loss_fn (Any): Loss function or dictionary of loss functions.
+        optimizer (Any): Optimizer or dictionary of optimizers.
+        scheduler (Any): Learning rate scheduler or dictionary of schedulers.
+        device (str): Device on which to run the trainer.
+        modules (Dict[str, Any]): Registry of available trainer, artifact, and utility functions.
+        save_dir (Optional[str]): Directory to save checkpoints and artifacts.
+
+    Returns:
+        Any: Instantiated trainer object, ready for training or evaluation.
+
+    Raises:
+        TypeError: If the configuration or its fields are not of the expected type.
+        ValueError: If required trainer or fusion components are missing or not found in the registry.
+    """
     print("Initializing trainer...")
-    trainer_cls = modules["get_trainer"](cfg.trainer.name)
-    trainer_params = (
-        OmegaConf.to_container(cfg.trainer.params, resolve=True)
-        if cfg.trainer.params
-        else {}
-    )
+    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+    if not isinstance(cfg_dict, dict):
+        raise TypeError(f"cfg must convert to a dict, got {type(cfg_dict)}")
+    trainer_cfg = cfg_dict.get("trainer")
+    if not isinstance(trainer_cfg, dict):
+        raise TypeError(f"cfg.trainer must be a dict, got {type(trainer_cfg)}")
+    trainer_name = trainer_cfg.get("name")
+    if not isinstance(trainer_name, str):
+        raise TypeError(f"trainer name must be a str, got {type(trainer_name)}")
+    trainer_cls = modules["get_trainer"](trainer_name)
+    trainer_params = trainer_cfg.get("params", {}) or {}
+    if not isinstance(trainer_params, dict):
+        raise TypeError(f"trainer_params must be a dict, got {type(trainer_params)}")
 
     # Extract special parameters
     device_param = trainer_params.pop("device", device)
     final_device = device_param if device_param else device
     artifact_dumper = modules.get("artifact_dumper", None)
 
-    trainer_name = cfg.trainer.name.lower()
+    trainer_name_lower = trainer_name.lower()
 
     # === Standard Trainer ===
-    if trainer_name in ["supervised", "autoencoder", "msn"]:
+    if trainer_name_lower in ["supervised", "autoencoder", "msn"]:
         opt_map = {
             "adam": torch.optim.Adam,
             "sgd": torch.optim.SGD,
             "adamw": torch.optim.AdamW,
             "rmsprop": torch.optim.RMSprop,
         }
-        opt_cls = opt_map.get(cfg.optimizer.name.lower())
-        optimizer_params = cfg.optimizer.params or {}
+        optimizer_cfg = cfg_dict.get("optimizer")
+        if not isinstance(optimizer_cfg, dict):
+            raise TypeError(f"cfg.optimizer must be a dict, got {type(optimizer_cfg)}")
+        opt_name = optimizer_cfg.get("name")
+        if not isinstance(opt_name, str):
+            raise TypeError(f"optimizer name must be a str, got {type(opt_name)}")
+        opt_cls = opt_map.get(opt_name.lower())
+        optimizer_params = optimizer_cfg.get("params", {}) or {}
+        if not isinstance(optimizer_params, dict):
+            raise TypeError(
+                f"optimizer_params must be a dict, got {type(optimizer_params)}"
+            )
 
         trainer = trainer_cls(
             model=model,
@@ -59,7 +108,7 @@ def initialize_trainer(
         )
 
     # === GAN Trainer ===
-    elif trainer_name == "gan":
+    elif trainer_name_lower == "gan":
         if "save_dir" in trainer_params:
             trainer_params.pop("save_dir")
 
@@ -76,19 +125,40 @@ def initialize_trainer(
             **trainer_params,
         )
 
-    elif trainer_name == "fusion":
+    elif trainer_name_lower == "fusion":
         from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
 
-        fusion_cfg = cfg.model.get("fusion")
-        if fusion_cfg is None:
-            raise ValueError("[ERROR] 'model.fusion' block is required for FusionTrainer.")
+        model_cfg = cfg_dict.get("model")
+        if not isinstance(model_cfg, dict):
+            raise TypeError(f"cfg.model must be a dict, got {type(model_cfg)}")
+        fusion_cfg = model_cfg.get("fusion")
+        if fusion_cfg is None or not isinstance(fusion_cfg, dict):
+            raise ValueError(
+                "[ERROR] 'model.fusion' block is required for FusionTrainer."
+            )
 
-        if fusion_cfg.type != "sklearn":
-            raise ValueError(f"[ERROR] Unsupported fusion type: {fusion_cfg.type}")
+        fusion_type = fusion_cfg.get("type")
+        if fusion_type != "sklearn":
+            raise ValueError(f"[ERROR] Unsupported fusion type: {fusion_type}")
 
+        fusion_params = OmegaConf.to_container(
+            fusion_cfg.get("params", {}), resolve=True
+        )
+        if not isinstance(fusion_params, dict) or not all(
+            isinstance(k, str) for k in fusion_params.keys()
+        ):
+            raise TypeError(
+                f"fusion_params must be a dict with str keys, got {type(fusion_params)} and keys {list(fusion_params.keys()) if isinstance(fusion_params, dict) else 'N/A'}"
+            )
+        fusion_params = typing.cast(Dict[str, Any], fusion_params)
+        model_name = fusion_cfg.get("model")
+        if not isinstance(model_name, str):
+            raise TypeError(
+                f"fusion_cfg['model'] must be a str, got {type(model_name)}"
+            )
         fusion_head = SklearnWrapper(
-            fusion_cfg.model,
-            **OmegaConf.to_container(fusion_cfg.get("params", {}), resolve=True),
+            model_name,
+            **fusion_params,
         )
 
         trainer = trainer_cls(
@@ -100,7 +170,6 @@ def initialize_trainer(
             artifact_dumper=artifact_dumper,
             **trainer_params,
         )
-
 
     # === Fallback Trainer ===
     else:

@@ -11,18 +11,18 @@ from refrakt_core.registry.trainer_registry import (TRAINER_REGISTRY,
 
 __all__ = [
     "DATASET_REGISTRY",
-    "register_dataset", 
+    "register_dataset",
     "get_dataset",
     "MODEL_REGISTRY",
     "register_model",
-    "get_model", 
+    "get_model",
     "TRAINER_REGISTRY",
     "register_trainer",
     "get_trainer",
-    "TRANSFORM_REGISTRY", 
+    "TRANSFORM_REGISTRY",
     "register_transform",
     "get_transform",
     "LOSS_REGISTRY",
-    "register_loss", 
-    "get_loss"
+    "register_loss",
+    "get_loss",
 ]

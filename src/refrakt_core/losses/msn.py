@@ -11,6 +11,7 @@ from torch import Tensor
 from refrakt_core.losses.templates.base import BaseLoss
 from refrakt_core.registry.loss_registry import register_loss
 
+
 @register_loss("msn")
 class MSNLoss(BaseLoss):
     def __init__(self, temp_anchor=0.1, temp_target=0.04, lambda_me_max=1.0) -> None:
@@ -18,22 +19,30 @@ class MSNLoss(BaseLoss):
         self.temp_anchor = temp_anchor
         self.temp_target = temp_target
         self.lambda_me_max = lambda_me_max
-        print(f"[INIT] MSNLossWrapper initialized with temp_anchor={temp_anchor}, temp_target={temp_target}, lambda_me_max={lambda_me_max}")
-
+        print(
+            f"[INIT] MSNLossWrapper initialized with temp_anchor={temp_anchor}, temp_target={temp_target}, lambda_me_max={lambda_me_max}"
+        )
 
     def forward(self, z_anchor: Tensor, z_target: Tensor, prototypes: Tensor) -> Tensor:
         total_loss, _ = self.compute_with_components(z_anchor, z_target, prototypes)
         return total_loss
 
-    def compute_with_components(self, z_anchor: Tensor, z_target: Tensor, prototypes: Tensor):
+    def compute_with_components(
+        self, z_anchor: Tensor, z_target: Tensor, prototypes: Tensor
+    ):
         if z_anchor.ndim != 2 or z_target.ndim != 2 or prototypes.ndim != 2:
             raise ValueError("All inputs must be 2D tensors.")
 
-        if z_anchor.shape[1] != z_target.shape[1] or z_anchor.shape[1] != prototypes.shape[1]:
+        if (
+            z_anchor.shape[1] != z_target.shape[1]
+            or z_anchor.shape[1] != prototypes.shape[1]
+        ):
             raise ValueError("Feature dimensions (D) must match for all inputs.")
 
         if z_anchor.shape[0] % z_target.shape[0] != 0:
-            raise ValueError("Anchor batch size must be a multiple of target batch size.")
+            raise ValueError(
+                "Anchor batch size must be a multiple of target batch size."
+            )
 
         B = z_target.shape[0]
         M = z_anchor.shape[0] // B
@@ -56,7 +65,7 @@ class MSNLoss(BaseLoss):
         components = {
             "loss_ce": loss_ce.detach(),
             "loss_entropy": loss_entropy.detach(),
-            "total": total_loss.detach()
+            "total": total_loss.detach(),
         }
 
         return total_loss, components

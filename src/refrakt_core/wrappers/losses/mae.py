@@ -1,11 +1,12 @@
 from typing import Dict, Optional
+
 import torch
 from torch import nn
 
-from refrakt_core.schema.model_output import ModelOutput
-from refrakt_core.schema.loss_output import LossOutput
-from refrakt_core.registry.loss_registry import register_loss
 from refrakt_core.losses.mae import MAELoss
+from refrakt_core.registry.loss_registry import register_loss
+from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.schema.model_output import ModelOutput
 
 
 @register_loss("mae_wrapped", mode="reconstruction")
@@ -25,9 +26,5 @@ class MAELossWrapper(nn.Module):
                 f"{['reconstruction', 'mask', 'original_patches']}"
             )
 
-        loss = self.loss_fn({
-            "recon": recon,
-            "mask": mask,
-            "original_patches": patches
-        })
+        loss = self.loss_fn({"recon": recon, "mask": mask, "original_patches": patches})
         return LossOutput(total=loss, components={"masked_mse": loss})

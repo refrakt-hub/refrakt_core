@@ -1,10 +1,11 @@
-"""Utility functions for setting up and initializing datasets, dataloaders, and model components."""
+"""
+Utility functions for setting up and initializing datasets, dataloaders, and model components.
+"""
 
 from typing import Any, Dict, Tuple
 
 import torch
 from omegaconf import OmegaConf
-
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.builders.loss_builder import build_loss
@@ -58,11 +59,13 @@ def build_datasets(cfg: OmegaConf) -> Tuple[Any, Any]:
         Tuple: Training and validation dataset objects.
     """
     print("Building datasets...")
-    train_dataset = build_dataset(cfg.dataset)
+    train_dataset = build_dataset(cfg.dataset)  # type: ignore[attr-defined]
 
     # Modify config to set train=False for validation
-    val_cfg = OmegaConf.merge(cfg.dataset, OmegaConf.create({"params": {"train": False}}))
-    val_dataset = build_dataset(val_cfg)
+    val_cfg = OmegaConf.merge(
+        cfg.dataset, OmegaConf.create({"params": {"train": False}})  # type: ignore[attr-defined]
+    )
+    val_dataset = build_dataset(val_cfg)  # type: ignore[attr-defined]
 
     return train_dataset, val_dataset
 
@@ -82,8 +85,8 @@ def build_dataloaders(
         Tuple: Training and validation dataloaders.
     """
     print("Building data loaders...")
-    train_loader = build_dataloader(train_dataset, cfg.dataloader)
-    val_loader = build_dataloader(val_dataset, cfg.dataloader)
+    train_loader = build_dataloader(train_dataset, cfg.dataloader)  # type: ignore[attr-defined]
+    val_loader = build_dataloader(val_dataset, cfg.dataloader)  # type: ignore[attr-defined]
     print(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
     return train_loader, val_loader
 
@@ -103,7 +106,11 @@ def build_model_components(cfg: OmegaConf) -> ModelComponents:
 
     model = build_model(cfg, modules, device)
     loss_fn = build_loss(cfg, modules, device)
-    optimizer = build_optimizer(cfg, model)
+    if isinstance(loss_fn, dict):
+        loss_fn = next(iter(loss_fn.values()))
+    optimizer = build_optimizer(cfg, model)  # type: ignore[attr-defined]
+    if isinstance(optimizer, dict):
+        optimizer = optimizer["optimizer"]
     scheduler = build_scheduler(cfg, optimizer)
 
     return ModelComponents(model, loss_fn, optimizer, scheduler, device)

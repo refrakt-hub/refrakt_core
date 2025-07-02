@@ -9,9 +9,9 @@ All custom trainers should inherit from BaseTrainer and implement the required m
 import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Union
-from omegaconf.listconfig import ListConfig
 
 import torch
+from omegaconf.listconfig import ListConfig
 from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
@@ -23,7 +23,7 @@ class BaseTrainer(ABC):
 
     Handles device setup, saving/loading checkpoints, and exposes an interface
     for training and evaluation to be implemented by subclasses.
-    
+
     Attributes:
         device (torch.device): The device on which the model runs.
         model (Module): The model to be trained.
@@ -120,7 +120,6 @@ class BaseTrainer(ABC):
             "global_step": self.global_step,
         }
 
-
         if self.optimizer is not None:
             if isinstance(self.optimizer, dict):
                 checkpoint["optimizer_state_dict"] = {
@@ -161,34 +160,52 @@ class BaseTrainer(ABC):
         try:
             import typing
             from collections import defaultdict
-            from omegaconf.nodes import AnyNode
-            from omegaconf import ListConfig, DictConfig
+
+            from omegaconf import DictConfig, ListConfig
             from omegaconf.base import ContainerMetadata, Metadata
+            from omegaconf.nodes import AnyNode
             from torch.serialization import add_safe_globals
 
-            add_safe_globals([ListConfig, \
-                    DictConfig, ContainerMetadata, \
-                    typing.Any, list, dict, defaultdict, \
-                    int, float, AnyNode, Metadata])
-            
+            add_safe_globals(
+                [
+                    ListConfig,
+                    DictConfig,
+                    ContainerMetadata,
+                    typing.Any,
+                    list,
+                    dict,
+                    defaultdict,
+                    int,
+                    float,
+                    AnyNode,
+                    Metadata,
+                ]
+            )
+
             if path is not None:
-                checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+                checkpoint = torch.load(
+                    path, map_location=self.device, weights_only=False
+                )
             else:
                 if suffix == "best_model":
                     path = self.get_checkpoint_path(suffix)
-                    checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+                    checkpoint = torch.load(
+                        path, map_location=self.device, weights_only=False
+                    )
                 else:
                     base_path = os.path.join(self.save_dir, f"{self.model_name}.pth")
                     fallback_path = self.get_checkpoint_path(suffix)
-                                        
+
                     if os.path.exists(base_path):
                         path = base_path
                         print(f"[INFO] Loading base model from: {path}")
                     else:
                         path = fallback_path
                         print(f"[INFO] Base model not found, falling back to: {path}")
-                    
-                    checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+
+                    checkpoint = torch.load(
+                        path, map_location=self.device, weights_only=False
+                    )
 
             self.model.load_state_dict(checkpoint["model_state_dict"])
 

@@ -3,14 +3,14 @@ Wrapper for CrossEntropyLoss using register_loss with mode='logits'.
 """
 
 from typing import Dict, Optional
-import torch
-from torch import Tensor
-from torch import nn
 
+import torch
+from torch import Tensor, nn
+
+from refrakt_core.losses.templates.base import BaseLoss
+from refrakt_core.registry.loss_registry import register_loss
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
-from refrakt_core.registry.loss_registry import register_loss
-from refrakt_core.losses.templates.base import BaseLoss
 
 
 @register_loss("ce_wrapped", mode="logits")
@@ -28,7 +28,7 @@ class CrossEntropyLossWrapper(BaseLoss):
         self,
         weight: Optional[Tensor] = None,
         label_smoothing: float = 0.0,
-        device: str = "cuda"
+        device: str = "cuda",
     ) -> None:
         super().__init__(name="CrossEntropyLoss")
         self.device = device
@@ -36,8 +36,7 @@ class CrossEntropyLossWrapper(BaseLoss):
         self.weight = weight.to(device) if weight is not None else None
 
         self.loss_fn = nn.CrossEntropyLoss(
-            weight=self.weight,
-            label_smoothing=self.label_smoothing
+            weight=self.weight, label_smoothing=self.label_smoothing
         )
 
     def forward(self, output: ModelOutput, target: Tensor) -> LossOutput:
@@ -56,16 +55,13 @@ class CrossEntropyLossWrapper(BaseLoss):
 
         loss = self.loss_fn(output.logits, target)
 
-        return LossOutput(
-            total=loss,
-            components={"cross_entropy": loss}
-        )
+        return LossOutput(total=loss, components={"cross_entropy": loss})
 
     def get_config(self) -> Dict[str, Optional[float]]:
         return {
             **super().get_config(),
             "label_smoothing": self.label_smoothing,
-            "device": self.device
+            "device": self.device,
         }
 
     def extra_repr(self) -> str:

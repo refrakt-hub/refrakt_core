@@ -1,31 +1,30 @@
 """The inference code for Refrakt (with optional fusion head support)."""
 
+import glob
 import os
+import re
 import sys
 import traceback
-import glob
-import re
+import warnings
+from datetime import datetime
 from typing import Any, Dict, Optional, Union
 
 import torch
-from PIL import Image
-from datetime import datetime
 from omegaconf import OmegaConf
+from PIL import Image
 
-from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.builders.model_builder import build_model
+from refrakt_core.api.builders.transform_builder import build_transform
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.core.utils import import_modules
-from refrakt_core.api.builders.transform_builder import build_transform
 from refrakt_core.global_logging import get_global_logger
+from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
 from refrakt_core.registry.model_registry import get_model
 from refrakt_core.registry.wrapper_registry import get_wrapper
-from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
+from refrakt_core.schema.model_output import ModelOutput
 
-
-import warnings
 warnings.filterwarnings("ignore")
 
 
@@ -48,6 +47,7 @@ class CustomImageDataset(torch.utils.data.Dataset):
 
 def load_fusion_head(path: str) -> Any:
     import joblib
+
     return joblib.load(path)
 
 
@@ -94,11 +94,15 @@ def inference(
         logger.info(f"Using device: {device}")
 
         model_cls = get_model(config.model.name)
-        model = build_model(config, modules={
-            "get_model": get_model,
-            "get_wrapper": get_wrapper,
-            "model": model_cls
-        }, device=device)
+        model = build_model(
+            config,
+            modules={
+                "get_model": get_model,
+                "get_wrapper": get_wrapper,
+                "model": model_cls,
+            },
+            device=device,
+        )
 
         # Log model structure for debugging
         # print("\nModel state dict keys:")
@@ -118,7 +122,7 @@ def inference(
         logger.info(f"Loading model from {model_path}")
         checkpoint = torch.load(model_path, map_location=device)
         state_dict = checkpoint.get("model_state_dict", checkpoint)
-        
+
         # Load state dict directly without transformation
         try:
             model.load_state_dict(state_dict)
@@ -131,7 +135,7 @@ def inference(
             except RuntimeError as e2:
                 logger.error(f"All attempts to load state dict failed: {str(e2)}")
                 raise
-        
+
         model.eval()
 
         # Load fusion head if path provided and exists
@@ -151,11 +155,15 @@ def inference(
                 image_paths = [custom_data.image_path]
             elif custom_data.get("image_dir"):
                 image_dir = custom_data.image_dir
-                image_paths = glob.glob(os.path.join(image_dir, "*.jpg")) + \
-                             glob.glob(os.path.join(image_dir, "*.png")) + \
-                             glob.glob(os.path.join(image_dir, "*.jpeg"))
+                image_paths = (
+                    glob.glob(os.path.join(image_dir, "*.jpg"))
+                    + glob.glob(os.path.join(image_dir, "*.png"))
+                    + glob.glob(os.path.join(image_dir, "*.jpeg"))
+                )
             else:
-                raise ValueError("custom_data must contain either image_path or image_dir")
+                raise ValueError(
+                    "custom_data must contain either image_path or image_dir"
+                )
 
             transform = build_transform(custom_data.get("transform", []))
             expected_channels = config.model.params.get("in_channels", 3)
@@ -168,13 +176,16 @@ def inference(
             )
         elif data is None:
             logger.info("No data provided, using test dataset...")
-            test_cfg = OmegaConf.merge(config.dataset, OmegaConf.create({"params": {"train": False}}))
+            test_cfg = OmegaConf.merge(
+                config.dataset, OmegaConf.create({"params": {"train": False}})
+            )
             test_dataset = build_dataset(test_cfg)
             data_loader = build_dataloader(test_dataset, config.dataloader)
         else:
             data_loader = data
 
         from refrakt_core.schema.artifact import ArtifactDumper
+
         artifact_dumper = ArtifactDumper(
             enabled=True,
             base_path="./artifacts",
@@ -192,7 +203,7 @@ def inference(
 
         results = []
 
-        if hasattr(logger, 'wandb') and hasattr(logger, 'step'):
+        if hasattr(logger, "wandb") and hasattr(logger, "step"):
             logger.wandb.step = 0
 
         with torch.no_grad():
@@ -200,13 +211,11 @@ def inference(
                 if isinstance(batch, torch.Tensor):
                     inputs = batch
                 elif isinstance(batch, dict):
-                    inputs = (
-                        batch.get("input")
-                        or batch.get("image")
-                        or batch.get("lr")
-                    )
+                    inputs = batch.get("input") or batch.get("image") or batch.get("lr")
                     if inputs is None:
-                        raise ValueError(f"Inference input could not be resolved from batch keys: {list(batch.keys())}")
+                        raise ValueError(
+                            f"Inference input could not be resolved from batch keys: {list(batch.keys())}"
+                        )
                 elif isinstance(batch, (list, tuple)):
                     inputs = batch[0]
                 else:
@@ -216,50 +225,71 @@ def inference(
                 inputs = ensure_4d_tensor(inputs)
 
                 output = model(inputs)  # Should be ModelOutput
-                
+
                 fusion_cfg = config.model.get("fusion")
-                if fusion_cfg and isinstance(output, ModelOutput) and output.embeddings is not None:
+                if (
+                    fusion_cfg
+                    and isinstance(output, ModelOutput)
+                    and output.embeddings is not None
+                ):
                     fusion_model_key = fusion_cfg.model
                     fusion_type = fusion_cfg.type
-                    fusion_path = os.path.join(config.trainer.params.save_dir, f"{config.model.name}_fusion.joblib")
+                    fusion_path = os.path.join(
+                        config.trainer.params.save_dir,
+                        f"{config.model.name}_fusion.joblib",
+                    )
 
                     if os.path.exists(fusion_path):
                         # logger.info(f"[FUSION] Loading fusion head from {fusion_path}")
 
                         if fusion_type == "sklearn":
-                            fusion_head = SklearnWrapper.load(fusion_model_key, fusion_path)
+                            fusion_head = SklearnWrapper.load(
+                                fusion_model_key, fusion_path
+                            )
                         else:
-                            raise ValueError(f"[FUSION] Unsupported fusion type: {fusion_type}")
+                            raise ValueError(
+                                f"[FUSION] Unsupported fusion type: {fusion_type}"
+                            )
 
                         # Run predictions using ML head
-                        fusion_preds = fusion_head.predict(output.embeddings.cpu().numpy())
+                        fusion_preds = fusion_head.predict(
+                            output.embeddings.cpu().numpy()
+                        )
 
                         # Store predictions inside output.extra
                         output.extra["fusion_preds"] = fusion_preds
                         # logger.info("[FUSION] Fusion predictions stored in output.extra['fusion_preds']")
                     else:
-                        logger.warning(f"[FUSION] Skipping — fusion head not found at {fusion_path}")
-
+                        logger.warning(
+                            f"[FUSION] Skipping — fusion head not found at {fusion_path}"
+                        )
 
                 # If fusion head is loaded, run fusion prediction on embeddings
                 if fusion_head is not None:
                     if not isinstance(output, ModelOutput):
-                        raise TypeError("Model output must be ModelOutput for fusion inference")
+                        raise TypeError(
+                            "Model output must be ModelOutput for fusion inference"
+                        )
                     if output.embeddings is None:
-                        raise ValueError("Backbone output missing embeddings for fusion inference")
+                        raise ValueError(
+                            "Backbone output missing embeddings for fusion inference"
+                        )
                     embeddings_np = output.embeddings.detach().cpu().numpy()
                     fusion_preds = fusion_head.predict(embeddings_np)
                     output.extra["fusion_preds"] = fusion_preds
 
                 # Adjust reconstruction shape if present
                 if isinstance(output, ModelOutput):
-                    if hasattr(output, "reconstruction") and output.reconstruction is not None:
+                    if (
+                        hasattr(output, "reconstruction")
+                        and output.reconstruction is not None
+                    ):
                         output.reconstruction = ensure_4d_tensor(output.reconstruction)
                     artifact_dumper.log_output(output, batch_id=i, targets=inputs)
                     results.append(output)
                 elif isinstance(output, dict):
-                    if 'recon' in output:
-                        output['recon'] = ensure_4d_tensor(output['recon'])
+                    if "recon" in output:
+                        output["recon"] = ensure_4d_tensor(output["recon"])
                     results.append(ModelOutput(**output))
                 elif isinstance(output, torch.Tensor):
                     output = ensure_4d_tensor(output)

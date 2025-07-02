@@ -35,8 +35,12 @@ class ConvNeXtBlock(nn.Module):
         padding: int = 1,
     ) -> None:
         super().__init__()
-        self.conv1: nn.Conv2d = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
-        self.conv2: nn.Conv2d = nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding)
+        self.conv1: nn.Conv2d = nn.Conv2d(
+            in_channels, out_channels, kernel_size, stride, padding
+        )
+        self.conv2: nn.Conv2d = nn.Conv2d(
+            out_channels, out_channels, kernel_size, stride, padding
+        )
         self.ln: nn.LayerNorm = nn.LayerNorm(out_channels)
         self.gelu: nn.GELU = nn.GELU()
 

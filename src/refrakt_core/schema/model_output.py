@@ -1,19 +1,22 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
+
 import torch
 
 
 @dataclass
 class ModelOutput:
-    embeddings: Optional[Any] = None         # contrastive / latent features
-    logits: Optional[Any] = None             # supervised output
-    image: Optional[Any] = None              # GAN or output image
+    embeddings: Optional[Any] = None  # contrastive / latent features
+    logits: Optional[Any] = None  # supervised output
+    image: Optional[Any] = None  # GAN or output image
     reconstruction: Optional[Any] = None  # AE / VAE
-    targets: Optional[Any] = None            # target values/labels
-    attention_maps: Optional[Any] = None     # ViT, DINO
-    loss_components: Dict[str, Any] = field(default_factory=dict)  # for contrastive/self-sup
-    extra: Dict[str, Any] = field(default_factory=dict)  
-    
+    targets: Optional[Any] = None  # target values/labels
+    attention_maps: Optional[Any] = None  # ViT, DINO
+    loss_components: Dict[str, Any] = field(
+        default_factory=dict
+    )  # for contrastive/self-sup
+    extra: Dict[str, Any] = field(default_factory=dict)
+
     def summary(self) -> Dict[str, float]:
         summary = {}
 
@@ -25,10 +28,14 @@ class ModelOutput:
             summary["embeddings/norm_mean"] = self.embeddings.norm(dim=1).mean().item()
             summary["embeddings/std"] = self.embeddings.std().item()
 
-        if self.reconstruction is not None and isinstance(self.reconstruction, torch.Tensor):
+        if self.reconstruction is not None and isinstance(
+            self.reconstruction, torch.Tensor
+        ):
             summary["reconstruction/mean"] = self.reconstruction.mean().item()
 
-        if self.attention_maps is not None and isinstance(self.attention_maps, torch.Tensor):
+        if self.attention_maps is not None and isinstance(
+            self.attention_maps, torch.Tensor
+        ):
             summary["attention/mean"] = self.attention_maps.mean().item()
             summary["attention/std"] = self.attention_maps.std().item()
 
@@ -65,5 +72,5 @@ class ModelOutput:
             targets=move(self.targets),
             attention_maps=move(self.attention_maps),
             loss_components=move(self.loss_components),
-            extra=move(self.extra)
+            extra=move(self.extra),
         )

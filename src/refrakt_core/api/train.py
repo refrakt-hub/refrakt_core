@@ -7,28 +7,29 @@ from typing import Optional
 import torch
 from omegaconf import OmegaConf
 
-from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.api.builders.dataloader_builder import build_dataloader
-from refrakt_core.api.builders.dataset_builder import build_dataset
-from refrakt_core.api.builders.model_builder import build_model
-from refrakt_core.api.builders.loss_builder import build_loss
-from refrakt_core.global_logging import get_global_logger
-from refrakt_core.schema.artifact import ArtifactDumper
-from refrakt_core.integrations.fusion.builder import build_fusion_head
-from refrakt_core.integrations.sklearn.trainer import FusionTrainer
-
-import refrakt_core.models
-import refrakt_core.losses
-import refrakt_core.trainer
 import refrakt_core.datasets
+import refrakt_core.losses
+import refrakt_core.models
+import refrakt_core.trainer
 import refrakt_core.transforms
 import refrakt_core.wrappers
+from refrakt_core.api.builders.dataloader_builder import build_dataloader
+from refrakt_core.api.builders.dataset_builder import build_dataset
+from refrakt_core.api.builders.loss_builder import build_loss
+from refrakt_core.api.builders.model_builder import build_model
+from refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.global_logging import get_global_logger
+from refrakt_core.integrations.fusion.builder import build_fusion_head
+from refrakt_core.integrations.sklearn.trainer import FusionTrainer
+from refrakt_core.schema.artifact import ArtifactDumper
 
 gc.collect()
 torch.cuda.empty_cache()
 
 import warnings
+
 warnings.filterwarnings("ignore")
+
 
 def train(
     config_path: str,
@@ -37,8 +38,8 @@ def train(
 ):
     from refrakt_core.registry.loss_registry import get_loss
     from refrakt_core.registry.model_registry import get_model
-    from refrakt_core.registry.wrapper_registry import get_wrapper
     from refrakt_core.registry.trainer_registry import get_trainer
+    from refrakt_core.registry.wrapper_registry import get_wrapper
 
     try:
         cfg = OmegaConf.load(config_path)
@@ -48,7 +49,7 @@ def train(
             resolved_model_name = f"autoencoder_{variant}"
         else:
             resolved_model_name = cfg.model.name
-            
+
         # === Logger Setup ===
         if logger is None:
             runtime_cfg = cfg.get("runtime", {})
@@ -56,7 +57,9 @@ def train(
             valid_log_types = {"wandb", "tensorboard"}
             unknown = set(log_types) - valid_log_types
             if unknown:
-                raise ValueError(f"❌ Unsupported log_type(s): {unknown}. Supported: {valid_log_types}")
+                raise ValueError(
+                    f"❌ Unsupported log_type(s): {unknown}. Supported: {valid_log_types}"
+                )
 
             logger = RefraktLogger(
                 model_name=resolved_model_name,
@@ -75,26 +78,34 @@ def train(
         # === Dataset + Dataloader ===
         logger.info("Building datasets...")
         train_dataset = build_dataset(cfg.dataset)
-        val_cfg = OmegaConf.merge(cfg.dataset, OmegaConf.create({"params": {"train": False}}))
+        val_cfg = OmegaConf.merge(
+            cfg.dataset, OmegaConf.create({"params": {"train": False}})
+        )
         val_dataset = build_dataset(val_cfg)
 
         logger.info("Building data loaders...")
         train_loader = build_dataloader(train_dataset, cfg.dataloader)
         val_loader = build_dataloader(val_dataset, cfg.dataloader)
-        logger.info(f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}")
+        logger.info(
+            f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}"
+        )
 
         # === Model ===
         logger.info("Building model...")
         model_cls = get_model(cfg.model.name)
-        model = build_model(cfg, modules={
-            "get_model": get_model, 
-            "get_wrapper": get_wrapper,
-            "model": model_cls
-        }, device=device)
-
+        model = build_model(
+            cfg,
+            modules={
+                "get_model": get_model,
+                "get_wrapper": get_wrapper,
+                "model": model_cls,
+            },
+            device=device,
+        )
 
         # === Log Model Graph ===
         import torch.nn.functional as F
+
         logger.info("Logging model graph...")
         try:
             if cfg.model.name == "dino":
@@ -117,6 +128,7 @@ def train(
 
         def count_parameters(model):
             return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
         logger.info(f"Trainable parameters: {count_parameters(model):,}")
 
         # === Loss Function ===
@@ -144,22 +156,30 @@ def train(
                     opt_name = comp_cfg["name"]
                     opt_cls = opt_map.get(opt_name.lower())
                     if not opt_cls:
-                        raise ValueError(f"Unsupported optimizer for {comp_name}: {opt_name}")
+                        raise ValueError(
+                            f"Unsupported optimizer for {comp_name}: {opt_name}"
+                        )
                     opt_params = comp_cfg.get("params", {})
                     params = getattr(model, comp_name).parameters()
                     optimizer[comp_name] = opt_cls(params, **opt_params)
-                    logger.info(f"Optimizer ({comp_name}): {opt_name} with params: {opt_params}")
+                    logger.info(
+                        f"Optimizer ({comp_name}): {opt_name} with params: {opt_params}"
+                    )
         elif cfg.optimizer.get("components"):
             optimizer = {}
             for comp_name, comp_cfg in cfg.optimizer.components.items():
                 opt_name = comp_cfg["name"]
                 opt_cls = opt_map.get(opt_name.lower())
                 if not opt_cls:
-                    raise ValueError(f"Unsupported optimizer for {comp_name}: {opt_name}")
+                    raise ValueError(
+                        f"Unsupported optimizer for {comp_name}: {opt_name}"
+                    )
                 opt_params = comp_cfg.get("params", {})
                 params = getattr(model, comp_name).parameters()
                 optimizer[comp_name] = opt_cls(params, **opt_params)
-                logger.info(f"Optimizer ({comp_name}): {opt_name} with params: {opt_params}")
+                logger.info(
+                    f"Optimizer ({comp_name}): {opt_name} with params: {opt_params}"
+                )
         else:
             opt_name = cfg.optimizer.name
             opt_cls = opt_map.get(opt_name.lower())
@@ -185,12 +205,18 @@ def train(
                 raise ValueError(f"Unsupported scheduler: {cfg.scheduler.name}")
             scheduler_params = cfg.scheduler.params or {}
             scheduler = scheduler_cls(optimizer, **scheduler_params)
-            logger.info(f"Scheduler: {cfg.scheduler.name} with params: {scheduler_params}")
+            logger.info(
+                f"Scheduler: {cfg.scheduler.name} with params: {scheduler_params}"
+            )
 
         # === Trainer Setup ===
         logger.info("Initializing trainer...")
         trainer_cls = get_trainer(cfg.trainer.name)
-        trainer_params = OmegaConf.to_container(cfg.trainer.params, resolve=True) if cfg.trainer.params else {}
+        trainer_params = (
+            OmegaConf.to_container(cfg.trainer.params, resolve=True)
+            if cfg.trainer.params
+            else {}
+        )
 
         if cfg.model.name == "autoencoder":
             variant = cfg.model.params.get("type", "simple")
@@ -209,12 +235,11 @@ def train(
             model_name=resolved_model_name,
             base_path="./artifacts",
             log_every=1,
-            logger=logger
+            logger=logger,
         )
         # artifact_dumper.log_every = artifact_log_every
         trainer_params["artifact_dumper"] = artifact_dumper
 
-    
         # === Trainer Init ===
         if cfg.trainer.name != "gan":
             trainer = trainer_cls(
@@ -241,7 +266,9 @@ def train(
                 opt_name = comp_cfg["name"]
                 opt_cls = opt_map.get(opt_name.lower())
                 if not opt_cls:
-                    raise ValueError(f"Unsupported optimizer for {comp_name}: {opt_name}")
+                    raise ValueError(
+                        f"Unsupported optimizer for {comp_name}: {opt_name}"
+                    )
 
                 optimizer_cls[comp_name] = opt_cls
                 optimizer_args = comp_cfg["params"]
@@ -260,7 +287,6 @@ def train(
 
         trainer.model_name = resolved_model_name
 
-
         # === Train ===
         logger.info(f"\nStarting training for {num_epochs} epochs...")
         final_metrics = trainer.train(num_epochs=num_epochs)
@@ -271,7 +297,9 @@ def train(
         # === Fusion Support ===
         if "fusion" in cfg.model:
             logger.info("\n[FUSION] Welcome to True Fusion v1.")
-            logger.info("\n[FUSION] Fusion head config detected. Starting fusion head training...")
+            logger.info(
+                "\n[FUSION] Fusion head config detected. Starting fusion head training..."
+            )
 
             # Load fusion config
             fusion_cfg = cfg.model.fusion
@@ -291,19 +319,24 @@ def train(
             fusion_metrics = fusion_trainer.train()
 
             # Save the fusion model
-            fusion_save_path = os.path.join(cfg.trainer.params.save_dir, f"{cfg.trainer.params.model_name}_fusion.joblib")
+            fusion_save_path = os.path.join(
+                cfg.trainer.params.save_dir,
+                f"{cfg.trainer.params.model_name}_fusion.joblib",
+            )
             if hasattr(fusion_head, "save"):
                 fusion_head.save(fusion_save_path)
                 logger.info(f"[FUSION] Fusion head saved to {fusion_save_path}")
 
             # Log fusion metrics
             if logger:
-                logger.log_metrics(fusion_metrics, step=trainer.global_step, prefix="fusion")
+                logger.log_metrics(
+                    fusion_metrics, step=trainer.global_step, prefix="fusion"
+                )
 
         # === Save Config ===
         config_save_path = os.path.join(
             trainer.save_dir or os.path.join("./artifacts", "yaml"),
-            f"{resolved_model_name}.yaml"
+            f"{resolved_model_name}.yaml",
         )
         OmegaConf.save(cfg, config_save_path)
         logger.info(f"Saved config to {config_save_path}")
@@ -314,7 +347,6 @@ def train(
             logger.log_metrics(final_metrics, step=trainer.global_step, prefix="final")
 
         logger.info("\n✅ Training completed successfully!")
-
 
     except Exception as e:
         logger = logger or get_global_logger()

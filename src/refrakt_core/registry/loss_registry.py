@@ -1,6 +1,6 @@
 """Loss registry for managing loss functions and classes."""
 
-from typing import Any, Callable, Dict, Type, Union, Optional
+from typing import Any, Callable, Dict, Optional, Type, Union
 
 from refrakt_core.global_logging import get_global_logger
 
@@ -23,20 +23,21 @@ def register_loss(name: str, mode: Optional[str] = None) -> Callable:
             LOSS_MODES[name] = mode  # Register mode if given
 
         return cls_or_fn
+
     return decorator
 
 
 def get_loss(name: str, *args: Any, **kwargs: Any) -> Any:
     """Get loss instance by name with optional arguments.
-    
+
     Args:
         name: The name of the loss to retrieve.
         *args: Positional arguments to pass to the loss constructor.
         **kwargs: Keyword arguments to pass to the loss constructor.
-        
+
     Returns:
         An instance of the requested loss.
-        
+
     Raises:
         ValueError: If the loss is not found.
     """
@@ -60,12 +61,11 @@ def get_loss(name: str, *args: Any, **kwargs: Any) -> Any:
 
     if name not in LOSS_REGISTRY:
         available_losses = list(LOSS_REGISTRY.keys())
-        raise ValueError(
-            f"Loss '{name}' not found. Available: {available_losses}"
-        )
+        raise ValueError(f"Loss '{name}' not found. Available: {available_losses}")
 
     return LOSS_REGISTRY[name](*args, **kwargs)
     # return LOSS_REGISTRY[name]
+
 
 def get_loss_mode(name: str) -> str:
     return LOSS_MODES.get(name, "logits")

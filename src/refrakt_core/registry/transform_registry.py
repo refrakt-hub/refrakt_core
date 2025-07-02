@@ -10,13 +10,14 @@ _IMPORTED: bool = False
 
 def register_transform(name: str) -> Callable[[Type[Any]], Type[Any]]:
     """Register a transform class with the given name.
-    
+
     Args:
         name: The name to register the transform under.
-        
+
     Returns:
         A decorator function that registers the transform class.
     """
+
     def decorator(cls: Type[Any]) -> Type[Any]:
         logger = get_global_logger()
         if name in TRANSFORM_REGISTRY:
@@ -31,15 +32,15 @@ def register_transform(name: str) -> Callable[[Type[Any]], Type[Any]]:
 
 def get_transform(name: str, *args: Any, **kwargs: Any) -> Any:
     """Get transform instance by name with optional arguments.
-    
+
     Args:
         name: The name of the transform to retrieve.
         *args: Positional arguments to pass to the transform constructor.
         **kwargs: Keyword arguments to pass to the transform constructor.
-        
+
     Returns:
         An instance of the requested transform.
-        
+
     Raises:
         ValueError: If the transform is not found.
     """
@@ -61,10 +62,12 @@ def get_transform(name: str, *args: Any, **kwargs: Any) -> Any:
 
         available_transforms = list(TRANSFORM_REGISTRY.keys()) + [
             "ToTensor",
-            "Normalize", 
+            "Normalize",
             "Compose",
         ]  # Example torchvision names
-        raise ValueError(f"Transform '{name}' not found. Available: {available_transforms}")
+        raise ValueError(
+            f"Transform '{name}' not found. Available: {available_transforms}"
+        )
 
     return TRANSFORM_REGISTRY[name](*args, **kwargs)
 

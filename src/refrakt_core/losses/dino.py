@@ -36,7 +36,7 @@ class DINOLoss(BaseLoss):
         out_dim: int = 65536,
         teacher_temp: float = 0.04,
         student_temp: float = 0.1,
-        center_momentum: float = 0.9
+        center_momentum: float = 0.9,
     ) -> None:
         super().__init__(name="DINOLoss")
         self.student_temp: float = student_temp

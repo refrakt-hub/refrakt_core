@@ -54,7 +54,9 @@ class VisionTransformer(BaseClassifier):
     ) -> None:
         super().__init__(num_classes=num_classes, model_name=model_name)
 
-        assert image_size % patch_size == 0, "Image size must be divisible by patch size"
+        assert (
+            image_size % patch_size == 0
+        ), "Image size must be divisible by patch size"
 
         self.n_patches = image_size // patch_size
         self.patch_size = patch_size

@@ -26,7 +26,7 @@ class CrossEntropyLoss(BaseLoss):
         self,
         weight: Optional[Tensor] = None,
         label_smoothing: float = 0.0,
-        device: str = "cuda"
+        device: str = "cuda",
     ) -> None:
         super().__init__(name="CrossEntropyLoss")
         self.weight = weight

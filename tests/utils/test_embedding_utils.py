@@ -9,6 +9,7 @@ def test_Embedding():
     out = embed(x)
     assert out.shape == (2, 64, 96)  # (32/4)**2 = 64 patches
 
+
 def test_RelativeEmbedding():
     rel_embed = RelativeEmbedding(window_size=7)
     attn = torch.randn(1, 4, 49, 49)  # (window_size**2, window_size**2)

@@ -50,17 +50,18 @@ class NTXentLoss(BaseLoss):
         z: Tensor = torch.cat([z1, z2], dim=0)  # (2N, D)
         z_norm: Tensor = F.normalize(z, dim=1)  # L2 normalization
 
-        sim_matrix: Tensor = torch.matmul(z_norm, z_norm.T) / self.temperature  # (2N, 2N)
+        sim_matrix: Tensor = (
+            torch.matmul(z_norm, z_norm.T) / self.temperature
+        )  # (2N, 2N)
 
         # Mask self-similarity
         mask: Tensor = torch.eye(2 * n, device=z.device).bool()
         sim_matrix.masked_fill_(mask, float("-inf"))
 
         # Positive pairs: i-th and (i+n)-th (for i in [0, N))
-        positive_indices: Tensor = torch.cat([
-            torch.arange(n, 2 * n),
-            torch.arange(0, n)
-        ]).to(z.device)
+        positive_indices: Tensor = torch.cat(
+            [torch.arange(n, 2 * n), torch.arange(0, n)]
+        ).to(z.device)
         pos_sim: Tensor = sim_matrix[torch.arange(2 * n), positive_indices]
 
         # Compute contrastive loss
@@ -78,10 +79,7 @@ class NTXentLoss(BaseLoss):
             dict: Configuration dictionary.
         """
         config = super().get_config()
-        config.update({
-            "temperature": self.temperature,
-            "type": "contrastive"
-        })
+        config.update({"temperature": self.temperature, "type": "contrastive"})
         return config
 
     def extra_repr(self) -> str:

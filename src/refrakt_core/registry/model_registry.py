@@ -9,15 +9,17 @@ _IMPORTED: bool = False
 
 import logging
 
+
 def register_model(name: str) -> Callable[[Type[Any]], Type[Any]]:
     """Register a model class with the given name.
-    
+
     Args:
         name: The name to register the model under.
-        
+
     Returns:
         A decorator function that registers the model class.
     """
+
     def decorator(cls: Type[Any]) -> Type[Any]:
         logger = get_global_logger()
         if name in MODEL_REGISTRY:
@@ -32,15 +34,15 @@ def register_model(name: str) -> Callable[[Type[Any]], Type[Any]]:
 
 def get_model(name: str, *args: Any, **kwargs: Any) -> Any:
     """Get model instance by name with optional arguments.
-    
+
     Args:
         name: The name of the model to retrieve.
         *args: Positional arguments to pass to the model constructor.
         **kwargs: Keyword arguments to pass to the model constructor.
-        
+
     Returns:
         An instance of the requested model.
-        
+
     Raises:
         ValueError: If the model is not found.
     """
@@ -50,9 +52,7 @@ def get_model(name: str, *args: Any, **kwargs: Any) -> Any:
         _IMPORTED = True
     if name not in MODEL_REGISTRY:
         available_models = list(MODEL_REGISTRY.keys())
-        raise ValueError(
-            f"Model '{name}' not found. Available: {available_models}"
-        )
+        raise ValueError(f"Model '{name}' not found. Available: {available_models}")
     # return MODEL_REGISTRY[name](*args, **kwargs)
     return MODEL_REGISTRY[name]
 
@@ -61,4 +61,3 @@ def log_registry_id() -> None:
     """Log the registry ID for debugging purposes."""
     logger = get_global_logger()
     logger.debug("MODEL REGISTRY ID: %s", id(MODEL_REGISTRY))
-    

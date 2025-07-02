@@ -1,33 +1,52 @@
-import os
 import glob
+import os
+
 import torch
 from omegaconf import OmegaConf
+
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.utils.methods import extract_visual_tensor
 
+
 def _load_config(cfg):
     return OmegaConf.load(cfg) if isinstance(cfg, str) else cfg
 
+
 def _build_test_loader(config):
-    test_cfg = OmegaConf.merge(config.dataset, OmegaConf.create({"params": {"train": False}}))
+    test_cfg = OmegaConf.merge(
+        config.dataset, OmegaConf.create({"params": {"train": False}})
+    )
     dataset = build_dataset(test_cfg)
     return build_dataloader(dataset, config.dataloader)
+
 
 def _load_model_checkpoint(model, model_path, device, logger):
     import typing
     from collections import defaultdict
-    from omegaconf.nodes import AnyNode
-    from omegaconf import ListConfig, DictConfig
+
+    from omegaconf import DictConfig, ListConfig
     from omegaconf.base import ContainerMetadata, Metadata
+    from omegaconf.nodes import AnyNode
     from torch.serialization import add_safe_globals
 
     # 🔐 Allow OmegaConf configs to be unpickled safely
-    add_safe_globals([ListConfig, \
-            DictConfig, ContainerMetadata, \
-            typing.Any, list, dict, defaultdict, \
-            int, float, AnyNode, Metadata])
-    
+    add_safe_globals(
+        [
+            ListConfig,
+            DictConfig,
+            ContainerMetadata,
+            typing.Any,
+            list,
+            dict,
+            defaultdict,
+            int,
+            float,
+            AnyNode,
+            Metadata,
+        ]
+    )
+
     if model_path is None:
         logger.warning("No model checkpoint provided — using random init weights")
         return 0

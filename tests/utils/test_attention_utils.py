@@ -10,6 +10,7 @@ def test_MSA():
     out = msa(x)
     assert out.shape == x.shape
 
+
 def test_MHA():
     mha = MHA(d_model=64, n_heads=4, dropout=0.1)
     q = torch.randn(2, 10, 64)
@@ -17,6 +18,7 @@ def test_MHA():
     out = mha(q, k, v, mask=None)
     assert out.shape == q.shape
     assert mha.att_scores is not None
+
 
 def test_ShiftedWindowMSA():
     sw_msa = ShiftedWindowMSA(embed_dim=96, n_heads=4, window_size=7, mask=True)

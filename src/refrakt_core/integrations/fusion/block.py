@@ -1,7 +1,9 @@
+from typing import Dict, Iterator, Optional, Union
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-from typing import Dict, Optional, Union, Iterator
+
 from refrakt_core.integrations.fusion.builder import build_fusion_head
 from refrakt_core.integrations.fusion.protocols import FusionHead
 from refrakt_core.schema.model_output import ModelOutput
@@ -20,13 +22,15 @@ class FusionBlock(nn.Module):
         generative_types = ("mae", "autoencoder", "vae", "srgan")
         backbone_type = type(backbone).__name__.lower()
         if any(gen_type in backbone_type for gen_type in generative_types):
-            raise NotImplementedError("Fusion is not yet supported for generative models (MAE, AE, VAE, SRGAN)")
-        
+            raise NotImplementedError(
+                "Fusion is not yet supported for generative models (MAE, AE, VAE, SRGAN)"
+            )
+
         self.backbone = backbone
         self.fusion_head: FusionHead = build_fusion_head(fusion_cfg)
         self._trained = False
         self.wrapper_config = {"wrapper_type": "fusion"}
-        
+
         # Register backbone as a submodule to ensure its parameters are tracked
         self.add_module("backbone", backbone)
 
@@ -50,11 +54,20 @@ class FusionBlock(nn.Module):
         self.fusion_head.fit(feats, labels)
         self._trained = True
 
-    def forward(self, x: Union[torch.Tensor, Dict[str, torch.Tensor]], teacher: bool = False, **kwargs) -> ModelOutput:
+    def forward(
+        self,
+        x: Union[torch.Tensor, Dict[str, torch.Tensor]],
+        teacher: bool = False,
+        **kwargs,
+    ) -> ModelOutput:
         # Handle dict input (for MSN)
         if isinstance(x, dict):
             base_output = self.backbone(x)
-            feats = base_output.embeddings if isinstance(base_output, ModelOutput) else base_output
+            feats = (
+                base_output.embeddings
+                if isinstance(base_output, ModelOutput)
+                else base_output
+            )
             # Only convert to numpy if feats is a tensor and not None
             if feats is not None and isinstance(feats, torch.Tensor):
                 feats_np = feats.detach().cpu().numpy()
@@ -62,16 +75,21 @@ class FusionBlock(nn.Module):
                 feats_np = None
         else:
             # Standard tensor input
-            if hasattr(self.backbone, 'forward'):
+            if hasattr(self.backbone, "forward"):
                 import inspect
+
                 sig = inspect.signature(self.backbone.forward)
-                if 'teacher' in sig.parameters:
+                if "teacher" in sig.parameters:
                     base_output = self.backbone(x, teacher=teacher, **kwargs)
                 else:
                     base_output = self.backbone(x)
             else:
                 base_output = self.backbone(x)
-            feats = base_output.embeddings if isinstance(base_output, ModelOutput) else base_output
+            feats = (
+                base_output.embeddings
+                if isinstance(base_output, ModelOutput)
+                else base_output
+            )
             if feats is not None and isinstance(feats, torch.Tensor):
                 feats_np = feats.detach().cpu().numpy()
             else:
@@ -87,8 +105,11 @@ class FusionBlock(nn.Module):
 
             return ModelOutput(
                 embeddings=feats,
-                logits=torch.tensor(preds, device=x["anchor"].device if isinstance(x, dict) else x.device),
-                extra={"fusion_preds": preds, "fusion_proba": proba}
+                logits=torch.tensor(
+                    preds,
+                    device=x["anchor"].device if isinstance(x, dict) else x.device,
+                ),
+                extra={"fusion_preds": preds, "fusion_proba": proba},
             )
 
         # Propagate all ModelOutput fields if base_output is a ModelOutput
@@ -101,12 +122,11 @@ class FusionBlock(nn.Module):
                 targets=base_output.targets,
                 attention_maps=base_output.attention_maps,
                 loss_components=base_output.loss_components,
-                extra=base_output.extra
+                extra=base_output.extra,
             )
         else:
             return ModelOutput(
-                embeddings=feats,
-                logits=getattr(base_output, 'logits', None)
+                embeddings=feats, logits=getattr(base_output, "logits", None)
             )
 
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:
@@ -116,7 +136,7 @@ class FusionBlock(nn.Module):
         """
 
         output: ModelOutput = self.backbone(x)
-        
+
         if output.logits is not None:
             return output.logits
         elif output.embeddings is not None:

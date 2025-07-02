@@ -19,22 +19,22 @@ def main():
     from refrakt_core.global_logging import set_global_logger
 
     cfg = OmegaConf.load(args.config)
-    
+
     # Extract runtime parameters from YAML config
-    runtime_cfg = cfg.get('runtime', {})
-    mode = runtime_cfg.get('mode', 'train')
-    log_dir = args.log_dir or runtime_cfg.get('log_dir', './logs')
-    
+    runtime_cfg = cfg.get("runtime", {})
+    mode = runtime_cfg.get("mode", "train")
+    log_dir = args.log_dir or runtime_cfg.get("log_dir", "./logs")
+
     # Handle log_types - accept list or single string
-    log_types = runtime_cfg.get('log_type', [])
+    log_types = runtime_cfg.get("log_type", [])
     if isinstance(log_types, str):
         log_types = [log_types]  # Convert single string to list
     elif log_types is None:
         log_types = []  # Convert None to empty list
-        
-    console = runtime_cfg.get('console', True)
-    model_path = runtime_cfg.get('model_path', None)
-    debug = args.debug or runtime_cfg.get('debug', False)
+
+    console = runtime_cfg.get("console", True)
+    model_path = runtime_cfg.get("model_path", None)
+    debug = args.debug or runtime_cfg.get("debug", False)
 
     model_name = cfg.model.name
 
@@ -65,7 +65,9 @@ def main():
 
         elif mode == "inference":
             if not model_path:
-                raise ValueError("model_path must be provided in runtime config for inference mode")
+                raise ValueError(
+                    "model_path must be provided in runtime config for inference mode"
+                )
             logger.info(f"Starting inference with config: {args.config}")
             inference(args.config, model_path=model_path, logger=logger)
 

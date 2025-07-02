@@ -2,8 +2,9 @@
 
 from inspect import signature
 from typing import Optional
-from refrakt_core.schema.model_output import ModelOutput
+
 from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.schema.model_output import ModelOutput
 
 
 class LossWrapper:

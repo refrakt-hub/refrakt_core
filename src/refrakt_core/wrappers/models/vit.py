@@ -1,7 +1,8 @@
 import torch
 from torch import nn
-from refrakt_core.schema.model_output import ModelOutput
+
 from refrakt_core.registry.wrapper_registry import register_wrapper
+from refrakt_core.schema.model_output import ModelOutput
 
 
 @register_wrapper("vit")
@@ -30,7 +31,7 @@ class ViTWrapper(nn.Module):
 
         return ModelOutput(
             logits=logits,
-            embeddings=cls_token  # useful for contrastive or similarity learning
+            embeddings=cls_token,  # useful for contrastive or similarity learning
         )
 
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:

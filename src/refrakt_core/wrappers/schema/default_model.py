@@ -1,6 +1,7 @@
+from typing import Any, Dict, Optional
+
 import torch
 import torch.nn as nn
-from typing import Any, Dict, Optional
 
 from refrakt_core.schema.model_output import ModelOutput
 
@@ -14,11 +15,13 @@ class DefaultModelWrapper(nn.Module):
         self,
         model_name: str,
         model_params: Dict[str, Any],
-        modules: Optional[Dict[str, Any]] = None
+        modules: Optional[Dict[str, Any]] = None,
     ):
         super().__init__()
         if modules is None or "get_model" not in modules:
-            raise ValueError("modules['get_model'] must be provided for DefaultModelWrapper.")
+            raise ValueError(
+                "modules['get_model'] must be provided for DefaultModelWrapper."
+            )
         self.model = modules["get_model"](model_name, **model_params)
 
     def forward(self, x: torch.Tensor, **kwargs) -> ModelOutput:
@@ -38,9 +41,19 @@ class DefaultModelWrapper(nn.Module):
                 attention_maps=output.get("attention_maps"),
                 image=output.get("image"),
                 loss_components=output.get("loss_components", {}),
-                extra={k: v for k, v in output.items() if k not in {
-                    "logits", "embeddings", "reconstruction", "attention_maps", "image", "loss_components"
-                }},
+                extra={
+                    k: v
+                    for k, v in output.items()
+                    if k
+                    not in {
+                        "logits",
+                        "embeddings",
+                        "reconstruction",
+                        "attention_maps",
+                        "image",
+                        "loss_components",
+                    }
+                },
             )
 
         raise ValueError(f"Unsupported output type from model: {type(output)}")
