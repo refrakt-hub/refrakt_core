@@ -102,7 +102,7 @@ class SupervisedTrainer(BaseTrainer):
         )
         self.global_step = 0
 
-    def train(self, num_epochs: int) -> None:
+    def train(self, num_epochs: int) -> Dict[str, float]:
         """
         Train the model for a specified number of epochs.
 
@@ -211,6 +211,8 @@ class SupervisedTrainer(BaseTrainer):
 
         if logger:
             logger.log_parameters(self.model, step=self.global_step, prefix="final_")
+
+        return {"best_accuracy": best_accuracy}
 
     def evaluate(self) -> float:
         """

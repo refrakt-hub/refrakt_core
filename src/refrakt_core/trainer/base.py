@@ -67,7 +67,7 @@ class BaseTrainer(ABC):
         self.global_step: int = 0
 
     @abstractmethod
-    def train(self, num_epochs: int) -> None:
+    def train(self, num_epochs: int) -> Dict[str, float]:
         """
         Train the model for the specified number of epochs.
 
