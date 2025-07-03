@@ -1,29 +1,53 @@
+"""
+Refrakt CLI entry point for training, testing, and inference.
+
+This module parses command-line arguments and dispatches to the appropriate pipeline stage.
+"""
+
 import argparse
+import gc
 import os
 import sys
-import gc
+from typing import cast
+
 import torch
 
-def main():
+
+def main() -> None:
+    """
+    Main entry point for the Refrakt CLI.
+
+    Parses command-line arguments, sets up logging, and dispatches to train, test, or inference.
+    """
     try:
         print("==> Refrakt CLI launched")
 
         parser = argparse.ArgumentParser(description="Refrakt Core Pipeline")
-        parser.add_argument("--config", required=True, help="Path to configuration file")
+        parser.add_argument(
+            "--config", required=True, help="Path to configuration file"
+        )
         parser.add_argument("--log_dir", help="Override log directory path")
         parser.add_argument("--debug", action="store_true", help="Enable debug logging")
         args = parser.parse_args()
 
         # Delay ALL imports until after logger configuration
         from omegaconf import OmegaConf
-
         from refrakt_core.api.core.logger import RefraktLogger
         from refrakt_core.global_logging import set_global_logger
 
         cfg = OmegaConf.load(args.config)
 
         # Extract runtime parameters from YAML config
-        runtime_cfg = cfg.get("runtime", {})
+        cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+        if not isinstance(cfg_dict, dict):
+            raise TypeError(
+                "Config must be a dict after OmegaConf.to_container, got type: {}".format(
+                    type(cfg_dict)
+                )
+            )
+        cfg_dict = cast(dict, cfg_dict)
+        runtime_cfg = cfg_dict.get("runtime", {})
+
         mode = runtime_cfg.get("mode", "train")
         log_dir = args.log_dir or runtime_cfg.get("log_dir", "./logs")
 

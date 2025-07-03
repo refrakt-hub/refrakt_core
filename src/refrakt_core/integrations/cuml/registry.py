@@ -38,4 +38,4 @@ def load_cuml_registry() -> Dict[str, str]:
         "cuml_registry.yaml"
     ).open("r") as f:
         content = cast(Dict[str, str], yaml.safe_load(f))
-    return content 
+    return content

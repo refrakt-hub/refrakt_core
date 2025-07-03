@@ -1,12 +1,18 @@
-import pytest
 import logging
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from refrakt_core.api.core.logger import RefraktLogger
 
+
 def test_logger_smoke():
-    logger = RefraktLogger("test_model", log_types=["tensorboard", "wandb"], console=True, debug=True)
+    logger = RefraktLogger(
+        "test_model", log_types=["tensorboard", "wandb"], console=True, debug=True
+    )
     assert isinstance(logger, RefraktLogger)
     logger.close()
+
 
 def test_logger_sanity():
     logger = RefraktLogger("test_model", log_types=[], console=False, debug=False)
@@ -16,11 +22,13 @@ def test_logger_sanity():
     logger.debug("debug message")
     logger.close()
 
+
 @patch("torch.utils.tensorboard.SummaryWriter", autospec=True)
 def test_tensorboard_init(mock_summary_writer):
     logger = RefraktLogger("tb_model", log_types=["tensorboard"])
     assert logger.tb_writer is not None
     logger.close()
+
 
 @patch("refrakt_core.api.core.logger.wandb", create=True)
 def test_wandb_init(mock_wandb):
@@ -28,6 +36,7 @@ def test_wandb_init(mock_wandb):
     logger = RefraktLogger("wandb_model", log_types=["wandb"])
     assert logger.wandb_run is not None
     logger.close()
+
 
 def test_log_metrics_and_config(monkeypatch):
     logger = RefraktLogger("test_model")
@@ -37,8 +46,10 @@ def test_log_metrics_and_config(monkeypatch):
     logger.log_config({"param": 1})
     logger.close()
 
+
 def test_log_images_and_inference(monkeypatch):
     import numpy as np
+
     logger = RefraktLogger("test_model")
     logger.tb_writer = MagicMock()
     logger.wandb_run = MagicMock()
@@ -47,7 +58,8 @@ def test_log_images_and_inference(monkeypatch):
     logger.log_inference_results(images, images, images, step=0)
     logger.close()
 
+
 def test_logger_close_safe():
     logger = RefraktLogger("test_model")
     # Should not raise even if tb_writer and wandb_run are None
-    logger.close() 
+    logger.close()

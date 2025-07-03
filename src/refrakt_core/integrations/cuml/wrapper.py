@@ -104,4 +104,4 @@ class CuMLWrapper:
     def load(cls, model: str, path: Union[str, Path]) -> "CuMLWrapper":
         instance = cls.__new__(cls)
         instance.model = joblib.load(path)
-        return instance 
+        return instance

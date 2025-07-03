@@ -9,10 +9,10 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
+from PIL import Image
 from refrakt_core.api.core.utils import flatten_and_filter_config
 from refrakt_core.utils.methods import extract_visual_tensor
 from torch import Tensor, nn
-from PIL import Image
 
 
 class RefraktLogger:
@@ -380,12 +380,7 @@ class RefraktLogger:
             import wandb
 
             self.wandb_run.log(
-                {
-                    tag: [
-                        wandb.Image(self._to_wandb_image(img))
-                        for img in images_seq
-                    ]
-                },
+                {tag: [wandb.Image(self._to_wandb_image(img)) for img in images_seq]},
                 step=step,
             )
 
@@ -487,7 +482,12 @@ class RefraktLogger:
                         import wandb
 
                         wandb.log(
-                            {full_name: wandb.Histogram(param_data.cpu().numpy().flatten().tolist())}, step=step
+                            {
+                                full_name: wandb.Histogram(
+                                    param_data.cpu().numpy().flatten().tolist()
+                                )
+                            },
+                            step=step,
                         )
 
     def log_gradients(self, model: nn.Module, step: int, prefix: str = "") -> None:
@@ -517,7 +517,12 @@ class RefraktLogger:
                         import wandb
 
                         wandb.log(
-                            {full_name: wandb.Histogram(grad_data.cpu().numpy().flatten().tolist())}, step=step
+                            {
+                                full_name: wandb.Histogram(
+                                    grad_data.cpu().numpy().flatten().tolist()
+                                )
+                            },
+                            step=step,
                         )
 
     def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:

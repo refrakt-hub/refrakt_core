@@ -10,14 +10,15 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
 import torch
-from refrakt_core.registry.trainer_registry import register_trainer
-from refrakt_core.schema.loss_output import LossOutput
-from refrakt_core.schema.model_output import ModelOutput
-from refrakt_core.trainer.base import BaseTrainer
 from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from refrakt_core.registry.trainer_registry import register_trainer
+from refrakt_core.schema.loss_output import LossOutput
+from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.trainer.base import BaseTrainer
 
 try:
     from refrakt_xai.utils import \
@@ -239,7 +240,9 @@ class SupervisedTrainer(BaseTrainer):
                 elif isinstance(output, torch.Tensor):
                     preds = torch.argmax(output, dim=1)
                 else:
-                    raise ValueError("Output does not have logits for argmax in evaluate().")
+                    raise ValueError(
+                        "Output does not have logits for argmax in evaluate()."
+                    )
 
                 correct += (preds == targets).sum().item()
                 total += targets.size(0)

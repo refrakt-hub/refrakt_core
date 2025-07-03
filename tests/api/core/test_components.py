@@ -2,18 +2,23 @@ import pytest
 from torch import nn
 from torch.optim import SGD
 from torch.optim.lr_scheduler import StepLR
+
 from refrakt_core.api.core.components import ModelComponents
+
 
 class DummyModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.linear = nn.Linear(2, 2)
+
     def forward(self, x):
         return self.linear(x)
+
 
 class DummyLoss(nn.Module):
     def forward(self, x, y):
         return ((x - y) ** 2).mean()
+
 
 def test_model_components_smoke():
     model = DummyModel()
@@ -27,6 +32,7 @@ def test_model_components_smoke():
     assert mc.scheduler is scheduler
     assert mc.device == "cpu"
 
+
 def test_model_components_sanity():
     model = DummyModel()
     loss_fn = DummyLoss()
@@ -38,6 +44,7 @@ def test_model_components_sanity():
     assert mc.scheduler is None
     assert mc.device == "cuda" or mc.device == "cpu"
 
+
 def test_model_components_unit():
     model = DummyModel()
     loss_fn = DummyLoss()
@@ -45,4 +52,4 @@ def test_model_components_unit():
     mc = ModelComponents(model, loss_fn, optimizer, device="cpu")
     # Test attribute assignment
     mc.device = "cuda"
-    assert mc.device == "cuda" 
+    assert mc.device == "cuda"

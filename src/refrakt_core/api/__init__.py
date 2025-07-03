@@ -6,7 +6,6 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 from omegaconf import OmegaConf
-
 from refrakt_core.api.inference import inference
 from refrakt_core.api.test import test
 from refrakt_core.api.train import train
