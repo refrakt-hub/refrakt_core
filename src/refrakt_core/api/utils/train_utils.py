@@ -278,3 +278,19 @@ def setup_data_loader_for_inference(config: DictConfig, data: Any = None) -> Any
         raise TypeError("test_cfg must be a DictConfig")
     test_dataset = build_dataset(test_cfg)
     return build_dataloader(test_dataset, config.dataloader)
+
+
+def build_ml_numpy_splits(cfg: DictConfig):
+    """
+    Build X, y numpy arrays for train/val from config for ML pipelines.
+    Assumes dataset.name == 'tabular_ml'.
+    """
+    from refrakt_core.api.builders.dataset_builder import build_dataset
+    from omegaconf import DictConfig
+    train_cfg = DictConfig(cfg.dataset)
+    val_cfg = DictConfig(OmegaConf.merge(cfg.dataset, OmegaConf.create({"params": {"train": False}})))
+    train_dataset = build_dataset(train_cfg)
+    val_dataset = build_dataset(val_cfg)
+    X_train, y_train = train_dataset.get_numpy()
+    X_val, y_val = val_dataset.get_numpy()
+    return X_train, y_train, X_val, y_val

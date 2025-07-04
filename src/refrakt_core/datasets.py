@@ -14,6 +14,10 @@ from PIL import Image
 from torch import Tensor, nn
 from torch.utils.data import Dataset
 
+import numpy as np
+import pandas as pd
+import requests
+
 from refrakt_core.registry.dataset_registry import register_dataset
 
 
@@ -122,3 +126,35 @@ class MSNCompatibleContrastiveDataset(Dataset):
         else:
             anchor = target = item
         return {"anchor": anchor, "target": target}
+
+
+@register_dataset("tabular_ml")
+class TabularMLDataset:
+    """
+    Dataset for tabular ML tasks. Loads a CSV and returns X, y as numpy arrays.
+    Args:
+        csv_path (str): Path to the CSV file.
+        target_col (str): Name of the target column.
+        drop_cols (Optional[list[str]]): Columns to drop (besides target).
+        download_url (Optional[str]): URL to download the CSV if not present.
+    """
+    def __init__(self, csv_path: str, target_col: str, drop_cols: Optional[list] = None, download_url: Optional[str] = None, **kwargs):
+        if not os.path.exists(csv_path) and download_url:
+            print(f"[TabularMLDataset] Downloading dataset from {download_url} to {csv_path}...")
+            os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+            r = requests.get(download_url)
+            r.raise_for_status()
+            with open(csv_path, 'wb') as f:
+                f.write(r.content)
+            print(f"[TabularMLDataset] Download complete.")
+        df = pd.read_csv(csv_path)
+        if drop_cols:
+            df = df.drop(columns=drop_cols)
+        self.y = df[target_col].values
+        self.X = df.drop(columns=[target_col]).values
+    def __len__(self):
+        return len(self.y)
+    def __getitem__(self, idx):
+        return self.X[idx], self.y[idx]
+    def get_numpy(self):
+        return self.X, self.y

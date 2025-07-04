@@ -1,0 +1,4 @@
+standard_scaler: sklearn.preprocessing.StandardScaler
+minmax_scaler: sklearn.preprocessing.MinMaxScaler
+onehot: sklearn.preprocessing.OneHotEncoder
+pca: sklearn.decomposition.PCA 

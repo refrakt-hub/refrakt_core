@@ -68,6 +68,33 @@ def train(
             raise TypeError("Config must be a dict after OmegaConf.to_container.")
         logger.log_config(cast(Dict[str, Any], config_dict))
 
+        # --- PURE-ML PIPELINE SUPPORT ---
+        is_pure_ml = getattr(cfg.model, 'type', None) == 'ml' or getattr(cfg.dataset, 'name', None) == 'tabular_ml'
+        if is_pure_ml:
+            from refrakt_core.api.utils.train_utils import build_ml_numpy_splits
+            from refrakt_core.integrations.ml.ml_builder import build_ml_pipeline
+            from refrakt_core.integrations.ml.trainer import MLTrainer
+            X_train, y_train, X_val, y_val = build_ml_numpy_splits(cfg)
+            feature_pipeline, ml_model, _, _, _, _ = build_ml_pipeline(
+                {
+                    'feature_engineering': getattr(cfg, 'feature_engineering', []),
+                    'model': OmegaConf.to_container(cfg.model, resolve=True)
+                },
+                X_train, y_train, X_val, y_val
+            )
+            artifact_dumper = setup_artifact_dumper(cfg, resolved_model_name, logger)
+            trainer = MLTrainer(feature_pipeline, ml_model, X_train, y_train, X_val, y_val, artifact_dumper)
+            logger.info(f"[ML] Starting pure-ML training...")
+            metrics = trainer.train()
+            logger.info(f"[ML] Training complete. Metrics: {metrics}")
+            # Save model and pipeline
+            import joblib
+            save_dir = cfg.trainer.params.save_dir if hasattr(cfg.trainer, 'params') and hasattr(cfg.trainer.params, 'save_dir') else './checkpoints'
+            os.makedirs(save_dir, exist_ok=True)
+            joblib.dump({'feature_pipeline': feature_pipeline, 'model': ml_model}, os.path.join(save_dir, f"{resolved_model_name}_ml.joblib"))
+            logger.info(f"[ML] Saved ML pipeline to {os.path.join(save_dir, f'{resolved_model_name}_ml.joblib')}")
+            return
+
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using device: {device}")
 

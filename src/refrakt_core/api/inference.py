@@ -63,6 +63,32 @@ def inference(
         config_dict = OmegaConf.to_container(config, resolve=True)
         logger.log_config(cast(Dict[str, Any], config_dict))
 
+        # --- PURE-ML PIPELINE SUPPORT ---
+        is_pure_ml = getattr(config.model, 'type', None) == 'ml' or getattr(config.dataset, 'name', None) == 'tabular_ml'
+        if is_pure_ml:
+            import joblib
+            import numpy as np
+            # Load pipeline
+            save_dir = config.trainer.params.save_dir if hasattr(config.trainer, 'params') and hasattr(config.trainer.params, 'save_dir') else './checkpoints'
+            pipeline_path = os.path.join(save_dir, f"{resolved_model_name}_ml.joblib")
+            pipeline = joblib.load(pipeline_path)
+            feature_pipeline = pipeline['feature_pipeline']
+            ml_model = pipeline['model']
+            # Load data
+            from refrakt_core.api.utils.train_utils import build_ml_numpy_splits
+            _, _, X_val, y_val = build_ml_numpy_splits(config)
+            preds = ml_model.predict(feature_pipeline.transform(X_val))
+            acc = (preds == y_val).mean() if y_val is not None else None
+            logger.info(f"[ML] Inference complete. Accuracy: {acc}")
+            return {
+                'model': ml_model,
+                'feature_pipeline': feature_pipeline,
+                'preds': preds,
+                'y_true': y_val,
+                'accuracy': acc,
+                'config': config,
+            }
+
         # Modules and device
         from refrakt_core.registry.model_registry import get_model
         from refrakt_core.registry.wrapper_registry import get_wrapper

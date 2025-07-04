@@ -13,6 +13,17 @@ from typing import Any, Dict, Optional
 import torch
 from omegaconf import OmegaConf
 
+from refrakt_core.registry.trainer_registry import register_trainer
+
+@register_trainer('ml')
+class DummyMLTrainer:
+    def __init__(self, *args, **kwargs):
+        pass
+    def train(self, *args, **kwargs):
+        pass
+    def evaluate(self, *args, **kwargs):
+        pass
+
 
 def initialize_trainer(
     cfg: OmegaConf,
