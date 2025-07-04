@@ -2,9 +2,9 @@
 
 from typing import Any, Dict
 
-from refrakt_core.integrations.cuml.wrapper import CuMLWrapper
+from refrakt_core.integrations.gpu.wrapper import CuMLWrapper
 from refrakt_core.integrations.fusion.protocols import FusionHead
-from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
+from refrakt_core.integrations.cpu.wrapper import SklearnWrapper
 
 
 def build_fusion_head(cfg: Dict[str, Any]) -> FusionHead:
@@ -27,17 +27,14 @@ def build_fusion_head(cfg: Dict[str, Any]) -> FusionHead:
     model = cfg["model"]
     params = cfg.get("params", {})
 
+    # Do not pop 'fusion_head' here; let the wrapper handle it
     model_params = dict(params)
-    fusion_head_config = (
-        model_params.pop("fusion_head", {}) if "fusion_head" in model_params else {}
-    )
-
-    if fusion_head_config is None:
-        fusion_head_config = {}
 
     if head_type == "sklearn":
         wrapper = SklearnWrapper(model, **model_params)
-        if fusion_head_config.get("path"):
+        # If a path is provided in fusion_head, try to load from path
+        fusion_head_config = params.get("fusion_head", {})
+        if fusion_head_config and isinstance(fusion_head_config, dict) and fusion_head_config.get("path"):
             try:
                 return SklearnWrapper.load(model, fusion_head_config["path"])
             except (FileNotFoundError, ValueError):
@@ -46,7 +43,8 @@ def build_fusion_head(cfg: Dict[str, Any]) -> FusionHead:
 
     if head_type == "cuml":
         wrapper = CuMLWrapper(model, **model_params)
-        if fusion_head_config.get("path"):
+        fusion_head_config = params.get("fusion_head", {})
+        if fusion_head_config and isinstance(fusion_head_config, dict) and fusion_head_config.get("path"):
             try:
                 return CuMLWrapper.load(model, fusion_head_config["path"])
             except (FileNotFoundError, ValueError):

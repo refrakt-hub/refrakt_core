@@ -126,7 +126,7 @@ def initialize_trainer(
         )
 
     elif trainer_name_lower == "fusion":
-        from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
+        from refrakt_core.integrations.cpu.wrapper import SklearnWrapper
 
         model_cfg = cfg_dict.get("model")
         if not isinstance(model_cfg, dict):

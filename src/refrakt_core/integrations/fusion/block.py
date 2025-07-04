@@ -1,9 +1,9 @@
-from typing import Dict, Iterator, Optional, Union
+from typing import Any, Dict, Iterator, Optional, Union
 
 import numpy as np
+from numpy.typing import NDArray
 import torch
 import torch.nn as nn
-
 from refrakt_core.integrations.fusion.builder import build_fusion_head
 from refrakt_core.integrations.fusion.protocols import FusionHead
 from refrakt_core.schema.model_output import ModelOutput
@@ -16,7 +16,7 @@ class FusionBlock(nn.Module):
     During eval/inference, it uses the fusion head to predict from embeddings.
     """
 
-    def __init__(self, backbone: nn.Module, fusion_cfg: Dict):
+    def __init__(self, backbone: nn.Module, fusion_cfg: Dict[str, Any]):
         super().__init__()
         # Check for generative models
         generative_types = ("mae", "autoencoder", "vae", "srgan")
@@ -41,7 +41,10 @@ class FusionBlock(nn.Module):
         """
         return self.backbone.parameters(recurse=recurse)
 
-    def _extract_features(self, x: torch.Tensor) -> np.ndarray:
+    def _extract_features(self, x: torch.Tensor) -> tuple[NDArray[np.float64], ModelOutput]:
+        """
+        Extract features from the backbone and return as numpy array and ModelOutput.
+        """
         output: ModelOutput = self.backbone(x)
         feats = output.embeddings
         if feats is None:
@@ -58,7 +61,7 @@ class FusionBlock(nn.Module):
         self,
         x: Union[torch.Tensor, Dict[str, torch.Tensor]],
         teacher: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ) -> ModelOutput:
         # Handle dict input (for MSN)
         if isinstance(x, dict):
@@ -144,11 +147,14 @@ class FusionBlock(nn.Module):
         else:
             return torch.zeros(x.shape[0], 10, device=x.device)  # Assuming 10 classes
 
-    def predict_proba(self, x: torch.Tensor) -> Optional[np.ndarray]:
+    def predict_proba(self, x: torch.Tensor) -> Optional[NDArray[np.float64]]:
+        """
+        Predict class probabilities using the fusion head if trained.
+        """
         feats, _ = self._extract_features(x)
         return self.fusion_head.predict_proba(feats) if self._trained else None
 
-    def update_teacher(self, *args, **kwargs):
+    def update_teacher(self, *args: Any, **kwargs: Any) -> Any:
         """
         Delegate teacher update to the backbone if available.
         """

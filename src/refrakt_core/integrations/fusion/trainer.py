@@ -2,13 +2,12 @@ from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
-from torch.nn import Module
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
+from torch.nn import Module
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 
 @register_trainer("fusion")

@@ -19,10 +19,10 @@ from refrakt_core.api.utils.train_utils import (load_config, load_fusion_head,
                                                 setup_artifact_dumper,
                                                 setup_logger)
 from refrakt_core.global_logging import get_global_logger
-from refrakt_core.integrations.cuml.wrapper import CuMLWrapper
+from refrakt_core.integrations.gpu.wrapper import CuMLWrapper
 from refrakt_core.integrations.fusion.builder import build_fusion_head
-from refrakt_core.integrations.sklearn.trainer import FusionTrainer
-from refrakt_core.integrations.sklearn.wrapper import SklearnWrapper
+from refrakt_core.integrations.fusion.trainer import FusionTrainer
+from refrakt_core.integrations.cpu.wrapper import SklearnWrapper
 
 gc.collect()
 torch.cuda.empty_cache()

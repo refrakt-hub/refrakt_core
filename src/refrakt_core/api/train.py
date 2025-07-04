@@ -28,7 +28,7 @@ from refrakt_core.api.utils.train_utils import (build_datasets_and_loaders,
                                                 setup_logger)
 from refrakt_core.global_logging import get_global_logger
 from refrakt_core.integrations.fusion.builder import build_fusion_head
-from refrakt_core.integrations.sklearn.trainer import FusionTrainer
+from refrakt_core.integrations.fusion.trainer import FusionTrainer
 
 gc.collect()
 torch.cuda.empty_cache()
