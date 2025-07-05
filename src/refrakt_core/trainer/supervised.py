@@ -85,6 +85,27 @@ class SupervisedTrainer(BaseTrainer):
         self._current_batch = None
         self._current_loss_output = None
 
+        # Ensure optimizer is constructed if not set by BaseTrainer
+        if self.optimizer is None:
+            from omegaconf import DictConfig, OmegaConf
+            args = optimizer_args
+            if isinstance(args, DictConfig):
+                _tmp_args = OmegaConf.to_container(args, resolve=True)
+                if isinstance(_tmp_args, dict):
+                    args = cast(Dict[str, Any], _tmp_args)
+                else:
+                    args = None
+            final_args = args or {"lr": 1e-3}
+            print(f"[DEBUG] Optimizer args: {final_args}")
+            self.optimizer = optimizer_cls(self.model.parameters(), **final_args)
+            print(f"[DEBUG] Optimizer constructed: {self.optimizer}")
+            if hasattr(self.optimizer, 'param_groups') and isinstance(self.optimizer, Optimizer):
+                print(f"[DEBUG] Learning rate: {self.optimizer.param_groups[0]['lr']}")
+        else:
+            print(f"[DEBUG] Optimizer already set: {self.optimizer}")
+            if hasattr(self.optimizer, 'param_groups') and isinstance(self.optimizer, Optimizer):
+                print(f"[DEBUG] Learning rate: {self.optimizer.param_groups[0]['lr']}")
+
     def _handle_training_step(self, batch: Any, step: int, epoch: int) -> None:
         """Handle a single training step."""
         return handle_training_step(self, batch, step, epoch)
@@ -149,16 +170,18 @@ class SupervisedTrainer(BaseTrainer):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
 
                 output = self.model(inputs)
-                loss_output = self.loss_fn(output, targets)
-
+                # Extract logits for predictions (don't call loss function!)
                 if isinstance(output, ModelOutput) and output.logits is not None:
-                    preds = torch.argmax(output.logits, dim=1)
+                    logits = output.logits
                 elif isinstance(output, torch.Tensor):
-                    preds = torch.argmax(output, dim=1)
+                    logits = output
                 else:
-                    raise ValueError(
-                        "Output does not have logits for argmax in evaluate()."
-                    )
+                    raise ValueError("Output does not have logits for argmax in evaluate().")
+
+                if logits is not None:
+                    preds = torch.argmax(logits, dim=1)
+                else:
+                    raise ValueError("Logits are None in evaluate().")
 
                 correct += (preds == targets).sum().item()
                 total += targets.size(0)

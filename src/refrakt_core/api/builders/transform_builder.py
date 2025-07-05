@@ -33,5 +33,5 @@ def build_transform(cfg: Union[List[Any], ListConfig, Dict[str, Any]]) -> Callab
         ValueError: If the configuration format is not recognized or supported.
     """
     transform_sequence = _resolve_transform_sequence(cfg)
-    transform_list = _build_transform_list(transform_sequence)
+    transform_list = _build_transform_list(transform_sequence, build_transform)
     return _create_final_transform(transform_list) 

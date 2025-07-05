@@ -9,6 +9,7 @@ from typing import Any, Dict
 from torch.optim import Optimizer
 
 from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.schema.loss_output import LossOutput
 
 
 def handle_training_step(trainer_instance, batch: Any, step: int, epoch: int) -> None:
@@ -21,10 +22,31 @@ def handle_training_step(trainer_instance, batch: Any, step: int, epoch: int) ->
             trainer_instance.optimizer.zero_grad()
     
     output = trainer_instance.model(inputs)
-    loss_output = trainer_instance.loss_fn(output, targets)
+    # Extract logits if output is ModelOutput
+    if isinstance(output, ModelOutput):
+        logits = output.logits
+    else:
+        logits = output
+    
+    loss = trainer_instance.loss_fn(logits, targets)
+    
+    # Wrap in LossOutput if needed
+    if not isinstance(loss, LossOutput):
+        loss_output = LossOutput(total=loss, components={"main": loss})
+    else:
+        loss_output = loss
 
     assert isinstance(loss_output.total, torch.Tensor)
     loss_output.total.backward()  # type: ignore[no-untyped-call]
+
+    # Debug: Check if gradients are computed
+    if trainer_instance.global_step % 10 == 0:
+        total_grad_norm = 0.0
+        for name, param in trainer_instance.model.named_parameters():
+            if param.grad is not None:
+                total_grad_norm += param.grad.data.norm(2).item() ** 2
+        total_grad_norm = total_grad_norm ** 0.5
+        print(f"[DEBUG] Gradient norm: {total_grad_norm:.4f}")
 
     trainer_instance._current_loss_output = loss_output
     log_training_metrics(trainer_instance, loss_output, output, step)
@@ -33,6 +55,15 @@ def handle_training_step(trainer_instance, batch: Any, step: int, epoch: int) ->
     if trainer_instance.optimizer is not None:
         if isinstance(trainer_instance.optimizer, Optimizer):
             trainer_instance.optimizer.step()
+            # Debug optimizer step
+            if trainer_instance.global_step % 10 == 0:
+                lr = trainer_instance.optimizer.param_groups[0]['lr']
+                print(f"[DEBUG] Optimizer step completed, LR: {lr:.6f}")
+    # Increment global_step after optimizer step
+    trainer_instance.global_step += 1
+    # Debug prints (less verbose)
+    if trainer_instance.global_step % 10 == 0:
+        print(f"[DEBUG] Step {trainer_instance.global_step}: loss={loss_output.total.item():.4f}")
 
 
 def log_training_metrics(trainer_instance, loss_output: Any, output: Any, step: int) -> None:

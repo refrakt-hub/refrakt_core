@@ -26,10 +26,10 @@ def _resolve_transform_sequence(cfg: Union[List[Any], ListConfig, Dict[str, Any]
         raise TypeError(f"Invalid transform config type: {type(cfg)}")
 
 
-def _build_nested_transform(name: str, params: Dict[str, Any]) -> Callable:
+def _build_nested_transform(name: str, params: Dict[str, Any], build_transform_fn: Callable) -> Callable:
     """Build nested transform blocks like RandomApply."""
     nested_cfgs = params.get("transforms", [])
-    nested_transforms = build_transform(nested_cfgs)
+    nested_transforms = build_transform_fn(nested_cfgs)
 
     if isinstance(nested_transforms, transforms.Compose):
         nested_transforms = nested_transforms.transforms
@@ -44,7 +44,7 @@ def _build_simple_transform(name: str, params: Dict[str, Any]) -> Callable:
     return get_transform(name, **params)
 
 
-def _build_transform_list(transform_sequence: Union[List[Any], ListConfig]) -> List[Callable]:
+def _build_transform_list(transform_sequence: Union[List[Any], ListConfig], build_transform_fn: Callable) -> List[Callable]:
     """Build list of transforms from sequence."""
     transform_list = []
     
@@ -54,7 +54,7 @@ def _build_transform_list(transform_sequence: Union[List[Any], ListConfig]) -> L
 
         # Handle nested transform blocks like RandomApply
         if name.lower() == "randomapply":
-            transform = _build_nested_transform(name, params)
+            transform = _build_nested_transform(name, params, build_transform_fn)
         else:
             transform = _build_simple_transform(name, params)
 

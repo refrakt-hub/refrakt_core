@@ -12,7 +12,7 @@ def test_build_transform_simple():
         {"name": "RandomVerticalFlip", "params": {"p": 0.5}},
     ]
     with patch(
-        "refrakt_core.api.builders.transform_builder.get_transform"
+        "refrakt_core.registry.transform_registry.get_transform"
     ) as get_transform:
         get_transform.side_effect = lambda name, **params: MagicMock(name=name)
         transform = build_transform(cfg)
@@ -30,7 +30,7 @@ def test_build_transform_nested():
         }
     ]
     with patch(
-        "refrakt_core.api.builders.transform_builder.get_transform"
+        "refrakt_core.registry.transform_registry.get_transform"
     ) as get_transform:
         get_transform.side_effect = lambda name, *args, **params: MagicMock(name=name)
         transform = build_transform(cfg)
