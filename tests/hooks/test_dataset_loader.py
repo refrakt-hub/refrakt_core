@@ -222,8 +222,8 @@ def test_validate_image_size_sanity():
         small_img_path = temp_path / "small.png"
         small_img = Image.new('RGB', (16, 16), color='red')
         small_img.save(small_img_path)
-        is_valid, error_msg = validate_image_size(small_img_path, max_size=(32, 32))
-        # 16x16 should be valid with max_size=(32,32) and default max_ratio=2.0
+        is_valid, error_msg = validate_image_size(small_img_path, max_size=(28, 28))
+        # 16x16 should be valid with max_size=(28,28) and default max_ratio=2.0
         assert is_valid is True
         # Test too large image
         large_img_path = temp_path / "large.png"

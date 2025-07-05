@@ -83,7 +83,7 @@ def test_validate_image_size_sanity():
     """Sanity test: Validate image size boundaries."""
     # Too small
     size = (16, 16)
-    is_valid, error_msg = validate_image_size(size, min_size=(32, 32))
+    is_valid, error_msg = validate_image_size(size, min_size=(28, 28))
     assert is_valid is False
     assert error_msg is not None
     assert "too small" in error_msg

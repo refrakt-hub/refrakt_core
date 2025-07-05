@@ -30,13 +30,13 @@ try:
     from refrakt_xai.utils import \
         generate_explainability  # type: ignore[import-not-found]
 except ImportError:
-    generate_explainability = None
+    generate_explainability = None  # type: ignore[unused-variable]
 
 try:
     from refrakt_viz.utils import (  # type: ignore[import-not-found]
         visualize_attention, visualize_embeddings)
 except ImportError:
-    visualize_embeddings = visualize_attention = None
+    visualize_embeddings = visualize_attention = None  # type: ignore[unused-variable]
 
 
 @register_trainer("supervised")
@@ -96,15 +96,7 @@ class SupervisedTrainer(BaseTrainer):
                 else:
                     args = None
             final_args = args or {"lr": 1e-3}
-            print(f"[DEBUG] Optimizer args: {final_args}")
             self.optimizer = optimizer_cls(self.model.parameters(), **final_args)
-            print(f"[DEBUG] Optimizer constructed: {self.optimizer}")
-            if hasattr(self.optimizer, 'param_groups') and isinstance(self.optimizer, Optimizer):
-                print(f"[DEBUG] Learning rate: {self.optimizer.param_groups[0]['lr']}")
-        else:
-            print(f"[DEBUG] Optimizer already set: {self.optimizer}")
-            if hasattr(self.optimizer, 'param_groups') and isinstance(self.optimizer, Optimizer):
-                print(f"[DEBUG] Learning rate: {self.optimizer.param_groups[0]['lr']}")
 
     def _handle_training_step(self, batch: Any, step: int, epoch: int) -> None:
         """Handle a single training step."""

@@ -22,7 +22,7 @@ class ImageSizeConfig:
     
     standard_size: Tuple[int, int] = (224, 224)
     max_size: Tuple[int, int] = (448, 448)  # 2x standard size
-    min_size: Tuple[int, int] = (32, 32)
+    min_size: Tuple[int, int] = (28, 28)
     aspect_ratio_tolerance: float = 0.1
     interpolation_method: str = "lanczos"  # lanczos, bilinear, nearest
 
@@ -31,7 +31,7 @@ def validate_image_size(
     size: Tuple[int, int], 
     image_path: Optional[Union[str, Path]] = None,
     max_size: Tuple[int, int] = (448, 448),
-    min_size: Tuple[int, int] = (32, 32)
+    min_size: Tuple[int, int] = (28, 28)
 ) -> Tuple[bool, Optional[str]]:
     """
     Validate if an image size is acceptable.

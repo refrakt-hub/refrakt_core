@@ -77,7 +77,7 @@ def create_resized_dataset(dataset: Any, target_size: Tuple[int, int]) -> Any:
     size_config = ImageSizeConfig(
         standard_size=target_size,
         max_size=(448, 448),
-        min_size=(32, 32)
+        min_size=(28, 28)
     )
     resizer = SmartImageResizer(size_config)
 

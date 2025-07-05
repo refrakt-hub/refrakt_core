@@ -91,7 +91,7 @@ def analyze_and_resize_dataset_images(
     dataset: Any,
     logger: RefraktLogger,
     max_size: Tuple[int, int] = (448, 448),
-    min_size: Tuple[int, int] = (32, 32),
+    min_size: Tuple[int, int] = (28, 28),
     target_size: Tuple[int, int] = (224, 224)
 ) -> Tuple[bool, Any]:
     """
@@ -130,7 +130,7 @@ def analyze_and_resize_dataset_images(
     logger.info(f"   Undersized images: {undersized_count}")
 
     if needs_resize:
-        logger.info("🔄 Dataset contains images outside acceptable size range (32x32 to 448x448)")
+        logger.info("🔄 Dataset contains images outside acceptable size range (28x28 to 448x448)")
         logger.info(f"📏 Resizing images to {target_size[0]}x{target_size[1]}...")
 
         # Create resized dataset
@@ -139,7 +139,7 @@ def analyze_and_resize_dataset_images(
 
         return True, resized_dataset
     else:
-        logger.info("✅ All images are within acceptable size range (32x32 to 448x448)")
+        logger.info("✅ All images are within acceptable size range (28x28 to 448x448)")
         return False, dataset
 
 

@@ -23,7 +23,7 @@ class ImageSizeConfig:
     standard_size: Tuple[int, int] = (224, 224)
     max_size: Tuple[int, int] = (448, 448)  # 2x standard size
     
-    min_size: Tuple[int, int] = (32, 32)
+    min_size: Tuple[int, int] = (28, 28)
     aspect_ratio_tolerance: float = 0.1
     interpolation_method: str = "lanczos"  # lanczos, bilinear, nearest
 
