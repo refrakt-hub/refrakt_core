@@ -10,7 +10,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from refrakt_core.api.core.utils import flatten_and_filter_config
+from refrakt_core.api.core.extras import flatten_and_filter_config
 from refrakt_core.utils.methods import extract_visual_tensor
 from torch import Tensor, nn
 
@@ -137,20 +137,8 @@ class RefraktLogger:
         Returns:
             Optional[Tensor]: Extracted tensor or None if not found.
         """
-        if isinstance(output, torch.Tensor):
-            return output
-        if hasattr(output, "logits") and isinstance(output.logits, torch.Tensor):
-            return output.logits
-        if hasattr(output, "reconstruction") and isinstance(
-            output.reconstruction, torch.Tensor
-        ):
-            return output.reconstruction
-        for attr in dir(output):
-            if not attr.startswith("_"):
-                val = getattr(output, attr)
-                if isinstance(val, torch.Tensor):
-                    return val
-        return None
+        from .utils.logging_utils import extract_tensor_from_model_output
+        return extract_tensor_from_model_output(output)
 
     def log_metrics(
         self, metrics: Dict[str, float], step: int, prefix: Optional[str] = None
@@ -163,42 +151,23 @@ class RefraktLogger:
             step (int): Training step or epoch.
             prefix (Optional[str], optional): Prefix for metric names. Defaults to None.
         """
-        if not hasattr(self, "_logged_metrics"):
-            self._logged_metrics = set()
+        from .utils.logger_helpers import (
+            _initialize_logged_metrics,
+            _create_metrics_to_log,
+            _log_to_tensorboard,
+            _log_to_wandb,
+        )
 
-        # Create metrics to log, checking for duplicates
-        metrics_to_log = {}
-        for metric_name, value in metrics.items():
-            # Apply prefix only once
-            full_metric_name = f"{prefix}/{metric_name}" if prefix else metric_name
-
-            # Create unique ID for this metric at this step
-            metric_id = (full_metric_name, step)
-
-            if metric_id not in self._logged_metrics:
-                self._logged_metrics.add(metric_id)
-                metrics_to_log[metric_name] = value
-            else:
-                self.debug(
-                    f"[RefraktLogger] Skipping duplicate metric '{full_metric_name}' at step {step}"
-                )
+        logged_metrics = _initialize_logged_metrics(self)
+        metrics_to_log = _create_metrics_to_log(metrics, step, prefix, logged_metrics)
 
         # Only log if we have metrics to log
         if not metrics_to_log:
             return
 
-        # Log to TensorBoard
-        if self.tb_writer:
-            for k, v in metrics_to_log.items():
-                full_k = f"{prefix}/{k}" if prefix else k
-                self.tb_writer.add_scalar(full_k, v, step)
-
-        # Log to WandB
-        if self.wandb_run:
-            log_data = {
-                f"{prefix}/{k}" if prefix else k: v for k, v in metrics_to_log.items()
-            }
-            self.wandb_run.log(log_data, step=step)
+        # Log to TensorBoard and WandB
+        _log_to_tensorboard(self.tb_writer, metrics_to_log, step, prefix)
+        _log_to_wandb(self.wandb_run, metrics_to_log, step, prefix)
 
     def log_config(self, config: Dict[str, Any]) -> None:
         """
@@ -207,30 +176,15 @@ class RefraktLogger:
         Args:
             config (Dict[str, Any]): Configuration dictionary.
         """
+        from .utils.logging_utils import create_scalar_config
+        
         if self.wandb_run:
             self.wandb_run.config.update(config)
 
         if self.tb_writer:
             try:
-                # Create a clean scalar-only config by flattening and filtering
-                scalar_config = {}
-                for k, v in flatten_and_filter_config(config).items():
-                    # Handle different value types
-                    if isinstance(v, (int, float, str, bool)):
-                        scalar_config[k] = v
-                    elif torch.is_tensor(v) and v.numel() == 1:
-                        scalar_config[k] = v.item()
-                    elif isinstance(v, (list, tuple)) and len(v) == 1:
-                        scalar_config[k] = v[0]
-                    elif (
-                        not isinstance(v, (torch.Tensor, list, tuple))
-                        and hasattr(v, "summary")
-                        and callable(getattr(v, "summary", None))
-                    ):
-                        summary = v.summary()
-                        if isinstance(summary, dict):
-                            for sk, sv in summary.items():
-                                scalar_config[f"{k}/{sk}"] = sv
+                # Create a clean scalar-only config
+                scalar_config = create_scalar_config(config)
 
                 # Add placeholder metric for TensorBoard requirements
                 metric_dict = {"placeholder": 0.0}
@@ -261,93 +215,26 @@ class RefraktLogger:
             input_tensor (Union[torch.Tensor, Dict[str, torch.Tensor]]): Input for tracing.
             model_output (Optional[Any], optional): Model output for graph extraction. Defaults to None.
         """
+        from .utils.logger_helpers import (
+            _prepare_input_tensor_for_graph,
+            _log_to_tensorboard_graph,
+            _log_to_wandb_watch,
+        )
+
         if not isinstance(model, nn.Module):
             self.warning("Model graph logging skipped: model is not nn.Module.")
             return
 
         try:
-            device = next(model.parameters()).device
-            if isinstance(input_tensor, dict):
-                input_tensor = {k: v.to(device) for k, v in input_tensor.items()}
-            else:
-                input_tensor = input_tensor.to(device)
-
-            if self.tb_writer:
-                try:
-                    if (
-                        hasattr(model, "__class__")
-                        and "FusionBlock" in model.__class__.__name__
-                    ):
-                        self.info(
-                            "Skipping TensorBoard graph logging for FusionBlock (complex model structure)"
-                        )
-                        return
-
-                    # Create a tracing module that wraps the original model
-                    class TracingModel(nn.Module):
-                        def __init__(self, model: nn.Module) -> None:
-                            super().__init__()
-                            self.model = model
-
-                        def forward(self, x: Any) -> torch.Tensor:
-                            # Use forward_for_graph if available
-                            if hasattr(self.model, "forward_for_graph"):
-                                return self.model.forward_for_graph(x)
-                            # Otherwise extract tensor from regular output
-                            output = self.model(x)
-                            return self._extract_tensor(output)
-
-                        @staticmethod
-                        def _extract_tensor(output: Any) -> torch.Tensor:
-                            """Extract a tensor from ModelOutput or raw output"""
-                            if isinstance(output, torch.Tensor):
-                                return output
-                            if hasattr(output, "logits") and isinstance(
-                                output.logits, torch.Tensor
-                            ):
-                                return output.logits
-                            if hasattr(output, "reconstruction") and isinstance(
-                                output.reconstruction, torch.Tensor
-                            ):
-                                return output.reconstruction
-                            # Try to find any tensor in output
-                            for attr in dir(output):
-                                if not attr.startswith("_") and isinstance(
-                                    getattr(output, attr), torch.Tensor
-                                ):
-                                    return getattr(output, attr)
-                            raise ValueError(
-                                "No tensor found in model output for tracing"
-                            )
-
-                    tracing_model = TracingModel(model)
-                    tracing_model.eval()
-                    self.tb_writer.add_graph(tracing_model, input_tensor)
-                    self.info("Logged model graph to TensorBoard.")
-                except Exception as e:
-                    self.warning(f"TensorBoard model graph logging failed: {e}")
-
-            if self.wandb_run:
-                try:
-                    import wandb
-
-                    self.wandb_run.watch(model, log="all", log_freq=100)
-                    self.info("WandB is watching model and gradients.")
-                except Exception as e:
-                    self.error(f"WandB model watching failed: {e}")
+            input_tensor = _prepare_input_tensor_for_graph(model, input_tensor)
+            _log_to_tensorboard_graph(self.tb_writer, model, input_tensor, self)
+            _log_to_wandb_watch(self.wandb_run, model, self)
         except Exception as e:
             self.error(f"Model graph logging failed: {e}")
 
     def _to_wandb_image(self, img):
-        if isinstance(img, torch.Tensor):
-            img = img.detach().cpu().numpy()
-        if isinstance(img, list):
-            img = np.array(img)
-        if isinstance(img, np.ndarray):
-            # If shape is (C, H, W), convert to (H, W, C)
-            if img.ndim == 3 and img.shape[0] in [1, 3]:
-                img = np.transpose(img, (1, 2, 0))
-        return img
+        from .utils.logging_utils import convert_to_wandb_image
+        return convert_to_wandb_image(img)
 
     def log_images(
         self,
@@ -365,24 +252,15 @@ class RefraktLogger:
             step (int): Training step or epoch.
             dataformats (str, optional): Data format. Defaults to "NCHW".
         """
-        if isinstance(images, Tensor):
-            images = images.detach().cpu().numpy()
-        # Convert ndarray to list if needed for Sequence
-        if isinstance(images, np.ndarray):
-            images_seq = images.tolist()
-        else:
-            images_seq = images
-        if self.tb_writer:
-            self.tb_writer.add_images(
-                tag, np.array(images_seq), step, dataformats=dataformats
-            )
-        if self.wandb_run:
-            import wandb
+        from .utils.logger_helpers import (
+            _prepare_images_for_logging,
+            _log_images_to_tensorboard,
+            _log_images_to_wandb,
+        )
 
-            self.wandb_run.log(
-                {tag: [wandb.Image(self._to_wandb_image(img)) for img in images_seq]},
-                step=step,
-            )
+        images_seq = _prepare_images_for_logging(images)
+        _log_images_to_tensorboard(self.tb_writer, tag, images_seq, step, dataformats)
+        _log_images_to_wandb(self.wandb_run, tag, images_seq, step, self._to_wandb_image)
 
     def log_inference_results(
         self,

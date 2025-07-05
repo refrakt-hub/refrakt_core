@@ -30,6 +30,18 @@ def register_transform(name: str) -> Callable[[Type[Any]], Type[Any]]:
     return decorator
 
 
+def _import_transforms():
+    """Import all transform modules to trigger registration."""
+    global _IMPORTED  # pylint: disable=global-statement
+    if not _IMPORTED:
+        try:
+            import refrakt_core.transforms
+            _IMPORTED = True
+        except ImportError as e:
+            logger = get_global_logger()
+            logger.error(f"Failed to import transforms: {e}")
+
+
 def get_transform(name: str, *args: Any, **kwargs: Any) -> Any:
     """Get transform instance by name with optional arguments.
 
@@ -44,11 +56,8 @@ def get_transform(name: str, *args: Any, **kwargs: Any) -> Any:
     Raises:
         ValueError: If the transform is not found.
     """
-    global _IMPORTED  # pylint: disable=global-statement
-    if not _IMPORTED:
-        # Trigger import of transforms module to register custom transforms
-        _IMPORTED = True
-
+    _import_transforms()
+    
     if name not in TRANSFORM_REGISTRY:
         # Try to find in torchvision transforms as fallback
         try:

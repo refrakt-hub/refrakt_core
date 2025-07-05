@@ -5,30 +5,38 @@ This module orchestrates the inference pipeline using utility functions for conf
 """
 
 import gc
-import os
 import sys
 import traceback
-from typing import Any, Dict, Optional, Union, cast
+from typing import Any, Dict, Optional, Union
 
 import torch
-from omegaconf import DictConfig, OmegaConf
-from PIL import Image
+from omegaconf import DictConfig
+
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.api.utils.train_utils import (
-    load_config, load_fusion_head, setup_artifact_dumper,
-    setup_data_loader_for_inference, setup_logger)
-from refrakt_core.global_logging import get_global_logger
+from refrakt_core.api.utils.inference_utils import (
+    resolve_model_name_for_inference,
+    handle_pure_ml_inference,
+    load_fusion_head_if_provided,
+    run_inference_loop,
+)
+from refrakt_core.api.helpers.inference_helpers import (
+    _load_and_validate_config,
+    _setup_logging,
+    _check_pure_ml_inference,
+    _setup_device,
+    _load_model_and_setup,
+    _setup_data_loader,
+)
 
 gc.collect()
 torch.cuda.empty_cache()
 
 import warnings
-
 warnings.filterwarnings("ignore")
 
 
 def inference(
-    cfg: Union[str, OmegaConf],
+    cfg: Union[str, DictConfig],
     model_path: str,
     fusion_head_path: Optional[str] = None,
     data: Any = None,
@@ -38,7 +46,7 @@ def inference(
     Orchestrate the inference pipeline for Refrakt.
 
     Args:
-        cfg: Path to config file or OmegaConf config.
+        cfg: Path to config file or DictConfig config.
         model_path (str): Path to the model checkpoint.
         fusion_head_path (Optional[str]): Path to the fusion head checkpoint.
         data (Any): Custom data for inference (optional).
@@ -48,105 +56,35 @@ def inference(
         Dict[str, Any]: Inference results and metadata.
     """
     try:
-        # Ensure cfg is str or DictConfig for load_config
-        config = load_config(cast("str | DictConfig", cfg))
-        # Resolve model name
-        if config.model.name == "autoencoder":
-            variant = config.model.params.get("variant", "simple")
-            resolved_model_name = f"autoencoder_{variant}"
-        else:
-            resolved_model_name = config.model.name
+        # Load and validate configuration
+        config = _load_and_validate_config(cfg)
+        resolved_model_name = resolve_model_name_for_inference(config)
 
-        # Logger
-        if logger is None:
-            logger = setup_logger(config, resolved_model_name)
-        config_dict = OmegaConf.to_container(config, resolve=True)
-        logger.log_config(cast(Dict[str, Any], config_dict))
+        # Setup logging
+        logger = _setup_logging(config, resolved_model_name, logger)
 
-        # --- PURE-ML PIPELINE SUPPORT ---
-        is_pure_ml = getattr(config.model, 'type', None) == 'ml' or getattr(config.dataset, 'name', None) == 'tabular_ml'
-        if is_pure_ml:
-            import joblib
-            import numpy as np
-            # Load pipeline
-            save_dir = config.trainer.params.save_dir if hasattr(config.trainer, 'params') and hasattr(config.trainer.params, 'save_dir') else './checkpoints'
-            pipeline_path = os.path.join(save_dir, f"{resolved_model_name}_ml.joblib")
-            pipeline = joblib.load(pipeline_path)
-            feature_pipeline = pipeline['feature_pipeline']
-            ml_model = pipeline['model']
-            # Load data
-            from refrakt_core.api.utils.train_utils import build_ml_numpy_splits
-            _, _, X_val, y_val = build_ml_numpy_splits(config)
-            preds = ml_model.predict(feature_pipeline.transform(X_val))
-            acc = (preds == y_val).mean() if y_val is not None else None
-            logger.info(f"[ML] Inference complete. Accuracy: {acc}")
-            return {
-                'model': ml_model,
-                'feature_pipeline': feature_pipeline,
-                'preds': preds,
-                'y_true': y_val,
-                'accuracy': acc,
-                'config': config,
-            }
+        # Check for pure ML inference
+        if _check_pure_ml_inference(config):
+            return handle_pure_ml_inference(config, resolved_model_name, logger)
 
-        # Modules and device
-        from refrakt_core.registry.model_registry import get_model
-        from refrakt_core.registry.wrapper_registry import get_wrapper
+        # Setup device
+        device = _setup_device()
 
-        modules = {
-            "get_model": get_model,
-            "get_wrapper": get_wrapper,
-        }
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        # Model
-        from refrakt_core.api.builders.model_builder import build_model
-
-        model_cls = get_model(config.model.name)
-        model = build_model(
-            cast(OmegaConf, config),
-            modules={
-                "get_model": get_model,
-                "get_wrapper": get_wrapper,
-                "model": model_cls,
-            },
-            device=str(device),
-        )
-
-        # Load checkpoint
-        from refrakt_core.api.utils.test_utils import _load_model_checkpoint
-
-        _load_model_checkpoint(model, model_path, device, logger)
-        model.eval()
+        # Load model and setup
+        model, modules = _load_model_and_setup(config, device, model_path, logger)
 
         # Load fusion head if provided
-        fusion_head = None
-        if fusion_head_path and os.path.exists(fusion_head_path):
-            fusion_head = load_fusion_head(fusion_head_path)
-            logger.info(f"Loaded fusion head from {fusion_head_path}")
+        fusion_head = load_fusion_head_if_provided(fusion_head_path, logger)
 
-        # Data loader
-        from refrakt_core.api.utils.train_utils import setup_data_loader_for_inference_with_resize
-        data_loader = setup_data_loader_for_inference_with_resize(config, data, logger)
+        # Setup data loader
+        data_loader = _setup_data_loader(config, data, logger)
 
-        # Artifact Dumper
+        # Setup artifact dumper
+        from refrakt_core.api.utils.train_utils import setup_artifact_dumper
         artifact_dumper = setup_artifact_dumper(config, resolved_model_name, logger)
 
-        # Inference loop
-        results = []
-        with torch.no_grad():
-            for i, batch in enumerate(data_loader):
-                if isinstance(batch, torch.Tensor):
-                    inputs = batch
-                elif isinstance(batch, dict):
-                    inputs = batch.get("input") or batch.get("image") or batch.get("lr")
-                    if inputs is None:
-                        raise ValueError("No valid input key found in batch.")
-                else:
-                    continue
-                outputs = model(inputs)
-                results.append(outputs)
-                # Optionally log outputs here
+        # Run inference
+        results = run_inference_loop(model, data_loader)
 
         logger.info("\n✅ Inference completed successfully!")
         return {

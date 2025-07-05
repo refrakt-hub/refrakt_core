@@ -27,6 +27,33 @@ def register_loss(name: str, mode: Optional[str] = None) -> Callable:
     return decorator
 
 
+def _import_losses():
+    """Import all loss modules to trigger registration."""
+    global _IMPORTED  # pylint: disable=global-statement
+    if not _IMPORTED:
+        try:
+            # Import custom losses
+            import refrakt_core.losses
+            
+            # Add standard PyTorch losses to registry
+            from torch import nn  # pylint: disable=import-outside-toplevel
+
+            standard_losses = {
+                "mse": nn.MSELoss,
+                "l1": nn.L1Loss,
+                "bce": nn.BCELoss,
+            }
+
+            for loss_name, loss_class in standard_losses.items():
+                if loss_name not in LOSS_REGISTRY:
+                    register_loss(loss_name)(loss_class)
+            
+            _IMPORTED = True
+        except ImportError as e:
+            logger = get_global_logger()
+            logger.error(f"Failed to import losses: {e}")
+
+
 def get_loss(name: str, *args: Any, **kwargs: Any) -> Any:
     """Get loss instance by name with optional arguments.
 
@@ -41,30 +68,12 @@ def get_loss(name: str, *args: Any, **kwargs: Any) -> Any:
     Raises:
         ValueError: If the loss is not found.
     """
-    global _IMPORTED  # pylint: disable=global-statement
-    if not _IMPORTED:
-        # Auto-import custom losses
-        _IMPORTED = True
-
-        # Add standard PyTorch losses to registry
-        from torch import nn  # pylint: disable=import-outside-toplevel
-
-        standard_losses = {
-            "mse": nn.MSELoss,
-            "l1": nn.L1Loss,
-            "bce": nn.BCELoss,
-        }
-
-        for loss_name, loss_class in standard_losses.items():
-            if loss_name not in LOSS_REGISTRY:
-                register_loss(loss_name)(loss_class)
-
+    _import_losses()
     if name not in LOSS_REGISTRY:
         available_losses = list(LOSS_REGISTRY.keys())
         raise ValueError(f"Loss '{name}' not found. Available: {available_losses}")
 
     return LOSS_REGISTRY[name](*args, **kwargs)
-    # return LOSS_REGISTRY[name]
 
 
 def get_loss_mode(name: str) -> str:

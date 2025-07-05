@@ -6,11 +6,17 @@ import torch.nn.functional as F
 
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.schema.utils.artifact_utils import (
+    extract_output_fields,
+    process_loss_output,
+    create_batch_record,
+    should_log_batch
+)
 
 
 class ArtifactDumper:
     """
-    Logs and saves model outputs and losses for visualization, analysis, or explainability.
+    Dumps model outputs and artifacts to disk and/or logging systems.
     """
 
     def __init__(
@@ -27,12 +33,10 @@ class ArtifactDumper:
         self.model_name = model_name
         self.base_path = base_path
         self.auto_flush = auto_flush
+        self.metadata = metadata or {}
         self.logger = logger
-        self.log_every = log_every  # ✅ store it
-
-        self.buffer: Dict[str, Dict[str, Any]] = {}
-        self.metadata: Dict[str, Any] = metadata or {}
-        os.makedirs(self.base_path, exist_ok=True)
+        self.log_every = log_every
+        self.buffer = {}
 
     def log_output(
         self,
@@ -45,31 +49,10 @@ class ArtifactDumper:
             return
 
         # Skip if batch_id doesn't meet log frequency
-        if isinstance(batch_id, int) and batch_id % self.log_every != 0:
+        if not should_log_batch(batch_id, self.log_every):
             return
 
-        record = {}
-        for field in [
-            "logits",
-            "embeddings",
-            "image",
-            "reconstruction",
-            "targets",
-            "attention_maps",
-            "loss_components",
-            "extra",
-        ]:
-            value = getattr(output, field, None)
-            if value is not None:
-                if field == "loss_components" and isinstance(value, dict):
-                    record[field] = {
-                        k: v.detach().cpu() if torch.is_tensor(v) else v
-                        for k, v in value.items()
-                    }
-                elif torch.is_tensor(value):
-                    record[field] = value.detach().cpu()
-                else:
-                    record[field] = value
+        record = extract_output_fields(output)
 
         if targets is not None and "targets" not in record:
             record["targets"] = targets.detach().cpu()
@@ -96,45 +79,11 @@ class ArtifactDumper:
             return
 
         # Respect log_every
-        if isinstance(batch_id, int) and batch_id % self.log_every != 0:
+        if not should_log_batch(batch_id, self.log_every):
             return
 
         batch_key = str(batch_id) if batch_id is not None else f"step_{step}"
-        record = {}
-
-        # === Log from ModelOutput ===
-        for field in [
-            "logits",
-            "embeddings",
-            "image",
-            "reconstruction",
-            "targets",
-            "attention_maps",
-            "loss_components",
-            "extra",
-        ]:
-            value = getattr(output, field, None)
-            if value is not None:
-                if field == "loss_components" and isinstance(value, dict):
-                    record[field] = {
-                        k: v.detach().cpu() if torch.is_tensor(v) else v
-                        for k, v in value.items()
-                    }
-                elif torch.is_tensor(value):
-                    record[field] = value.detach().cpu()
-                else:
-                    record[field] = value
-
-        if filenames is not None:
-            record["filenames"] = filenames
-
-        # === Log from LossOutput ===
-        if loss is not None:
-            # LossOutput.total is always a torch.Tensor
-            record["loss_total"] = float(loss.total.item())
-            record["loss_components_full"] = {
-                k: float(v.item()) for k, v in loss.components.items()
-            }
+        record = create_batch_record(output, loss, filenames)
 
         self.buffer[batch_key] = record
 
@@ -174,16 +123,16 @@ class ArtifactDumper:
 
         if isinstance(loss, LossOutput):
             # Handle both tensor and float types for loss.total
-            if hasattr(loss.total, 'item'):
+            if torch.is_tensor(loss.total):
                 record["loss_total"] = float(loss.total.item())
             else:
                 record["loss_total"] = float(loss.total)
             record["loss_components"] = {
-                k: float(v.item()) if hasattr(v, 'item') else float(v)
+                k: float(v.item()) if torch.is_tensor(v) else float(v)
                 for k, v in loss.components.items()
             }
         elif isinstance(loss, dict):
-            record["loss_dict"] = {k: float(v.item()) for k, v in loss.items()}
+            record["loss_dict"] = {k: float(v.item()) if torch.is_tensor(v) else float(v) for k, v in loss.items()}
 
         self.buffer[key] = record
 

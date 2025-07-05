@@ -32,6 +32,18 @@ def register_model(name: str) -> Callable[[Type[Any]], Type[Any]]:
     return decorator
 
 
+def _import_models():
+    """Import all model modules to trigger registration."""
+    global _IMPORTED  # pylint: disable=global-statement
+    if not _IMPORTED:
+        try:
+            import refrakt_core.models
+            _IMPORTED = True
+        except ImportError as e:
+            logger = get_global_logger()
+            logger.error(f"Failed to import models: {e}")
+
+
 def get_model(name: str, *args: Any, **kwargs: Any) -> Any:
     """Get model instance by name with optional arguments.
 
@@ -46,10 +58,7 @@ def get_model(name: str, *args: Any, **kwargs: Any) -> Any:
     Raises:
         ValueError: If the model is not found.
     """
-    global _IMPORTED  # pylint: disable=global-statement
-    if not _IMPORTED:
-        # Trigger import of models
-        _IMPORTED = True
+    _import_models()
     if name not in MODEL_REGISTRY:
         available_models = list(MODEL_REGISTRY.keys())
         raise ValueError(f"Model '{name}' not found. Available: {available_models}")

@@ -19,6 +19,12 @@ from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
+from refrakt_core.trainer.utils.supervised_utils import (
+    handle_training_step,
+    log_training_metrics,
+    log_artifacts,
+    handle_epoch_end
+)
 
 try:
     from refrakt_xai.utils import \
@@ -36,10 +42,7 @@ except ImportError:
 @register_trainer("supervised")
 class SupervisedTrainer(BaseTrainer):
     """
-    Trainer for supervised learning tasks (classification, regression, etc.).
-
-    Handles training, evaluation, logging, and artifact dumping for supervised models.
-    Optionally integrates with explainability and visualization tools if available.
+    Supervised trainer for classification and regression tasks.
     """
 
     def __init__(
@@ -55,45 +58,22 @@ class SupervisedTrainer(BaseTrainer):
         artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
-        """
-        Initialize the SupervisedTrainer.
-
-        Args:
-            model (Module): The model to be trained.
-            train_loader (DataLoader): DataLoader for training data.
-            val_loader (DataLoader): DataLoader for validation data.
-            loss_fn (Callable): Loss function for supervised learning.
-            optimizer_cls (Callable[..., Optimizer]): Optimizer class.
-            optimizer_args (Optional[Dict[str, Any]]): Arguments for the optimizer.
-            device (str, optional): Device to use (default: "cuda").
-            scheduler (Optional[Any], optional): Learning rate scheduler.
-            artifact_dumper (Optional[Any], optional): Artifact logger/dumper.
-            **kwargs: Additional keyword arguments.
-        """
         super().__init__(
-            model,
-            train_loader,
-            val_loader,
-            device,
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            loss_fn=loss_fn,
+            optimizer_cls=optimizer_cls,
+            optimizer_args=optimizer_args,
+            device=device,
+            scheduler=scheduler,
             artifact_dumper=artifact_dumper,
             **kwargs,
         )
+
         self.loss_fn = loss_fn
         self.scheduler = scheduler
         self.extra_params = kwargs
-
-        from omegaconf import DictConfig, OmegaConf
-
-        if isinstance(optimizer_args, DictConfig):
-            _tmp_args = OmegaConf.to_container(optimizer_args, resolve=True)
-            if isinstance(_tmp_args, dict):
-                optimizer_args = cast(Dict[str, Any], _tmp_args)
-            else:
-                optimizer_args = None
-        self.optimizer: Optional[Union[Optimizer, Dict[str, Optimizer]]] = (
-            optimizer_cls(self.model.parameters(), **(optimizer_args or {"lr": 1e-4}))
-        )
-
         self.grad_log_interval = kwargs.get("grad_log_interval", 100)
         self.param_log_interval = kwargs.get("param_log_interval", 500)
         self.log_every = (
@@ -102,6 +82,24 @@ class SupervisedTrainer(BaseTrainer):
             else None
         )
         self.global_step = 0
+        self._current_batch = None
+        self._current_loss_output = None
+
+    def _handle_training_step(self, batch: Any, step: int, epoch: int) -> None:
+        """Handle a single training step."""
+        return handle_training_step(self, batch, step, epoch)
+
+    def _log_training_metrics(self, loss_output: Any, output: Any, step: int) -> None:
+        """Log training metrics."""
+        return log_training_metrics(self, loss_output, output, step)
+
+    def _log_artifacts(self, output: Any, loss_output: Any, step: int, epoch: int) -> None:
+        """Log artifacts for the current step."""
+        return log_artifacts(self, output, loss_output, step, epoch)
+
+    def _handle_epoch_end(self, epoch: int, best_accuracy: float) -> float:
+        """Handle end of epoch operations."""
+        return handle_epoch_end(self, epoch, best_accuracy)
 
     def train(self, num_epochs: int) -> Dict[str, float]:
         """
@@ -121,96 +119,12 @@ class SupervisedTrainer(BaseTrainer):
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
 
             for step, batch in enumerate(loop):
-                inputs, targets = self._unpack_batch(batch)
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                self._current_batch = batch  # Store for artifact logging
+                self._handle_training_step(batch, step, epoch)
+                if self._current_loss_output is not None:
+                    loop.set_postfix({"loss": self._current_loss_output.total.item()})
 
-                if self.optimizer is not None:
-                    if isinstance(self.optimizer, Optimizer):
-                        self.optimizer.zero_grad()
-                output = self.model(inputs)
-
-                loss_output = self.loss_fn(output, targets)
-
-                assert isinstance(loss_output.total, torch.Tensor)
-                loss_output.total.backward()  # type: ignore[no-untyped-call]
-
-                if logger and self.global_step % self.grad_log_interval == 0:
-                    logger.log_gradients(self.model, step=self.global_step, prefix="")
-                if logger and self.global_step % self.param_log_interval == 0:
-                    logger.log_parameters(self.model, step=self.global_step, prefix="")
-                    if self.optimizer is not None and isinstance(
-                        self.optimizer, Optimizer
-                    ):
-                        lr = self.optimizer.param_groups[0]["lr"]
-                        logger.log_metrics({"lr": lr}, step=self.global_step)
-
-                if self.optimizer is not None:
-                    if isinstance(self.optimizer, Optimizer):
-                        self.optimizer.step()
-
-                loss_summary = loss_output.summary()
-                if self.artifact_dumper:
-                    self.artifact_dumper.log_scalar_dict(
-                        loss_summary, step=self.global_step, prefix="train"
-                    )
-
-                if isinstance(output, ModelOutput) and hasattr(output, "summary"):
-                    output_summary = output.summary()
-                    if self.artifact_dumper:
-                        self.artifact_dumper.log_scalar_dict(
-                            output_summary, step=self.global_step, prefix="train/output"
-                        )
-
-                loop.set_postfix({"loss": loss_output.total.item()})
-
-                # === Artifact logging ===
-                if self.artifact_dumper and self.artifact_dumper.should_log_step(
-                    self.global_step
-                ):
-                    # wrap everything inside a ModelOutput
-                    full_output = output
-                    if not isinstance(output, ModelOutput):
-                        full_output = ModelOutput(logits=output)
-                    full_output.targets = targets
-                    full_output.image = inputs
-
-                    self.artifact_dumper.log_full_output(
-                        full_output,
-                        loss=loss_output,
-                        step=self.global_step,
-                        batch_id=f"step{self.global_step}",
-                        skip_metrics_logging=True,  # Skip since metrics are already logged above
-                    )
-
-                    if step == 0:
-                        self.artifact_dumper.log_full_output(
-                            full_output,
-                            loss=loss_output,
-                            step=self.global_step,
-                            batch_id=f"epoch{epoch}_step{step}",
-                            skip_metrics_logging=True,  # Skip since metrics are already logged above
-                        )
-
-                self.global_step += 1
-
-            if (
-                self.scheduler
-                and not isinstance(self.scheduler, dict)
-                and hasattr(self.scheduler, "step")
-            ):
-                self.scheduler.step()
-                if self.optimizer is not None and isinstance(self.optimizer, Optimizer):
-                    print(
-                        f"Epoch {epoch + 1} complete. LR: {self.optimizer.param_groups[0]['lr']:.6f}"
-                    )
-
-            acc = self.evaluate()
-            if acc > best_accuracy:
-                best_accuracy = acc
-                self.save(suffix="best_model")
-                print(f"New best model saved with accuracy: {acc * 100:.2f}%")
-
-            self.save(suffix="latest")
+            best_accuracy = self._handle_epoch_end(epoch, best_accuracy)
 
         if logger:
             logger.log_parameters(self.model, step=self.global_step, prefix="final_")

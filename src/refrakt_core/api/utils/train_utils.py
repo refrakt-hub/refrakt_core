@@ -18,6 +18,8 @@ from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.registry.model_registry import get_model
 from refrakt_core.registry.wrapper_registry import get_wrapper
 from refrakt_core.schema.artifact import ArtifactDumper
+from refrakt_core.integrations.fusion.builder import build_fusion_head
+from refrakt_core.integrations.fusion.trainer import FusionTrainer
 from torch.utils.data import Dataset
 
 from refrakt_core.transforms.image_resizer import SmartImageResizer, ImageSizeConfig
@@ -105,75 +107,21 @@ def analyze_and_resize_dataset_images(
     Returns:
         Tuple of (needs_resize, modified_dataset)
     """
+    from .image_analysis_utils import analyze_image_sizes, calculate_size_statistics, create_resized_dataset
+    
     logger.info("🔍 Analyzing dataset image sizes...")
 
-    # Initialize size validator and resizer
-    size_config = ImageSizeConfig(
-        standard_size=target_size,
-        max_size=max_size,
-        min_size=min_size
+    # Analyze image sizes
+    sizes, needs_resize, oversized_count, undersized_count = analyze_image_sizes(
+        dataset, max_size, min_size
     )
-    resizer = SmartImageResizer(size_config)
-
-    # Sample images to analyze sizes
-    sample_count = min(100, len(dataset))  # Sample up to 100 images
-    sample_indices = list(range(0, len(dataset), max(1, len(dataset) // sample_count)))[:sample_count]
-
-    sizes = []
-    needs_resize = False
-    oversized_count = 0
-    undersized_count = 0
-
-    logger.info(f"📊 Sampling {len(sample_indices)} images for size analysis...")
-
-    for idx in sample_indices:
-        try:
-            # Get image from dataset
-            sample = dataset[idx]
-            if isinstance(sample, (tuple, list)):
-                # Handle (image, label) format
-                image = sample[0]
-            elif isinstance(sample, dict):
-                # Handle dict format (e.g., {'lr': tensor, 'hr': tensor})
-                image = list(sample.values())[0]
-            else:
-                image = sample
-
-            # Convert tensor to PIL if needed
-            if isinstance(image, torch.Tensor):
-                if image.dim() == 3:  # (C, H, W)
-                    size = (image.size(2), image.size(1))  # (W, H)
-                else:  # (H, W)
-                    size = (image.size(1), image.size(0))  # (W, H)
-            else:
-                size = image.size  # PIL Image
-
-            sizes.append(size)
-
-            # Check if size is outside acceptable range
-            width, height = size
-            if width > max_size[0] or height > max_size[1]:
-                oversized_count += 1
-                needs_resize = True
-            elif width < min_size[0] or height < min_size[1]:
-                undersized_count += 1
-                needs_resize = True
-
-        except Exception as e:
-            logger.warning(f"⚠️ Could not analyze image at index {idx}: {e}")
-            continue
 
     if not sizes:
         logger.warning("⚠️ Could not analyze any images in dataset")
         return False, dataset
 
-    # Calculate statistics
-    avg_width = sum(s[0] for s in sizes) / len(sizes)
-    avg_height = sum(s[1] for s in sizes) / len(sizes)
-    max_width = max(s[0] for s in sizes)
-    max_height = max(s[1] for s in sizes)
-    min_width = min(s[0] for s in sizes)
-    min_height = min(s[1] for s in sizes)
+    # Calculate and log statistics
+    avg_width, avg_height, max_width, max_height, min_width, min_height = calculate_size_statistics(sizes)
 
     logger.info(f"📈 Image size statistics:")
     logger.info(f"   Average: {avg_width:.1f}x{avg_height:.1f}")
@@ -185,63 +133,8 @@ def analyze_and_resize_dataset_images(
         logger.info("🔄 Dataset contains images outside acceptable size range (32x32 to 448x448)")
         logger.info(f"📏 Resizing images to {target_size[0]}x{target_size[1]}...")
 
-        # Create a wrapper dataset that resizes images on-the-fly
-        class ResizedDataset(Dataset):
-            def __init__(self, original_dataset, resizer, target_size):
-                self.original_dataset = original_dataset
-                self.resizer = resizer
-                self.target_size = target_size
-
-            def __len__(self):
-                return len(self.original_dataset)
-
-            def __getitem__(self, idx):
-                sample = self.original_dataset[idx]
-
-                if isinstance(sample, (tuple, list)):
-                    # Handle (image, label) format
-                    image, *rest = sample
-                    resized_image = self._resize_image(image)
-                    return (resized_image, *rest)
-                elif isinstance(sample, dict):
-                    # Handle dict format
-                    resized_sample = {}
-                    for key, value in sample.items():
-                        if isinstance(value, torch.Tensor) and value.dim() >= 2:
-                            resized_sample[key] = self._resize_image(value)
-                        else:
-                            resized_sample[key] = value
-                    return resized_sample
-                else:
-                    # Handle single image
-                    return self._resize_image(sample)
-
-            def _resize_image(self, image):
-                """Resize image using SmartImageResizer"""
-                if isinstance(image, torch.Tensor):
-                    # Convert tensor to PIL for resizing
-                    if image.dim() == 3:  # (C, H, W)
-                        pil_image = torchvision.transforms.ToPILImage()(image)
-                    else:  # (H, W)
-                        pil_image = torchvision.transforms.ToPILImage()(image.unsqueeze(0))
-
-                    # Resize using SmartImageResizer's internal method to bypass validation
-                    resized_pil = self.resizer._resize_maintain_aspect(
-                        pil_image,
-                        self.target_size
-                    )
-
-                    # Convert back to tensor
-                    return torchvision.transforms.ToTensor()(resized_pil)
-                else:
-                    # PIL Image - use internal method to bypass validation
-                    return self.resizer._resize_maintain_aspect(
-                        image,
-                        self.target_size
-                    )
-
         # Create resized dataset
-        resized_dataset = ResizedDataset(dataset, resizer, target_size)
+        resized_dataset = create_resized_dataset(dataset, target_size)
         logger.info("✅ Dataset resizing complete!")
 
         return True, resized_dataset
@@ -556,3 +449,140 @@ def build_ml_numpy_splits(cfg: DictConfig):
     X_train, y_train = train_dataset.get_numpy()
     X_val, y_val = val_dataset.get_numpy()
     return X_train, y_train, X_val, y_val
+
+
+def _resolve_model_name_train(cfg: DictConfig) -> str:
+    """Resolve the model name based on configuration for training."""
+    if cfg.model.name == "autoencoder":
+        variant = cfg.model.params.get("variant", "simple")
+        resolved_model_name = f"autoencoder_{variant}"
+    else:
+        resolved_model_name = cfg.model.name
+    
+    # Check if using custom dataset and append _custom suffix
+    dataset_params = cfg.dataset.params if hasattr(cfg, "dataset") and hasattr(cfg.dataset, "params") else {}
+    dataset_path = dataset_params.get("path", "") or dataset_params.get("zip_path", "")
+    if dataset_path and str(dataset_path).endswith(".zip"):
+        resolved_model_name = f"{resolved_model_name}_custom"
+    
+    return resolved_model_name
+
+
+def _handle_pure_ml_training(cfg: DictConfig, resolved_model_name: str, logger: RefraktLogger) -> None:
+    """Handle pure ML pipeline training."""
+    from refrakt_core.api.utils.train_utils import build_ml_numpy_splits
+    from refrakt_core.integrations.ml.ml_builder import build_ml_pipeline
+    from refrakt_core.integrations.ml.trainer import MLTrainer
+    
+    X_train, y_train, X_val, y_val = build_ml_numpy_splits(cfg)
+    feature_pipeline, ml_model, _, _, _, _ = build_ml_pipeline(
+        {
+            'feature_engineering': getattr(cfg, 'feature_engineering', []),
+            'model': OmegaConf.to_container(cfg.model, resolve=True)
+        },
+        X_train, y_train, X_val, y_val
+    )
+    artifact_dumper = setup_artifact_dumper(cfg, resolved_model_name, logger)
+    trainer = MLTrainer(feature_pipeline, ml_model, X_train, y_train, X_val, y_val, artifact_dumper)
+    logger.info(f"[ML] Starting pure-ML training...")
+    metrics = trainer.train()
+    logger.info(f"[ML] Training complete. Metrics: {metrics}")
+    
+    # Save model and pipeline
+    import joblib
+    save_dir = cfg.trainer.params.save_dir if hasattr(cfg.trainer, 'params') and hasattr(cfg.trainer.params, 'save_dir') else './checkpoints'
+    os.makedirs(save_dir, exist_ok=True)
+    joblib.dump({'feature_pipeline': feature_pipeline, 'model': ml_model}, os.path.join(save_dir, f"{resolved_model_name}_ml.joblib"))
+    logger.info(f"[ML] Saved ML pipeline to {os.path.join(save_dir, f'{resolved_model_name}_ml.joblib')}")
+
+
+def _setup_optimizer_config(cfg: DictConfig) -> Tuple[Any, Dict[str, Any]]:
+    """Setup optimizer configuration."""
+    from torch import optim
+    opt_map = {
+        "adam": optim.Adam,
+        "sgd": optim.SGD,
+        "adamw": optim.AdamW,
+        "rmsprop": optim.RMSprop,
+    }
+    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+    if not isinstance(cfg_dict, dict):
+        raise TypeError(f"Config must be a dict after OmegaConf.to_container, got {type(cfg_dict)}")
+    optimizer_cfg = cfg_dict.get("optimizer", {})
+    opt_name = optimizer_cfg.get("name", "adamw")
+    opt_cls = opt_map[opt_name.lower()]
+    optimizer_args = optimizer_cfg.get("params", {}) or {}
+    return opt_cls, optimizer_args
+
+
+def _setup_trainer_params(cfg: DictConfig, device: str, logger: RefraktLogger, 
+                         artifact_dumper: Any, resolved_model_name: str) -> Tuple[Any, Dict[str, Any], int, str]:
+    """Setup trainer parameters."""
+    from refrakt_core.registry.trainer_registry import get_trainer
+    
+    trainer_cls = get_trainer(cfg.trainer.name)
+    trainer_params = (
+        OmegaConf.to_container(cfg.trainer.params, resolve=True)
+        if cfg.trainer.params
+        else {}
+    )
+    if not isinstance(trainer_params, dict):
+        trainer_params = {}
+    trainer_params = cast(Dict[str, Any], trainer_params)
+    num_epochs = trainer_params.pop("num_epochs", 10)  # Changed default from 1 to 10
+    device_param = trainer_params.pop("device", device)
+    final_device = device_param or device
+    trainer_params["logger"] = logger
+    trainer_params["artifact_dumper"] = artifact_dumper
+    trainer_params["model_name"] = resolved_model_name
+    
+    return trainer_cls, trainer_params, num_epochs, final_device
+
+
+def _handle_fusion_training(cfg: DictConfig, model: torch.nn.Module, train_loader: Any, 
+                          val_loader: Any, device: str, artifact_dumper: Any, trainer: Any, logger: RefraktLogger) -> None:
+    """Handle fusion head training if configured."""
+    if not hasattr(cfg.model, "fusion"):
+        return
+    
+    logger.info("\n[FUSION] Fusion head config detected. Starting fusion head training...")
+    fusion_cfg = cfg.model.fusion
+    fusion_head = build_fusion_head(fusion_cfg)
+    fusion_trainer = FusionTrainer(
+        model=model,
+        fusion_head=fusion_head,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        device=device,
+        artifact_dumper=artifact_dumper,
+        model_name=cfg.trainer.params.model_name,
+    )
+    fusion_metrics = fusion_trainer.train()
+    fusion_save_path = os.path.join(
+        cfg.trainer.params.save_dir,
+        f"{cfg.trainer.params.model_name}_fusion.joblib",
+    )
+    save_method = getattr(fusion_head, "save", None)
+    if callable(save_method):
+        save_method(fusion_save_path)
+        logger.info(f"[FUSION] Fusion head saved to {fusion_save_path}")
+    if logger:
+        logger.log_metrics(fusion_metrics, step=trainer.global_step, prefix="fusion")
+
+
+def _save_config_and_log_metrics(cfg: DictConfig, trainer: Any, resolved_model_name: str, 
+                                final_metrics: Dict[str, Any], logger: RefraktLogger) -> None:
+    """Save configuration and log final metrics."""
+    # Save Config
+    config_save_path = os.path.join(
+        getattr(trainer, "save_dir", os.path.join("./artifacts", "yaml")),
+        f"{resolved_model_name}.yaml",
+    )
+    OmegaConf.save(cfg, config_save_path)
+    logger.info(f"Saved config to {config_save_path}")
+
+    # Log Final Metrics
+    print("\nFinal Metrics:", final_metrics)
+    if logger:
+        logger.log_metrics(final_metrics, step=trainer.global_step, prefix="final")
+    logger.info("\n✅ Training completed successfully!")

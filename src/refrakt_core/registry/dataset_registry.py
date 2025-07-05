@@ -30,6 +30,18 @@ def register_dataset(name: str) -> Callable[[Type[Any]], Type[Any]]:
     return decorator
 
 
+def _import_datasets():
+    """Import all dataset modules to trigger registration."""
+    global _IMPORTED  # pylint: disable=global-statement
+    if not _IMPORTED:
+        try:
+            import refrakt_core.datasets
+            _IMPORTED = True
+        except ImportError as e:
+            logger = get_global_logger()
+            logger.error(f"Failed to import datasets: {e}")
+
+
 def get_dataset(name: str, *args: Any, **kwargs: Any) -> Any:
     """Get dataset instance by name with optional arguments.
 
@@ -44,11 +56,8 @@ def get_dataset(name: str, *args: Any, **kwargs: Any) -> Any:
     Raises:
         ValueError: If the dataset is not found.
     """
-    global _IMPORTED  # pylint: disable=global-statement
-    if not _IMPORTED:
-        # Trigger import of datasets module to register custom datasets
-        _IMPORTED = True
-
+    _import_datasets()
+    
     if name not in DATASET_REGISTRY:
         # Try to find in torchvision datasets as fallback
         try:

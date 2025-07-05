@@ -8,6 +8,78 @@ from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 
 
+def _handle_non_model_output(fn, output, target) -> LossOutput:
+    """Handle case when output is not a ModelOutput."""
+    result = fn(output, target)
+    return _convert_result_to_loss_output(result)
+
+
+def _convert_result_to_loss_output(result) -> LossOutput:
+    """Convert various result types to LossOutput."""
+    if isinstance(result, LossOutput):
+        return result
+    elif isinstance(result, dict):
+        if result:
+            total = sum(result.values())
+            if not isinstance(total, torch.Tensor):
+                total = torch.tensor(total)
+        else:
+            total = torch.tensor(0.0)
+        return LossOutput(total=total, components=result)
+    elif isinstance(result, tuple) and len(result) == 2:
+        total, components = result
+        if not isinstance(total, torch.Tensor):
+            total = torch.tensor(total)
+        if not isinstance(components, dict):
+            components = {}
+        return LossOutput(total=total, components=components)
+    else:
+        if result is None:
+            return LossOutput(total=torch.tensor(float('nan')))
+        if not isinstance(result, torch.Tensor):
+            result = torch.tensor(result)
+        return LossOutput(total=result)
+
+
+def _build_input_dict_with_field_map(fn, output: ModelOutput, target, field_map: dict) -> dict:
+    """Build input dictionary using field mapping."""
+    args = signature(fn).parameters.keys()
+    input_dict = {}
+
+    for k, v in field_map.items():
+        if v is None:
+            # Special case: use the target parameter
+            input_dict[k] = target
+        else:
+            attr = getattr(output, v, None)
+            if attr is not None:
+                input_dict[k] = attr
+    
+    # Also add target if it's expected but not in field_map
+    if "target" in args and "target" not in field_map:
+        input_dict["target"] = target
+    
+    return input_dict
+
+
+def _build_input_dict_auto(fn, output: ModelOutput, target) -> dict:
+    """Build input dictionary automatically from ModelOutput attributes."""
+    args = signature(fn).parameters.keys()
+    input_dict = {}
+
+    for arg in args:
+        if arg == "target":
+            input_dict["target"] = target
+        elif hasattr(output, arg):
+            val = getattr(output, arg)
+            if val is not None:
+                input_dict[arg] = val
+        elif arg == "output":
+            input_dict["output"] = output
+
+    return input_dict
+
+
 class LossWrapper:
     """
     Wraps any loss function or class and dispatches fields from ModelOutput accordingly.
@@ -26,79 +98,13 @@ class LossWrapper:
 
     def __call__(self, output: ModelOutput, target=None) -> LossOutput:
         if not isinstance(output, ModelOutput):
-            result = self.fn(output, target)
-            if isinstance(result, LossOutput):
-                return result
-            elif isinstance(result, dict):
-                if result:
-                    total = sum(result.values())
-                    if not isinstance(total, torch.Tensor):
-                        total = torch.tensor(total)
-                else:
-                    total = torch.tensor(0.0)
-                return LossOutput(total=total, components=result)
-            elif isinstance(result, tuple) and len(result) == 2:
-                total, components = result
-                if not isinstance(total, torch.Tensor):
-                    total = torch.tensor(total)
-                if not isinstance(components, dict):
-                    components = {}
-                return LossOutput(total=total, components=components)
-            else:
-                if result is None:
-                    return LossOutput(total=torch.tensor(float('nan')))
-                if not isinstance(result, torch.Tensor):
-                    result = torch.tensor(result)
-                return LossOutput(total=result)
+            return _handle_non_model_output(self.fn, output, target)
 
-        args = signature(self.fn).parameters.keys()
-        input_dict = {}
-
+        # Build input dictionary based on field mapping
         if self.field_map:
-            for k, v in self.field_map.items():
-                if v is None:
-                    # Special case: use the target parameter
-                    input_dict[k] = target
-                else:
-                    attr = getattr(output, v, None)
-                    if attr is not None:
-                        input_dict[k] = attr
-            # Also add target if it's expected but not in field_map
-            if "target" in args and "target" not in self.field_map:
-                input_dict["target"] = target
+            input_dict = _build_input_dict_with_field_map(self.fn, output, target, self.field_map)
         else:
-            for arg in args:
-                if arg == "target":
-                    input_dict["target"] = target
-                elif hasattr(output, arg):
-                    val = getattr(output, arg)
-                    if val is not None:
-                        input_dict[arg] = val
-                elif arg == "output":
-                    input_dict["output"] = output
+            input_dict = _build_input_dict_auto(self.fn, output, target)
 
         result = self.fn(**input_dict)
-
-        if isinstance(result, LossOutput):
-            return result
-        elif isinstance(result, dict):
-            if result:
-                total = sum(result.values())
-                if not isinstance(total, torch.Tensor):
-                    total = torch.tensor(total)
-            else:
-                total = torch.tensor(0.0)
-            return LossOutput(total=total, components=result)
-        elif isinstance(result, tuple) and len(result) == 2:
-            total, components = result
-            if not isinstance(total, torch.Tensor):
-                total = torch.tensor(total)
-            if not isinstance(components, dict):
-                components = {}
-            return LossOutput(total=total, components=components)
-        else:
-            if result is None:
-                return LossOutput(total=torch.tensor(float('nan')))
-            if not isinstance(result, torch.Tensor):
-                result = torch.tensor(result)
-            return LossOutput(total=result)
+        return _convert_result_to_loss_output(result)

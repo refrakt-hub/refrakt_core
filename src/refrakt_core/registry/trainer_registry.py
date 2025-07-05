@@ -27,6 +27,18 @@ def register_trainer(name: str) -> Callable[[Type[Any]], Type[Any]]:
     return decorator
 
 
+def _import_trainers():
+    """Import all trainer modules to trigger registration."""
+    global _IMPORTED  # pylint: disable=global-statement
+    if not _IMPORTED:
+        try:
+            import refrakt_core.trainer
+            _IMPORTED = True
+        except ImportError as e:
+            logger = get_global_logger()
+            logger.error(f"Failed to import trainers: {e}")
+
+
 def get_trainer(name: str) -> Type[Any]:
     """Get trainer class by name.
 
@@ -39,10 +51,7 @@ def get_trainer(name: str) -> Type[Any]:
     Raises:
         ValueError: If the trainer is not found.
     """
-    global _IMPORTED  # pylint: disable=global-statement
-    if not _IMPORTED:
-        # Trigger import of trainers
-        _IMPORTED = True
+    _import_trainers()
     if name not in TRAINER_REGISTRY:
         available_trainers = list(TRAINER_REGISTRY.keys())
         raise ValueError(f"Trainer '{name}' not found. Available: {available_trainers}")

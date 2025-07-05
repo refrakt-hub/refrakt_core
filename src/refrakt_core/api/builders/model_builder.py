@@ -7,14 +7,18 @@ It supports model instantiation, optional wrapping, and fusion block integration
 Typical usage involves passing a configuration (OmegaConf), a modules registry, and a device to build and wrap models for training or inference.
 """
 
-import inspect
 from typing import Any, Dict, List, Optional, Union
 
 from omegaconf import OmegaConf, DictConfig
-from refrakt_core.integrations.fusion.block import FusionBlock
-from refrakt_core.registry.wrapper_registry import load_wrapper
-from refrakt_core.wrappers.schema.default_model import DefaultModelWrapper
-from refrakt_core.hooks.hyperparameter_override import apply_overrides
+
+from .utils.model_utils import (
+    validate_model_config,
+    apply_model_overrides,
+    instantiate_base_model,
+    wrap_model,
+    create_default_wrapper,
+    add_fusion_block,
+)
 
 
 def build_model(
@@ -46,104 +50,33 @@ def build_model(
     import refrakt_core.models
 
     # Apply overrides if provided
-    if overrides:
-        # Convert to dict, apply overrides, then back to OmegaConf
-        cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-        if isinstance(cfg_dict, dict):
-            cfg_dict = apply_overrides(cfg_dict, overrides)
-            cfg = OmegaConf.create(cfg_dict)
-        else:
-            # If not a dict, skip overrides
-            pass
+    cfg = apply_model_overrides(cfg, overrides)
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     if not isinstance(cfg_dict, dict):
         raise TypeError(f"cfg must convert to a dict, got {type(cfg_dict)}")
-    model_cfg = cfg_dict.get("model")
-    if not isinstance(model_cfg, dict):
-        raise TypeError(f"cfg.model must be a dict, got {type(model_cfg)}")
-
-    model_params = model_cfg.get("params", {}) or {}
-    model_name = model_cfg.get("name")
-    if not isinstance(model_name, str):
-        raise TypeError(f"model_name must be a str, got {type(model_name)}")
-    wrapper_name = model_cfg.get("wrapper", None)
-    if wrapper_name is not None and not isinstance(wrapper_name, str):
-        raise TypeError(f"wrapper_name must be a str or None, got {type(wrapper_name)}")
+    
+    model_name, model_params, wrapper_name = validate_model_config(cfg_dict)
 
     try:
-        get_model_fn = modules.get("get_model")
-        if get_model_fn is None:
-            raise ValueError(
-                "[ERROR] get_model function not found in modules registry."
-            )
-
-        get_wrapper_fn = modules.get("get_wrapper")
-
-        # Convert DictConfig to regular dict if needed
-        model_params_dict = (
-            dict(model_params) if hasattr(model_params, "items") else model_params
-        )
-
         # Step 1: Instantiate base model
-        # Patch for AutoEncoder: map 'type' to 'mode' if present
-        if model_name == "autoencoder" and "type" in model_params_dict:
-            model_params_dict["mode"] = model_params_dict.pop("type")
-        raw_model = get_model_fn(model_name, **model_params_dict).to(device)
+        raw_model = instantiate_base_model(model_name, model_params, modules, device)
 
         # Step 2: Wrap model (if wrapper is specified)
         if wrapper_name:
-            if get_wrapper_fn is None:
-                raise ValueError(
-                    "[ERROR] get_wrapper function not found in modules registry."
-                )
-            wrapper_cls = get_wrapper_fn(wrapper_name)
-            if wrapper_cls is None:
-                raise ValueError(
-                    f"[ERROR] Wrapper class for '{wrapper_name}' not found."
-                )
-            sig = inspect.signature(wrapper_cls.__init__)
-            valid_params = set(sig.parameters.keys()) - {
-                "self",
-                "model",
-                "args",
-                "kwargs",
-            }
-
-            wrapper_args = {k: v for k, v in model_params.items() if k in valid_params}
-
-            # Special handling for autoencoder wrapper: set 'variant' from model_params['mode'] if present
-            if wrapper_name == "autoencoder" and "mode" in model_params:
-                wrapper_args["variant"] = model_params["mode"]
-
-            model = wrapper_cls(model=raw_model, **wrapper_args).to(device)
-            print(f"[SUCCESS] Wrapped model '{model_name}' with '{wrapper_name}'")
+            model = wrap_model(raw_model, wrapper_name, model_params, modules, device)
         else:
-            print(
-                f"[INFO] No wrapper specified. Using DefaultModelWrapper for model '{model_name}'"
-            )
-            model = DefaultModelWrapper(
-                model_name=model_name, model_params=model_params, modules=modules
-            ).to(device)
+            model = create_default_wrapper(model_name, model_params, modules, device)
 
     except Exception as e:
         import traceback
-
         traceback.print_exc()
         print(f"[FALLBACK] Using DefaultModelWrapper due to error: {e}")
-        model = DefaultModelWrapper(
-            model_name=model_name, model_params=model_params, modules=modules
-        ).to(device)
+        model = create_default_wrapper(model_name, model_params, modules, device)
 
-    fusion_cfg = model_cfg.get("fusion", None)
-    if fusion_cfg:
-        from refrakt_core.integrations.fusion.block import FusionBlock
-
-        print(
-            f"[INFO] Wrapping model with FusionBlock using fusion config: {fusion_cfg}"
-        )
-        model = FusionBlock(backbone=model, fusion_cfg=fusion_cfg).to(device)
-        print("[SUCCESS] Model wrapped with FusionBlock.")
+    # Step 3: Add fusion block if specified
+    model_cfg = cfg_dict.get("model")
+    model = add_fusion_block(model, model_cfg, device)
 
     print(f"[FINALIZED] Model: {model_name} with params: {model_params}")
     return model
