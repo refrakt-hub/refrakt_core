@@ -23,7 +23,11 @@ class PerceptualLossWrapper(nn.Module):
         hr = target  # Use target for high-res images
 
         if sr is None or hr is None:
-            missing = [f for f in self.required_fields if locals()[f] is None]
+            missing = []
+            if sr is None:
+                missing.append("sr")
+            if hr is None:
+                missing.append("hr")
             raise ValueError(f"Missing required fields: {missing}")
 
         loss = self.loss_fn(sr, hr)

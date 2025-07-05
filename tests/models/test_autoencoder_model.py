@@ -12,19 +12,19 @@ def test_device():
 
 @pytest.fixture
 def simple_autoencoder(test_device):
-    return AutoEncoder(input_dim=784, hidden_dim=8, type="simple").to(test_device)
+    return AutoEncoder(input_dim=784, hidden_dim=8, mode="simple").to(test_device)
 
 
 @pytest.fixture
 def vae_autoencoder(test_device):
-    return AutoEncoder(input_dim=784, hidden_dim=8, type="vae").to(test_device)
+    return AutoEncoder(input_dim=784, hidden_dim=8, mode="vae").to(test_device)
 
 
 def test_simple_autoencoder_init(simple_autoencoder):
     """Test that the simple autoencoder initializes correctly."""
     assert simple_autoencoder.input_dim == 784
     assert simple_autoencoder.hidden_dim == 8
-    assert simple_autoencoder.type == "simple"
+    assert simple_autoencoder.mode == "simple"
     assert simple_autoencoder.model_name == "autoencoder"
     assert simple_autoencoder.model_type == "autoencoder"
 
@@ -33,7 +33,7 @@ def test_vae_init(vae_autoencoder):
     """Test that the variational autoencoder initializes correctly."""
     assert vae_autoencoder.input_dim == 784
     assert vae_autoencoder.hidden_dim == 8
-    assert vae_autoencoder.type == "vae"
+    assert vae_autoencoder.mode == "vae"
     assert hasattr(vae_autoencoder, "mu")
     assert hasattr(vae_autoencoder, "sigma")
 
@@ -100,6 +100,6 @@ def test_get_latent(simple_autoencoder):
 def test_invalid_type():
     """Test that an invalid type raises ValueError."""
     with pytest.raises(ValueError):
-        model = AutoEncoder(input_dim=784, hidden_dim=8, type="invalid")
+        model = AutoEncoder(input_dim=784, hidden_dim=8, mode="invalid")
         x = torch.randn(10, 784)
         model(x)

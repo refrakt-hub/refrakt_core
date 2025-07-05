@@ -16,7 +16,8 @@ def test_msn_loss_basic():
 
     loss = loss_fn(z_anchor, z_target, prototypes)
     assert not torch.isnan(loss)
-    assert loss.item() > 0
+    # MSN loss can be negative due to entropy term, so just check it's finite
+    assert torch.isfinite(loss)
 
 
 import pytest

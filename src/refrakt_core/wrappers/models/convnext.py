@@ -25,6 +25,10 @@ class ConvNeXtWrapper(nn.Module):
         self.backbone = model
 
     def forward(self, x):
+        """
+        Forward pass for ConvNeXtWrapper.
+        Returns ModelOutput with logits and embeddings.
+        """
         # Get features using the backbone's forward with return_features=True
         embeddings = self.backbone(x, return_features=True)
         # Get logits by applying fc layer to features

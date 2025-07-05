@@ -29,11 +29,12 @@ class PerceptualLoss(BaseLoss):
         """
         super().__init__(name="PerceptualLoss")
 
-        vgg: nn.Sequential = vgg19(pretrained=True).features[:36].to(device).eval()
-        for param in vgg.parameters():
+        vgg_full: nn.Sequential = vgg19(pretrained=True).features
+        # Extract features up to layer 36 (before the last maxpool)
+        self.vgg = nn.Sequential(*list(vgg_full.children())[:36]).to(device).eval()
+        for param in self.vgg.parameters():
             param.requires_grad = False
 
-        self.vgg: nn.Sequential = vgg
         self.device: str = device
 
         self.freeze()
@@ -49,6 +50,10 @@ class PerceptualLoss(BaseLoss):
         Returns:
             Tensor: Scalar loss computed as MSE between VGG19 feature maps.
         """
+        # Move inputs to the same device as the VGG model
+        sr = sr.to(self.device)
+        hr = hr.to(self.device)
+        
         sr_features: Tensor = self.vgg(sr)
         hr_features: Tensor = self.vgg(hr)
 

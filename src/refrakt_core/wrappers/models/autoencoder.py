@@ -35,7 +35,14 @@ class AutoencoderWrapper(nn.Module):
                 },
             )
         else:
-            return ModelOutput(reconstruction=output)
+            # Handle both dictionary and tensor outputs for simple variant
+            if isinstance(output, dict) and "recon" in output:
+                return ModelOutput(reconstruction=output["recon"])
+            else:
+                return ModelOutput(reconstruction=output)
 
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:
-        return self.forward(x).reconstruction
+        reconstruction = self.forward(x).reconstruction
+        if reconstruction is None:
+            raise ValueError("Reconstruction is None")
+        return reconstruction

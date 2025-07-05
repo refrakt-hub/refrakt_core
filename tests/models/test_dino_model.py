@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from refrakt_core.models.resnet import ResNet18
-from refrakt_core.wrappers.dino import DINOBackboneWrapper, DINOModelWrapper
+from refrakt_core.models.dino import DINOBackboneWrapper, DINOModelWrapper
 
 
 @pytest.fixture
@@ -25,11 +25,11 @@ def test_dino_forward(dino_model):
 
     # Student forward
     student_out = dino_model(x, teacher=False)
-    assert student_out.shape == (2, 65536)
+    assert student_out.shape == (2, 2048)  # Default out_dim in DINOModelWrapper
 
     # Teacher forward
     teacher_out = dino_model(x, teacher=True)
-    assert teacher_out.shape == (2, 65536)
+    assert teacher_out.shape == (2, 2048)  # Default out_dim in DINOModelWrapper
 
 
 import torch.nn as nn

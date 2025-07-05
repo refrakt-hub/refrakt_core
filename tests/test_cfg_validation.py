@@ -4,7 +4,7 @@ import pytest
 from omegaconf import OmegaConf
 from pydantic import ValidationError
 
-from refrakt_core.config.schema import RefraktConfig
+from refrakt_core.schema.yaml_validator import RefraktConfig
 
 CONFIG_DIR = "./src/refrakt_core/config/"
 

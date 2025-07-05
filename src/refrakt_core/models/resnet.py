@@ -7,6 +7,7 @@ block definitions (Basic and Bottleneck), custom input channels, and projection 
 
 from typing import List, Optional, Type, Union
 
+import torch
 from torch import Tensor, nn
 
 from refrakt_core.models.templates.models import BaseClassifier
@@ -72,6 +73,11 @@ class ResNet(BaseClassifier):
 
         return nn.Sequential(*layers)
 
+    @property
+    def device(self) -> torch.device:
+        """Get the device the model is on."""
+        return self._device
+
     def forward(
         self, x: Tensor, return_features: bool = False, **kwargs
     ) -> Union[Tensor, Tensor]:
@@ -79,7 +85,6 @@ class ResNet(BaseClassifier):
 
         x = self.conv1(x)
         x = self.maxpool(x)
-        x = self.layer0(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)

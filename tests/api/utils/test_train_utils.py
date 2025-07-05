@@ -3,16 +3,9 @@ from unittest import mock
 import torch
 from omegaconf import DictConfig
 
-import sys
-sys.modules['refrakt_core.api.builders.dataloader_builder'] = mock.Mock()
-sys.modules['refrakt_core.api.builders.dataset_builder'] = mock.Mock()
-sys.modules['refrakt_core.api.builders.loss_builder'] = mock.Mock()
-sys.modules['refrakt_core.api.builders.model_builder'] = mock.Mock()
-sys.modules['refrakt_core.api.builders.scheduler_builder'] = mock.Mock()
-sys.modules['refrakt_core.api.core.logger'] = mock.Mock()
-sys.modules['refrakt_core.registry.model_registry'] = mock.Mock()
-sys.modules['refrakt_core.registry.wrapper_registry'] = mock.Mock()
-sys.modules['refrakt_core.schema.artifact'] = mock.Mock()
+# Remove global module mocking that causes test isolation issues
+# sys.modules['refrakt_core.registry.model_registry'] = mock.Mock()
+# sys.modules['refrakt_core.registry.wrapper_registry'] = mock.Mock()
 
 from refrakt_core.api.utils import train_utils
 
