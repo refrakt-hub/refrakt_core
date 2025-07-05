@@ -8,10 +8,11 @@ import gc
 import os
 import sys
 import traceback
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional, cast, Union
 
 import torch
-from omegaconf import OmegaConf
+import torch.nn
+from omegaconf import OmegaConf, DictConfig
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.utils.test_utils import (_build_test_loader,
                                                _load_model_checkpoint)
@@ -33,24 +34,34 @@ warnings.filterwarnings("ignore")
 
 
 def test(
-    cfg: Any, model_path: Optional[str] = None, logger: Optional[RefraktLogger] = None
+    cfg: Union[str, DictConfig], model_path: Optional[str] = None, logger: Optional[RefraktLogger] = None
 ) -> None:
     """
     Orchestrate the test pipeline for Refrakt.
 
     Args:
-        cfg: Path to config file or OmegaConf config.
+        cfg (Union[str, DictConfig]): Path to config file or DictConfig object.
         model_path (Optional[str]): Path to the model checkpoint.
         logger (Optional[RefraktLogger]): Logger instance (optional).
     """
     try:
-        config = load_config(cfg)
+        # Load config if it's a string, otherwise use as-is
+        if isinstance(cfg, str):
+            config = load_config(cfg)
+        else:
+            config = cfg
         # Resolve model name
         if config.model.name == "autoencoder":
             variant = config.model.params.get("variant", "simple")
             resolved_model_name = f"autoencoder_{variant}"
         else:
             resolved_model_name = config.model.name
+        
+        # Check if using custom dataset and append _custom suffix
+        dataset_params = config.dataset.params if hasattr(config, "dataset") and hasattr(config.dataset, "params") else {}
+        dataset_path = dataset_params.get("path", "") or dataset_params.get("zip_path", "")
+        if dataset_path and str(dataset_path).endswith(".zip"):
+            resolved_model_name = f"{resolved_model_name}_custom"
 
         # Logger
         if logger is None:
@@ -94,7 +105,8 @@ def test(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Data, Model, Loss
-        dataloader = _build_test_loader(config)
+        from refrakt_core.api.utils.test_utils import _build_test_loader_with_resize
+        dataloader = _build_test_loader_with_resize(config, logger)
         model_cls = get_model(config.model.name)
         from refrakt_core.api.builders.model_builder import build_model
 
@@ -141,6 +153,7 @@ def test(
 
         # Fusion Head
         fusion_cfg = getattr(config.model, "fusion", None)
+        fusion_acc = None
         if fusion_cfg:
             fusion_type = fusion_cfg.type
             fusion_model_key = fusion_cfg.model
@@ -175,20 +188,106 @@ def test(
                     f"[FUSION] No fusion model found at: {fusion_model_path}"
                 )
 
-        # Log model outputs per batch (optional, can be expanded as needed)
+        # Evaluate model performance
         model.eval()
-        with torch.no_grad():
-            for i, batch in enumerate(dataloader):
-                if isinstance(batch, torch.Tensor):
-                    inputs = batch
-                elif isinstance(batch, dict):
-                    inputs = batch.get("input") or batch.get("image") or batch.get("lr")
-                    if inputs is None:
-                        raise ValueError("No valid input key found in batch.")
+        eval_results = {}
+        
+        # Use trainer's evaluate method if available
+        if hasattr(trainer, 'evaluate'):
+            try:
+                if fusion_cfg and fusion_acc is not None:
+                    # For fusion models, we already evaluated above
+                    eval_results['fusion_accuracy'] = fusion_acc
                 else:
-                    continue
-                outputs = model(inputs)
-                # Optionally log outputs here
+                    # For regular models, use trainer's evaluate method
+                    accuracy = trainer.evaluate()
+                    eval_results['accuracy'] = accuracy
+                    logger.info(f"Model accuracy: {accuracy:.4f}")
+            except Exception as e:
+                logger.warning(f"Could not use trainer's evaluate method: {e}")
+                # Fall back to manual evaluation (inline)
+                correct = 0
+                total = 0
+                with torch.no_grad():
+                    for batch in dataloader:
+                        if isinstance(batch, torch.Tensor):
+                            inputs = batch
+                            targets = None
+                        elif isinstance(batch, dict):
+                            inputs = batch.get("input") or batch.get("image") or batch.get("lr")
+                            targets = batch.get("target") or batch.get("label")
+                            if inputs is None:
+                                logger.warning("No valid input key found in batch, skipping...")
+                                continue
+                        elif isinstance(batch, (list, tuple)) and len(batch) >= 2:
+                            inputs, targets = batch[0], batch[1]
+                        else:
+                            logger.warning(f"Unexpected batch format: {type(batch)}, skipping...")
+                            continue
+                        inputs = inputs.to(device)
+                        if targets is not None:
+                            targets = targets.to(device)
+                        outputs = model(inputs)
+                        if hasattr(outputs, 'logits'):
+                            logits = outputs.logits
+                        elif isinstance(outputs, torch.Tensor):
+                            logits = outputs
+                        else:
+                            logger.warning("Could not extract logits from model output")
+                            continue
+                        if targets is not None:
+                            preds = torch.argmax(logits, dim=1)
+                            correct += (preds == targets).sum().item()
+                            total += targets.size(0)
+                if total > 0:
+                    accuracy = correct / total
+                    eval_results['accuracy'] = accuracy
+                    logger.info(f"Manual evaluation - Accuracy: {accuracy:.4f}")
+                else:
+                    logger.warning("No valid samples for accuracy calculation")
+                    eval_results['accuracy'] = None
+        else:
+            # Manual evaluation if trainer doesn't have evaluate method (inline)
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for batch in dataloader:
+                    if isinstance(batch, torch.Tensor):
+                        inputs = batch
+                        targets = None
+                    elif isinstance(batch, dict):
+                        inputs = batch.get("input") or batch.get("image") or batch.get("lr")
+                        targets = batch.get("target") or batch.get("label")
+                        if inputs is None:
+                            logger.warning("No valid input key found in batch, skipping...")
+                            continue
+                    elif isinstance(batch, (list, tuple)) and len(batch) >= 2:
+                        inputs, targets = batch[0], batch[1]
+                    else:
+                        logger.warning(f"Unexpected batch format: {type(batch)}, skipping...")
+                        continue
+                    inputs = inputs.to(device)
+                    if targets is not None:
+                        targets = targets.to(device)
+                    outputs = model(inputs)
+                    if hasattr(outputs, 'logits'):
+                        logits = outputs.logits
+                    elif isinstance(outputs, torch.Tensor):
+                        logits = outputs
+                    else:
+                        logger.warning("Could not extract logits from model output")
+                        continue
+                    if targets is not None:
+                        preds = torch.argmax(logits, dim=1)
+                        correct += (preds == targets).sum().item()
+                        total += targets.size(0)
+            if total > 0:
+                accuracy = correct / total
+                eval_results['accuracy'] = accuracy
+                logger.info(f"Manual evaluation - Accuracy: {accuracy:.4f}")
+            else:
+                logger.warning("No valid samples for accuracy calculation")
+                eval_results['accuracy'] = None
 
         logger.info("\n✅ Testing completed successfully!")
         print("\nEvaluation Results:", eval_results)
@@ -203,3 +302,76 @@ def test(
     finally:
         gc.collect()
         torch.cuda.empty_cache()
+
+
+def _manual_evaluation(model: torch.nn.Module, dataloader: Any, device: torch.device, logger: RefraktLogger) -> Dict[str, Any]:
+    """
+    Manually evaluate the model when trainer's evaluate method is not available.
+    
+    Args:
+        model: The model to evaluate
+        dataloader: DataLoader for evaluation
+        device: Device to run evaluation on
+        logger: Logger instance
+        
+    Returns:
+        Dict containing evaluation metrics
+    """
+    model.eval()
+    eval_results = {}
+    
+    try:
+        # Try to compute accuracy for classification tasks
+        correct = 0
+        total = 0
+        
+        with torch.no_grad():
+            for batch in dataloader:
+                if isinstance(batch, torch.Tensor):
+                    inputs = batch
+                    targets = None  # No targets provided
+                elif isinstance(batch, dict):
+                    inputs = batch.get("input") or batch.get("image") or batch.get("lr")
+                    targets = batch.get("target") or batch.get("label")
+                    if inputs is None:
+                        logger.warning("No valid input key found in batch, skipping...")
+                        continue
+                elif isinstance(batch, (list, tuple)) and len(batch) >= 2:
+                    inputs, targets = batch[0], batch[1]
+                else:
+                    logger.warning(f"Unexpected batch format: {type(batch)}, skipping...")
+                    continue
+                
+                inputs = inputs.to(device)
+                if targets is not None:
+                    targets = targets.to(device)
+                
+                outputs = model(inputs)
+                
+                # Extract logits for classification
+                if hasattr(outputs, 'logits'):
+                    logits = outputs.logits
+                elif isinstance(outputs, torch.Tensor):
+                    logits = outputs
+                else:
+                    logger.warning("Could not extract logits from model output")
+                    continue
+                
+                if targets is not None:
+                    preds = torch.argmax(logits, dim=1)
+                    correct += (preds == targets).sum().item()
+                    total += targets.size(0)
+        
+        if total > 0:
+            accuracy = correct / total
+            eval_results['accuracy'] = accuracy
+            logger.info(f"Manual evaluation - Accuracy: {accuracy:.4f}")
+        else:
+            logger.warning("No valid samples for accuracy calculation")
+            eval_results['accuracy'] = None
+            
+    except Exception as e:
+        logger.warning(f"Manual evaluation failed: {e}")
+        eval_results['error'] = str(e)
+    
+    return eval_results

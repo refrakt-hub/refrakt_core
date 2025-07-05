@@ -179,6 +179,7 @@ class SupervisedTrainer(BaseTrainer):
                         loss=loss_output,
                         step=self.global_step,
                         batch_id=f"step{self.global_step}",
+                        skip_metrics_logging=True,  # Skip since metrics are already logged above
                     )
 
                     if step == 0:
@@ -187,6 +188,7 @@ class SupervisedTrainer(BaseTrainer):
                             loss=loss_output,
                             step=self.global_step,
                             batch_id=f"epoch{epoch}_step{step}",
+                            skip_metrics_logging=True,  # Skip since metrics are already logged above
                         )
 
                 self.global_step += 1

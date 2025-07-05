@@ -1,8 +1,12 @@
+import gc
 import glob
 import os
+import sys
+import traceback
 from typing import Any, Dict, Optional, Tuple, Union, cast
 
 import torch
+import torchvision.transforms
 from omegaconf import DictConfig, OmegaConf
 from PIL import Image
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
@@ -15,6 +19,9 @@ from refrakt_core.registry.model_registry import get_model
 from refrakt_core.registry.wrapper_registry import get_wrapper
 from refrakt_core.schema.artifact import ArtifactDumper
 from torch.utils.data import Dataset
+
+from refrakt_core.transforms.image_resizer import SmartImageResizer, ImageSizeConfig
+from refrakt_core.transforms.standard_transforms import StandardImageTransform
 
 """
 Utility functions for safe model wrapping in Refrakt.
@@ -76,6 +83,208 @@ def setup_logger(cfg: DictConfig, model_name: str) -> RefraktLogger:
         console=console,
         debug=debug,
     )
+
+
+def analyze_and_resize_dataset_images(
+    dataset: Any,
+    logger: RefraktLogger,
+    max_size: Tuple[int, int] = (448, 448),
+    min_size: Tuple[int, int] = (32, 32),
+    target_size: Tuple[int, int] = (224, 224)
+) -> Tuple[bool, Any]:
+    """
+    Analyze dataset image sizes and resize if needed.
+
+    Args:
+        dataset: The dataset to analyze
+        logger: Logger instance for logging resize operations
+        max_size: Maximum allowed image size
+        min_size: Minimum allowed image size
+        target_size: Target size for resizing
+
+    Returns:
+        Tuple of (needs_resize, modified_dataset)
+    """
+    logger.info("🔍 Analyzing dataset image sizes...")
+
+    # Initialize size validator and resizer
+    size_config = ImageSizeConfig(
+        standard_size=target_size,
+        max_size=max_size,
+        min_size=min_size
+    )
+    resizer = SmartImageResizer(size_config)
+
+    # Sample images to analyze sizes
+    sample_count = min(100, len(dataset))  # Sample up to 100 images
+    sample_indices = list(range(0, len(dataset), max(1, len(dataset) // sample_count)))[:sample_count]
+
+    sizes = []
+    needs_resize = False
+    oversized_count = 0
+    undersized_count = 0
+
+    logger.info(f"📊 Sampling {len(sample_indices)} images for size analysis...")
+
+    for idx in sample_indices:
+        try:
+            # Get image from dataset
+            sample = dataset[idx]
+            if isinstance(sample, (tuple, list)):
+                # Handle (image, label) format
+                image = sample[0]
+            elif isinstance(sample, dict):
+                # Handle dict format (e.g., {'lr': tensor, 'hr': tensor})
+                image = list(sample.values())[0]
+            else:
+                image = sample
+
+            # Convert tensor to PIL if needed
+            if isinstance(image, torch.Tensor):
+                if image.dim() == 3:  # (C, H, W)
+                    size = (image.size(2), image.size(1))  # (W, H)
+                else:  # (H, W)
+                    size = (image.size(1), image.size(0))  # (W, H)
+            else:
+                size = image.size  # PIL Image
+
+            sizes.append(size)
+
+            # Check if size is outside acceptable range
+            width, height = size
+            if width > max_size[0] or height > max_size[1]:
+                oversized_count += 1
+                needs_resize = True
+            elif width < min_size[0] or height < min_size[1]:
+                undersized_count += 1
+                needs_resize = True
+
+        except Exception as e:
+            logger.warning(f"⚠️ Could not analyze image at index {idx}: {e}")
+            continue
+
+    if not sizes:
+        logger.warning("⚠️ Could not analyze any images in dataset")
+        return False, dataset
+
+    # Calculate statistics
+    avg_width = sum(s[0] for s in sizes) / len(sizes)
+    avg_height = sum(s[1] for s in sizes) / len(sizes)
+    max_width = max(s[0] for s in sizes)
+    max_height = max(s[1] for s in sizes)
+    min_width = min(s[0] for s in sizes)
+    min_height = min(s[1] for s in sizes)
+
+    logger.info(f"📈 Image size statistics:")
+    logger.info(f"   Average: {avg_width:.1f}x{avg_height:.1f}")
+    logger.info(f"   Range: {min_width}x{min_height} to {max_width}x{max_height}")
+    logger.info(f"   Oversized images: {oversized_count}")
+    logger.info(f"   Undersized images: {undersized_count}")
+
+    if needs_resize:
+        logger.info("🔄 Dataset contains images outside acceptable size range (32x32 to 448x448)")
+        logger.info(f"📏 Resizing images to {target_size[0]}x{target_size[1]}...")
+
+        # Create a wrapper dataset that resizes images on-the-fly
+        class ResizedDataset(Dataset):
+            def __init__(self, original_dataset, resizer, target_size):
+                self.original_dataset = original_dataset
+                self.resizer = resizer
+                self.target_size = target_size
+
+            def __len__(self):
+                return len(self.original_dataset)
+
+            def __getitem__(self, idx):
+                sample = self.original_dataset[idx]
+
+                if isinstance(sample, (tuple, list)):
+                    # Handle (image, label) format
+                    image, *rest = sample
+                    resized_image = self._resize_image(image)
+                    return (resized_image, *rest)
+                elif isinstance(sample, dict):
+                    # Handle dict format
+                    resized_sample = {}
+                    for key, value in sample.items():
+                        if isinstance(value, torch.Tensor) and value.dim() >= 2:
+                            resized_sample[key] = self._resize_image(value)
+                        else:
+                            resized_sample[key] = value
+                    return resized_sample
+                else:
+                    # Handle single image
+                    return self._resize_image(sample)
+
+            def _resize_image(self, image):
+                """Resize image using SmartImageResizer"""
+                if isinstance(image, torch.Tensor):
+                    # Convert tensor to PIL for resizing
+                    if image.dim() == 3:  # (C, H, W)
+                        pil_image = torchvision.transforms.ToPILImage()(image)
+                    else:  # (H, W)
+                        pil_image = torchvision.transforms.ToPILImage()(image.unsqueeze(0))
+
+                    # Resize using SmartImageResizer's internal method to bypass validation
+                    resized_pil = self.resizer._resize_maintain_aspect(
+                        pil_image,
+                        self.target_size
+                    )
+
+                    # Convert back to tensor
+                    return torchvision.transforms.ToTensor()(resized_pil)
+                else:
+                    # PIL Image - use internal method to bypass validation
+                    return self.resizer._resize_maintain_aspect(
+                        image,
+                        self.target_size
+                    )
+
+        # Create resized dataset
+        resized_dataset = ResizedDataset(dataset, resizer, target_size)
+        logger.info("✅ Dataset resizing complete!")
+
+        return True, resized_dataset
+    else:
+        logger.info("✅ All images are within acceptable size range (32x32 to 448x448)")
+        return False, dataset
+
+
+def build_datasets_and_loaders_with_resize(
+    cfg: DictConfig,
+    logger: RefraktLogger
+) -> Tuple[Any, Any, Any, Any]:
+    """
+    Build train/val datasets and dataloaders from config with automatic image resizing.
+    """
+    if not isinstance(cfg.dataset, DictConfig):
+        raise TypeError("cfg.dataset must be a DictConfig")
+
+    # Build original datasets
+    train_dataset = build_dataset(cfg.dataset)
+    val_cfg = OmegaConf.merge(
+        cfg.dataset, OmegaConf.create({"params": {"train": False}})
+    )
+    if not isinstance(val_cfg, DictConfig):
+        raise TypeError("val_cfg must be a DictConfig")
+    val_dataset = build_dataset(val_cfg)
+
+    # Analyze and resize if needed
+    train_resized, train_dataset = analyze_and_resize_dataset_images(
+        train_dataset, logger
+    )
+    val_resized, val_dataset = analyze_and_resize_dataset_images(
+        val_dataset, logger
+    )
+
+    if train_resized or val_resized:
+        logger.info("🔄 Using resized datasets for training")
+
+    # Build dataloaders
+    train_loader = build_dataloader(train_dataset, cfg.dataloader)
+    val_loader = build_dataloader(val_dataset, cfg.dataloader)
+
+    return train_dataset, val_dataset, train_loader, val_loader
 
 
 def build_datasets_and_loaders(cfg: DictConfig) -> Tuple[Any, Any, Any, Any]:
@@ -239,6 +448,59 @@ class CustomImageDataset(Dataset):
         if self.transform:
             img = self.transform(img)
         return img
+
+
+def setup_data_loader_for_inference_with_resize(config: DictConfig, data: Any = None, logger: Optional[RefraktLogger] = None) -> Any:
+    """
+    Set up a data loader for inference with automatic image resizing, supporting custom data or test dataset.
+    """
+    if data is not None:
+        return data
+    custom_data = config.get("custom_data")
+    if custom_data:
+        if custom_data.get("image_path"):
+            image_paths = [custom_data.image_path]
+        elif custom_data.get("image_dir"):
+            image_dir = custom_data.image_dir
+            image_paths = (
+                glob.glob(os.path.join(image_dir, "*.jpg"))
+                + glob.glob(os.path.join(image_dir, "*.png"))
+                + glob.glob(os.path.join(image_dir, "*.jpeg"))
+            )
+        else:
+            raise ValueError("custom_data must contain either image_path or image_dir")
+        from refrakt_core.api.builders.transform_builder import build_transform
+
+        transform = build_transform(custom_data.get("transform", []))
+        expected_channels = config.model.params.get("in_channels", 3)
+        dataset = CustomImageDataset(image_paths, transform, expected_channels)
+        
+        # Apply resizing if logger is provided
+        if logger is not None:
+            inference_resized, dataset = analyze_and_resize_dataset_images(dataset, logger)
+            if inference_resized:
+                logger.info("🔄 Using resized inference dataset")
+        
+        return torch.utils.data.DataLoader(
+            dataset,
+            batch_size=config.dataloader.params.get("batch_size", 1),
+            shuffle=False,
+            num_workers=config.dataloader.params.get("num_workers", 0),
+        )
+    test_cfg = OmegaConf.merge(
+        config.dataset, OmegaConf.create({"params": {"train": False}})
+    )
+    if not isinstance(test_cfg, DictConfig):
+        raise TypeError("test_cfg must be a DictConfig")
+    test_dataset = build_dataset(test_cfg)
+    
+    # Apply resizing if logger is provided
+    if logger is not None:
+        inference_resized, test_dataset = analyze_and_resize_dataset_images(test_dataset, logger)
+        if inference_resized:
+            logger.info("🔄 Using resized inference dataset")
+    
+    return build_dataloader(test_dataset, config.dataloader)
 
 
 def setup_data_loader_for_inference(config: DictConfig, data: Any = None) -> Any:

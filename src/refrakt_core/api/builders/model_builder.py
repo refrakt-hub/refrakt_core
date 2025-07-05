@@ -8,15 +8,21 @@ Typical usage involves passing a configuration (OmegaConf), a modules registry, 
 """
 
 import inspect
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, Union
 
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 from refrakt_core.integrations.fusion.block import FusionBlock
 from refrakt_core.registry.wrapper_registry import load_wrapper
 from refrakt_core.wrappers.schema.default_model import DefaultModelWrapper
+from refrakt_core.hooks.hyperparameter_override import apply_overrides
 
 
-def build_model(cfg: OmegaConf, modules: Dict[str, Any], device: str) -> Any:
+def build_model(
+    cfg: Union[OmegaConf, DictConfig], 
+    modules: Dict[str, Any], 
+    device: str,
+    overrides: Optional[List[str]] = None
+) -> Any:
     """
     Build and wrap a model from configuration, with optional fusion block integration.
 
@@ -28,6 +34,7 @@ def build_model(cfg: OmegaConf, modules: Dict[str, Any], device: str) -> Any:
         cfg (OmegaConf): Configuration specifying the model structure and parameters.
         modules (Dict[str, Any]): Registry of available model and wrapper functions.
         device (str): Device on which to place the model.
+        overrides (Optional[List[str]]): List of override strings in format 'path.to.param=value'
 
     Returns:
         Any: Instantiated and wrapped model object, ready for training or inference.
@@ -37,6 +44,17 @@ def build_model(cfg: OmegaConf, modules: Dict[str, Any], device: str) -> Any:
         ValueError: If required model or wrapper components are missing or not found in the registry.
     """
     import refrakt_core.models
+
+    # Apply overrides if provided
+    if overrides:
+        # Convert to dict, apply overrides, then back to OmegaConf
+        cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+        if isinstance(cfg_dict, dict):
+            cfg_dict = apply_overrides(cfg_dict, overrides)
+            cfg = OmegaConf.create(cfg_dict)
+        else:
+            # If not a dict, skip overrides
+            pass
 
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     if not isinstance(cfg_dict, dict):
@@ -68,11 +86,10 @@ def build_model(cfg: OmegaConf, modules: Dict[str, Any], device: str) -> Any:
         )
 
         # Step 1: Instantiate base model
-        model_cls = get_model_fn(model_name)
         # Patch for AutoEncoder: map 'type' to 'mode' if present
         if model_name == "autoencoder" and "type" in model_params_dict:
             model_params_dict["mode"] = model_params_dict.pop("type")
-        raw_model = model_cls(**model_params_dict).to(device)
+        raw_model = get_model_fn(model_name, **model_params_dict).to(device)
 
         # Step 2: Wrap model (if wrapper is specified)
         if wrapper_name:

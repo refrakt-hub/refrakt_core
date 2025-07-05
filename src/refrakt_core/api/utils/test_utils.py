@@ -12,6 +12,8 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
+from refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.api.utils.train_utils import analyze_and_resize_dataset_images
 from refrakt_core.utils.methods import extract_visual_tensor
 
 
@@ -49,6 +51,40 @@ def _build_test_loader(config: Any) -> Any:
     if not isinstance(test_cfg, DictConfig):
         raise TypeError("test_cfg must be a DictConfig after conversion.")
     dataset = build_dataset(test_cfg)
+    return build_dataloader(dataset, config.dataloader)
+
+
+def _build_test_loader_with_resize(config: Any, logger: RefraktLogger) -> Any:
+    """
+    Build a test dataloader from the given config with automatic image resizing.
+
+    Args:
+        config (Any): Configuration object (DictConfig or ListConfig).
+        logger (RefraktLogger): Logger instance for logging resize operations.
+
+    Returns:
+        Any: PyTorch DataLoader for test data with resizing applied if needed.
+    """
+    test_cfg = OmegaConf.merge(
+        config.dataset, OmegaConf.create({"params": {"train": False}})
+    )
+    # Ensure test_cfg is a DictConfig
+    from omegaconf import ListConfig
+
+    if isinstance(test_cfg, ListConfig):
+        test_cfg = OmegaConf.create(OmegaConf.to_container(test_cfg, resolve=True))
+    if not isinstance(test_cfg, DictConfig):
+        raise TypeError("test_cfg must be a DictConfig after conversion.")
+    
+    # Build dataset
+    dataset = build_dataset(test_cfg)
+    
+    # Analyze and resize if needed
+    test_resized, dataset = analyze_and_resize_dataset_images(dataset, logger)
+    
+    if test_resized:
+        logger.info("🔄 Using resized test dataset")
+    
     return build_dataloader(dataset, config.dataloader)
 
 

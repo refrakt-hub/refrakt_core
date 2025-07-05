@@ -8,10 +8,10 @@ import gc
 import os
 import sys
 import traceback
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional, cast, Union
 
 import torch
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 import refrakt_core.models
 import refrakt_core.wrappers
 import refrakt_core.losses
@@ -39,7 +39,7 @@ warnings.filterwarnings("ignore")
 
 
 def train(
-    config_path: str,
+    cfg: Union[str, DictConfig],
     model_path: Optional[str] = None,
     logger: Optional[RefraktLogger] = None,
 ) -> None:
@@ -47,18 +47,26 @@ def train(
     Orchestrate the training pipeline for Refrakt.
 
     Args:
-        config_path (str): Path to the configuration file.
+        cfg (Union[str, DictConfig]): Path to the configuration file or DictConfig object.
         model_path (Optional[str]): Path to save the trained model.
         logger (Optional[RefraktLogger]): Logger instance (optional).
     """
     try:
-        cfg = load_config(config_path)
+        # Load config if it's a string, otherwise use as-is
+        if isinstance(cfg, str):
+            cfg = load_config(cfg)
         # Resolve model name
         if cfg.model.name == "autoencoder":
             variant = cfg.model.params.get("variant", "simple")
             resolved_model_name = f"autoencoder_{variant}"
         else:
             resolved_model_name = cfg.model.name
+        
+        # Check if using custom dataset and append _custom suffix
+        dataset_params = cfg.dataset.params if hasattr(cfg, "dataset") and hasattr(cfg.dataset, "params") else {}
+        dataset_path = dataset_params.get("path", "") or dataset_params.get("zip_path", "")
+        if dataset_path and str(dataset_path).endswith(".zip"):
+            resolved_model_name = f"{resolved_model_name}_custom"
 
         # Logger
         if logger is None:
@@ -99,9 +107,8 @@ def train(
         logger.info(f"Using device: {device}")
 
         # Data
-        train_dataset, val_dataset, train_loader, val_loader = (
-            build_datasets_and_loaders(cfg)
-        )
+        from refrakt_core.api.utils.train_utils import build_datasets_and_loaders_with_resize
+        train_dataset, val_dataset, train_loader, val_loader = build_datasets_and_loaders_with_resize(cfg, logger)
         logger.info(
             f"Train batches: {len(train_loader)}, Val batches: {len(val_loader)}"
         )
@@ -161,6 +168,9 @@ def train(
         final_device = device_param or device
         trainer_params["logger"] = logger
         trainer_params["artifact_dumper"] = artifact_dumper
+        # Add model_name to trainer_params
+        trainer_params["model_name"] = resolved_model_name
+        
         trainer = trainer_cls(
             model=model,
             train_loader=train_loader,
@@ -172,7 +182,6 @@ def train(
             scheduler=scheduler,
             **trainer_params,
         )
-        trainer.model_name = resolved_model_name
 
         # Train
         logger.info(f"\nStarting training for {num_epochs} epochs...")

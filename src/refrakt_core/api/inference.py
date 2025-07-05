@@ -126,7 +126,8 @@ def inference(
             logger.info(f"Loaded fusion head from {fusion_head_path}")
 
         # Data loader
-        data_loader = setup_data_loader_for_inference(config, data)
+        from refrakt_core.api.utils.train_utils import setup_data_loader_for_inference_with_resize
+        data_loader = setup_data_loader_for_inference_with_resize(config, data, logger)
 
         # Artifact Dumper
         artifact_dumper = setup_artifact_dumper(config, resolved_model_name, logger)

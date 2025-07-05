@@ -90,6 +90,7 @@ class ArtifactDumper:
         batch_id: Optional[Union[int, str]] = None,
         prefix: str = "train",
         filenames: Optional[List[str]] = None,
+        skip_metrics_logging: bool = False,
     ):
         if not self.enabled:
             return
@@ -129,6 +130,7 @@ class ArtifactDumper:
 
         # === Log from LossOutput ===
         if loss is not None:
+            # LossOutput.total is always a torch.Tensor
             record["loss_total"] = float(loss.total.item())
             record["loss_components_full"] = {
                 k: float(v.item()) for k, v in loss.components.items()
@@ -137,7 +139,7 @@ class ArtifactDumper:
         self.buffer[batch_key] = record
 
         # === Push scalar metrics to logger (W&B, TensorBoard) ===
-        if self.logger and step is not None:
+        if self.logger and step is not None and not skip_metrics_logging:
             scalar_dict = {}
             if hasattr(output, "summary") and callable(output.summary):
                 scalar_dict.update(output.summary())
@@ -171,9 +173,14 @@ class ArtifactDumper:
         record = self.buffer.get(key, {})
 
         if isinstance(loss, LossOutput):
-            record["loss_total"] = float(loss.total)
+            # Handle both tensor and float types for loss.total
+            if hasattr(loss.total, 'item'):
+                record["loss_total"] = float(loss.total.item())
+            else:
+                record["loss_total"] = float(loss.total)
             record["loss_components"] = {
-                k: float(v.item()) for k, v in loss.components.items()
+                k: float(v.item()) if hasattr(v, 'item') else float(v)
+                for k, v in loss.components.items()
             }
         elif isinstance(loss, dict):
             record["loss_dict"] = {k: float(v.item()) for k, v in loss.items()}
@@ -217,8 +224,6 @@ class ArtifactDumper:
             "metadata": self.metadata,
             "outputs": self.buffer,
         }
-        if hasattr(self, "scalar_logs"):
-            save_data["scalar_logs"] = self.scalar_logs
         torch.save(save_data, str(full_path))
 
     def reset(self):

@@ -19,6 +19,7 @@ import pandas as pd
 import requests
 
 from refrakt_core.registry.dataset_registry import register_dataset
+from refrakt_core.loaders.dataset_loader import load_custom_dataset
 
 
 @register_dataset("contrastive")
@@ -41,10 +42,12 @@ class ContrastiveDataset(Dataset[Tuple[Tensor, Tensor, Any]]):
         self.base_dataset = base_dataset
         self.transform = transform
 
+        # Handle transform with transforms attribute (like torchvision.Compose)
         if self.transform and hasattr(self.transform, "transforms"):
-            self.transform.transforms = [
-                t for t in self.transform.transforms if not isinstance(t, nn.Flatten)
-            ]
+            if hasattr(self.transform.transforms, "__iter__"):
+                self.transform.transforms = [
+                    t for t in self.transform.transforms if not isinstance(t, nn.Flatten)
+                ]
 
     def __len__(self) -> int:
         return len(self.base_dataset)
@@ -126,6 +129,58 @@ class MSNCompatibleContrastiveDataset(Dataset):
         else:
             anchor = target = item
         return {"anchor": anchor, "target": target}
+
+
+@register_dataset("custom")
+class CustomDataset(Dataset):
+    """
+    Custom dataset that loads data from zip files with automatic format detection.
+    
+    This dataset integrates the custom zip file loading functionality with the registry system.
+    
+    Args:
+        zip_path (str): Path to the zip file containing the dataset
+        task_type (Optional[str]): Type of task (gan, supervised, contrastive). If None, auto-detects.
+        transform (Optional[Callable]): Transform to apply to images
+        train (bool): Whether this is for training (True) or validation (False)
+        **kwargs: Additional arguments passed to the underlying dataset loader
+    """
+    
+    def __init__(
+        self,
+        zip_path: str,
+        task_type: Optional[str] = None,
+        transform: Optional[Callable] = None,
+        train: bool = True,
+        **kwargs
+    ) -> None:
+        self.zip_path = zip_path
+        self.task_type = task_type
+        self.transform = transform
+        self.train = train
+        self.kwargs = kwargs
+        
+        # Load the custom dataset using the existing loader
+        # Note: load_custom_dataset expects torchvision.Compose for transform
+        # but we'll pass it as-is and let the loader handle it
+        train_dataset, val_dataset = load_custom_dataset(
+            zip_path=zip_path,
+            task_type=task_type,
+            transform=transform,  # type: ignore
+            **kwargs
+        )
+        
+        # Select the appropriate dataset based on train flag
+        if train:
+            self.dataset = train_dataset
+        else:
+            self.dataset = val_dataset if val_dataset is not None else train_dataset
+    
+    def __len__(self) -> int:
+        return len(self.dataset)
+    
+    def __getitem__(self, idx: int) -> Any:
+        return self.dataset[idx]
 
 
 @register_dataset("tabular_ml")
