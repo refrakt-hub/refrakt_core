@@ -9,6 +9,13 @@ from torch.nn import Module
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from refrakt_core.integrations.fusion.helpers import (
+    unpack_batch,
+    extract_features_from_model,
+    validate_model_output,
+    process_labels
+)
+
 
 @register_trainer("fusion")
 class FusionTrainer(BaseTrainer):
@@ -70,34 +77,21 @@ class FusionTrainer(BaseTrainer):
             loop = tqdm(loader, desc="Extracting Features", leave=False)
 
             for batch in loop:
-                x, y = self._unpack_batch(batch)
+                x, y = unpack_batch(batch)
                 if first:
                     first = False
                 x = x.to(self.device)
                 output = self.model(x)
 
-                if not isinstance(output, ModelOutput) or output.embeddings is None:
-                    raise ValueError(
-                        "Backbone must return `ModelOutput` with `embeddings` for fusion mode."
-                    )
+                validate_model_output(output)
 
                 emb = output.embeddings
                 features.append(emb.detach().cpu().numpy())
-                y_cpu = y.detach().cpu()
-                if y_cpu.ndim > 1:
-                    y_cpu = y_cpu.view(-1)
-                labels.append(y_cpu.numpy())
+                labels.append(process_labels(y))
 
         return np.concatenate(features), np.concatenate(labels)
 
     def _unpack_batch(
         self, batch: Union[tuple, list, Dict[str, torch.Tensor]]
     ) -> tuple:
-        # Handle SimCLR-style batches: (img1, img2, label)
-        if isinstance(batch, (tuple, list)):
-            if len(batch) == 3:
-                return batch[0], batch[2]  # img1, label
-            return batch[0], batch[1]
-        if isinstance(batch, dict):
-            return batch["input"], batch["target"]
-        raise TypeError("Unsupported batch format")
+        return unpack_batch(batch)

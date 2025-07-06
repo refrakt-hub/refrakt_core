@@ -1,6 +1,13 @@
 from typing import Any, Dict, Optional
 import numpy as np
 
+from refrakt_core.integrations.ml.helpers import (
+    prepare_training_data,
+    prepare_evaluation_data,
+    calculate_accuracy,
+    log_metrics
+)
+
 class MLTrainer:
     def __init__(self, feature_pipeline, model, X_train, y_train, X_val=None, y_val=None, artifact_dumper=None):
         self.feature_pipeline = feature_pipeline
@@ -12,7 +19,7 @@ class MLTrainer:
         self.artifact_dumper = artifact_dumper
 
     def train(self):
-        Xf = self.feature_pipeline.fit_transform(self.X_train)
+        Xf = prepare_training_data(self.feature_pipeline, self.X_train, self.y_train)
         self.model.fit(Xf, self.y_train)
         metrics = {}
         if self.X_val is not None and self.y_val is not None:
@@ -20,13 +27,12 @@ class MLTrainer:
         return metrics
 
     def evaluate(self):
-        Xf = self.feature_pipeline.transform(self.X_val)
+        Xf = prepare_evaluation_data(self.feature_pipeline, self.X_val)
         preds = self.model.predict(Xf)
-        acc = (preds == self.y_val).mean()
-        if self.artifact_dumper:
-            self.artifact_dumper.log_scalar_dict({'ml_accuracy': acc}, step=0, prefix='val')
+        acc = calculate_accuracy(preds, self.y_val)
+        log_metrics(self.artifact_dumper, {'ml_accuracy': acc}, step=0, prefix='val')
         return {'ml_accuracy': acc}
 
     def predict(self, X):
-        Xf = self.feature_pipeline.transform(X)
+        Xf = prepare_evaluation_data(self.feature_pipeline, X)
         return self.model.predict(Xf) 

@@ -26,6 +26,7 @@ import numpy as np
 from numpy.typing import NDArray
 from refrakt_core.integrations.gpu.registry import load_cuml_registry
 from refrakt_core.integrations.common_types import ClassifierOutput, NDArrayF
+from refrakt_core.integrations.gpu.utils import extract_wrapper_params, instantiate_cuml_model, validate_predict_proba_support
 
 
 class CuMLEstimator(Protocol):
@@ -56,30 +57,11 @@ class CuMLWrapper:
         Raises:
             ValueError: If the model path is invalid.
         """
-        registry = load_cuml_registry()
-        class_path = registry.get(model, model)
-
-        module_path, class_name = class_path.rsplit(".", 1)
-
-        try:
-            module = importlib.import_module(module_path)
-            model_cls: Type[object] = getattr(module, class_name)
-        except (ModuleNotFoundError, AttributeError) as e:
-            raise ValueError(f"Invalid cuML model '{model}': {e}")
-
         # Extract wrapper-specific parameters
-        wrapper_params = {}
-        model_params = dict(params)  # Make a copy to modify
-
-        # Handle special parameters
-        if "fusion_head" in model_params:
-            fusion_head_val = model_params.pop("fusion_head")
-            if fusion_head_val is None:
-                wrapper_params["fusion_head"] = {}
-            else:
-                wrapper_params["fusion_head"] = fusion_head_val
-
-        model_instance = model_cls(**model_params)
+        wrapper_params, model_params = extract_wrapper_params(params)
+        
+        # Instantiate the model
+        model_instance = instantiate_cuml_model(model, model_params)
         self.model: CuMLEstimator = cast(CuMLEstimator, model_instance)
 
         # Store wrapper configuration
@@ -92,11 +74,8 @@ class CuMLWrapper:
         return self.model.predict(X)
 
     def predict_proba(self, X: NDArrayF) -> NDArray:
-        if hasattr(self.model, "predict_proba"):
-            return self.model.predict_proba(X)
-        raise AttributeError(
-            f"{self.model.__class__.__name__} does not support predict_proba"
-        )
+        validate_predict_proba_support(self.model)
+        return self.model.predict_proba(X)
 
     def __repr__(self) -> str:
         return str(self.model)

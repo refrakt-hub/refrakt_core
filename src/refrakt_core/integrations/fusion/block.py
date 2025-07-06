@@ -7,6 +7,11 @@ import torch.nn as nn
 from refrakt_core.integrations.fusion.builder import build_fusion_head
 from refrakt_core.integrations.fusion.protocols import FusionHead
 from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.integrations.fusion.helpers import (
+    extract_features_from_model,
+    validate_model_output,
+    process_labels
+)
 
 
 class FusionBlock(nn.Module):
@@ -46,14 +51,15 @@ class FusionBlock(nn.Module):
         Extract features from the backbone and return as numpy array and ModelOutput.
         """
         output: ModelOutput = self.backbone(x)
+        validate_model_output(output)
         feats = output.embeddings
-        if feats is None:
-            raise ValueError("Backbone did not return embeddings in ModelOutput.")
-        return feats.detach().cpu().numpy(), output
+        if feats is not None:
+            return feats.detach().cpu().numpy(), output
+        raise ValueError("Backbone did not return embeddings in ModelOutput.")
 
     def fit(self, x: torch.Tensor, y: torch.Tensor) -> None:
         feats, _ = self._extract_features(x)
-        labels = y.detach().cpu().numpy()
+        labels = process_labels(y)
         self.fusion_head.fit(feats, labels)
         self._trained = True
 
@@ -63,40 +69,9 @@ class FusionBlock(nn.Module):
         teacher: bool = False,
         **kwargs: Any,
     ) -> ModelOutput:
-        # Handle dict input (for MSN)
-        if isinstance(x, dict):
-            base_output = self.backbone(x)
-            feats = (
-                base_output.embeddings
-                if isinstance(base_output, ModelOutput)
-                else base_output
-            )
-            # Only convert to numpy if feats is a tensor and not None
-            if feats is not None and isinstance(feats, torch.Tensor):
-                feats_np = feats.detach().cpu().numpy()
-            else:
-                feats_np = None
-        else:
-            # Standard tensor input
-            if hasattr(self.backbone, "forward"):
-                import inspect
-
-                sig = inspect.signature(self.backbone.forward)
-                if "teacher" in sig.parameters:
-                    base_output = self.backbone(x, teacher=teacher, **kwargs)
-                else:
-                    base_output = self.backbone(x)
-            else:
-                base_output = self.backbone(x)
-            feats = (
-                base_output.embeddings
-                if isinstance(base_output, ModelOutput)
-                else base_output
-            )
-            if feats is not None and isinstance(feats, torch.Tensor):
-                feats_np = feats.detach().cpu().numpy()
-            else:
-                feats_np = None
+        feats_np, base_output = extract_features_from_model(
+            self.backbone, x, self.device, teacher, **kwargs
+        )
 
         if not self.training and self._trained and feats_np is not None:
             preds = self.fusion_head.predict(feats_np)
@@ -107,7 +82,7 @@ class FusionBlock(nn.Module):
                 pass
 
             return ModelOutput(
-                embeddings=feats,
+                embeddings=base_output.embeddings if isinstance(base_output, ModelOutput) else None,
                 logits=torch.tensor(
                     preds,
                     device=x["anchor"].device if isinstance(x, dict) else x.device,
@@ -129,7 +104,8 @@ class FusionBlock(nn.Module):
             )
         else:
             return ModelOutput(
-                embeddings=feats, logits=getattr(base_output, "logits", None)
+                embeddings=base_output.embeddings if hasattr(base_output, 'embeddings') else None, 
+                logits=getattr(base_output, "logits", None)
             )
 
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:

@@ -16,6 +16,13 @@ from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
+from refrakt_core.trainer.utils.base_utils import (
+    determine_checkpoint_path,
+    load_checkpoint_from_path,
+    load_optimizer_state,
+    load_scheduler_state,
+)
+
 
 class BaseTrainer(ABC):
     """
@@ -158,78 +165,26 @@ class BaseTrainer(ABC):
             KeyError: If expected keys are missing in the checkpoint.
         """
         try:
-            import typing
-            from collections import defaultdict
-
-            from omegaconf import DictConfig, ListConfig
-            from omegaconf.base import ContainerMetadata, Metadata
-            from omegaconf.nodes import AnyNode
-            from torch.serialization import add_safe_globals
-
-            add_safe_globals(
-                [
-                    ListConfig,
-                    DictConfig,
-                    ContainerMetadata,
-                    typing.Any,
-                    list,
-                    dict,
-                    defaultdict,
-                    int,
-                    float,
-                    AnyNode,
-                    Metadata,
-                ]
+            checkpoint_path = determine_checkpoint_path(
+                path=path,
+                suffix=suffix,
+                save_dir=self.save_dir,
+                model_name=self.model_name,
             )
-
-            if path is not None:
-                checkpoint = torch.load(
-                    path, map_location=self.device, weights_only=False
-                )
-            else:
-                if suffix == "best_model":
-                    path = self.get_checkpoint_path(suffix)
-                    checkpoint = torch.load(
-                        path, map_location=self.device, weights_only=False
-                    )
-                else:
-                    base_path = os.path.join(self.save_dir, f"{self.model_name}.pth")
-                    fallback_path = self.get_checkpoint_path(suffix)
-
-                    if os.path.exists(base_path):
-                        path = base_path
-                        print(f"[INFO] Loading base model from: {path}")
-                    else:
-                        path = fallback_path
-                        print(f"[INFO] Base model not found, falling back to: {path}")
-
-                    checkpoint = torch.load(
-                        path, map_location=self.device, weights_only=False
-                    )
+            
+            checkpoint = load_checkpoint_from_path(checkpoint_path, self.device)
 
             self.model.load_state_dict(checkpoint["model_state_dict"])
 
             if self.optimizer is not None and "optimizer_state_dict" in checkpoint:
-                optimizer_state = checkpoint["optimizer_state_dict"]
-                if isinstance(self.optimizer, dict):
-                    for k, opt in self.optimizer.items():
-                        if k in optimizer_state:
-                            opt.load_state_dict(optimizer_state[k])
-                else:
-                    self.optimizer.load_state_dict(optimizer_state)
+                load_optimizer_state(self.optimizer, checkpoint["optimizer_state_dict"])
 
             if self.scheduler is not None and "scheduler_state_dict" in checkpoint:
-                scheduler_state = checkpoint["scheduler_state_dict"]
-                if isinstance(self.scheduler, dict):
-                    for k, sch in self.scheduler.items():
-                        if k in scheduler_state:
-                            sch.load_state_dict(scheduler_state[k])
-                else:
-                    self.scheduler.load_state_dict(scheduler_state)
+                load_scheduler_state(self.scheduler, checkpoint["scheduler_state_dict"])
 
             self.global_step = checkpoint.get("global_step", 0)
 
-            print(f"[INFO] Successfully loaded from: {path}")
+            print(f"[INFO] Successfully loaded from: {checkpoint_path}")
 
         except (OSError, RuntimeError, KeyError) as e:
             print(f"[ERROR] Failed to load model: {e}")

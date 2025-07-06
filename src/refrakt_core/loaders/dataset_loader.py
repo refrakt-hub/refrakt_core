@@ -19,6 +19,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, datasets
 
 from refrakt_core.logging_config import get_logger
+from refrakt_core.loaders.utils import find_directory_by_keywords
 
 
 @dataclass
@@ -57,60 +58,26 @@ def _find_train_directory(extracted_path: Path) -> Optional[Path]:
     """Find a directory that contains 'train' in its name."""
     logger = get_logger("dataset_loader")
     logger.debug(f"Searching for train directory in: {extracted_path}")
-    
-    # First, look for exact matches or close matches
-    for item in extracted_path.iterdir():
-        logger.debug(f"Checking item: {item.name} (is_dir: {item.is_dir()})")
-        if item.is_dir():
-            item_name_lower = item.name.lower()
-            # Check for exact matches and common typos
-            if any(keyword in item_name_lower for keyword in ["train", "traing", "trainging", "training"]):
-                logger.debug(f"Found train directory: {item}")
-                return item
-    
-    # If not found, look deeper in the directory structure
-    for item in extracted_path.iterdir():
-        if item.is_dir():
-            # Recursively search in subdirectories
-            for subitem in item.iterdir():
-                if subitem.is_dir():
-                    subitem_name_lower = subitem.name.lower()
-                    if any(keyword in subitem_name_lower for keyword in ["train", "traing", "trainging", "training"]):
-                        logger.debug(f"Found train directory in subdirectory: {subitem}")
-                        return subitem
-    
-    logger.debug("No train directory found")
-    return None
+    keywords = ["train", "traing", "trainging", "training"]
+    result = find_directory_by_keywords(extracted_path, keywords)
+    if result:
+        logger.debug(f"Found train directory: {result}")
+    else:
+        logger.debug("No train directory found")
+    return result
 
 
 def _find_val_directory(extracted_path: Path) -> Optional[Path]:
     """Find a directory that contains 'val' or 'test' in its name."""
     logger = get_logger("dataset_loader")
     logger.debug(f"Searching for val/test directory in: {extracted_path}")
-    
-    # First, look for exact matches or close matches
-    for item in extracted_path.iterdir():
-        logger.debug(f"Checking item: {item.name} (is_dir: {item.is_dir()})")
-        if item.is_dir():
-            item_name_lower = item.name.lower()
-            # Check for exact matches and common variations
-            if any(keyword in item_name_lower for keyword in ["val", "test", "testing", "validation"]):
-                logger.debug(f"Found val/test directory: {item}")
-                return item
-    
-    # If not found, look deeper in the directory structure
-    for item in extracted_path.iterdir():
-        if item.is_dir():
-            # Recursively search in subdirectories
-            for subitem in item.iterdir():
-                if subitem.is_dir():
-                    subitem_name_lower = subitem.name.lower()
-                    if any(keyword in subitem_name_lower for keyword in ["val", "test", "testing", "validation"]):
-                        logger.debug(f"Found val/test directory in subdirectory: {subitem}")
-                        return subitem
-    
-    logger.debug("No val/test directory found")
-    return None
+    keywords = ["val", "test", "testing", "validation"]
+    result = find_directory_by_keywords(extracted_path, keywords)
+    if result:
+        logger.debug(f"Found val/test directory: {result}")
+    else:
+        logger.debug("No val/test directory found")
+    return result
 
 
 def validate_supervised_structure(extracted_path: Path) -> bool:

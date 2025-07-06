@@ -65,6 +65,32 @@ class ArtifactDumper:
         if self.auto_flush:
             self.save(filename=f"batch_{batch_id}_{self.model_name}.pt")
 
+    def _log_metrics_to_logger(self, output: ModelOutput, loss: Optional[LossOutput], step: Optional[int], prefix: str):
+        """
+        Helper method to log scalar metrics to the logger.
+        """
+        if not self.logger or step is None:
+            return
+        
+        scalar_dict: Dict[str, float] = {}
+        if hasattr(output, "summary") and callable(output.summary):
+            summary = output.summary()
+            if isinstance(summary, dict):
+                scalar_dict.update(summary)
+        if loss and hasattr(loss, "summary"):
+            loss_summary = loss.summary()
+            if isinstance(loss_summary, dict):
+                scalar_dict.update(loss_summary)
+        if scalar_dict:
+            self.logger.log_metrics(scalar_dict, step=step, prefix=prefix)
+
+    def _save_if_auto_flush(self, batch_key):
+        """
+        Helper method to save to disk if auto_flush is enabled.
+        """
+        if self.auto_flush:
+            self.save(filename=f"batch_{batch_key}_{self.model_name}.pt")
+
     def log_full_output(
         self,
         output: ModelOutput,
@@ -87,19 +113,12 @@ class ArtifactDumper:
 
         self.buffer[batch_key] = record
 
-        # === Push scalar metrics to logger (W&B, TensorBoard) ===
-        if self.logger and step is not None and not skip_metrics_logging:
-            scalar_dict = {}
-            if hasattr(output, "summary") and callable(output.summary):
-                scalar_dict.update(output.summary())
-            if loss and hasattr(loss, "summary"):
-                scalar_dict.update(loss.summary())
-            if scalar_dict:
-                self.logger.log_metrics(scalar_dict, step=step, prefix=prefix)
+        # Push scalar metrics to logger (W&B, TensorBoard)
+        if not skip_metrics_logging:
+            self._log_metrics_to_logger(output, loss, step, prefix)
 
-        # === Save to disk if auto_flush ===
-        if self.auto_flush:
-            self.save(filename=f"batch_{batch_key}_{self.model_name}.pt")
+        # Save to disk if auto_flush
+        self._save_if_auto_flush(batch_key)
 
     def should_log_step(self, step: int) -> bool:
         if not hasattr(self, "_logged_steps"):

@@ -18,6 +18,11 @@ from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.wrappers.losses.mae import MAELossWrapper
+from refrakt_core.trainer.utils.autoencoder_utils import (
+    handle_autoencoder_training_step,
+    handle_autoencoder_evaluation_step,
+    extract_autoencoder_inputs,
+)
 
 T = TypeVar("T", bound=torch.Tensor)
 
@@ -84,7 +89,7 @@ class AETrainer(BaseTrainer):
             optimizer_cls(self.model.parameters(), **optimizer_args)
         )
 
-    def train(self, num_epochs: int) -> None:
+    def train(self, num_epochs: int) -> Dict[str, float]:
         """
         Train the autoencoder model for a specified number of epochs.
 
@@ -98,44 +103,22 @@ class AETrainer(BaseTrainer):
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
 
             for step, batch in enumerate(loop):
-                inputs = self._extract_inputs(batch)
+                inputs = extract_autoencoder_inputs(batch)
                 inputs = inputs.to(self.device)
 
-                # Reshape inputs if they're flattened
-                if inputs.dim() == 2 and hasattr(self.model, "expected_input_dim"):
-                    # Only reshape if model specifies expected dimensions
-                    inputs = inputs.view(-1, *self.model.expected_input_dim)
-
-                if self.optimizer is not None and isinstance(self.optimizer, Optimizer):
-                    self.optimizer.zero_grad()
-                output = self.model(inputs)
-
-                # In train() method, after getting output:
-                if not isinstance(output, ModelOutput):
-                    output = self._unwrap_output(output)
-
-                # In the train() method, replace the loss computation with:
-                loss_output = self.loss_fn(output, inputs)
-
-                loss_output.total.backward()  # type: ignore[no-untyped-call]
-                if self.optimizer is not None and isinstance(self.optimizer, Optimizer):
-                    self.optimizer.step()
-
-                # Log training metrics at every step
-                if self.artifact_dumper:
-                    self.artifact_dumper.log_scalar_dict(
-                        loss_output.summary(), step=self.global_step, prefix="train"
-                    )
-
-                    if isinstance(output, ModelOutput):
-                        self.artifact_dumper.log_scalar_dict(
-                            output.summary(), step=self.global_step, prefix="train"
-                        )
+                loss_value, output = handle_autoencoder_training_step(
+                    model=self.model,
+                    inputs=inputs,
+                    loss_fn=self.loss_fn,
+                    optimizer=self.optimizer,
+                    global_step=self.global_step,
+                    artifact_dumper=self.artifact_dumper,
+                )
 
                 self.global_step += 1
-                loop.set_postfix({"loss": loss_output.total.item()})
+                loop.set_postfix({"loss": loss_value})
 
-            # Validation - no visualization, just metrics
+            # Validation
             val_loss = self.evaluate()
 
             if val_loss < best_loss:
@@ -145,7 +128,7 @@ class AETrainer(BaseTrainer):
 
             self.save(suffix="latest")
 
-        # Optionally, log final metrics or save final model here
+        return {"final_loss": best_loss, "best_loss": best_loss}
 
     def evaluate(self) -> float:
         """
@@ -166,22 +149,18 @@ class AETrainer(BaseTrainer):
                     self.global_step + val_step + 1000000
                 )  # Large offset to avoid conflicts
 
-                inputs = self._extract_inputs(batch)
+                inputs = extract_autoencoder_inputs(batch)
                 inputs = inputs.to(self.device)
 
-                if inputs.dim() == 2 and hasattr(self.model, "expected_input_dim"):
-                    # Only reshape if model specifies expected dimensions
-                    inputs = inputs.view(-1, *self.model.expected_input_dim)
-
-                output = self.model(inputs)
-                loss_output: LossOutput = self.loss_fn(output, inputs)
-                total_loss += loss_output.total.item()
-
-                # Log validation metrics at every step with unique step counter
-                if self.artifact_dumper:
-                    self.artifact_dumper.log_scalar_dict(
-                        loss_output.summary(), step=val_global_step, prefix="val"
-                    )
+                loss_value = handle_autoencoder_evaluation_step(
+                    model=self.model,
+                    inputs=inputs,
+                    loss_fn=self.loss_fn,
+                    global_step=val_global_step,
+                    artifact_dumper=self.artifact_dumper,
+                )
+                
+                total_loss += loss_value
 
         avg_loss = total_loss / len(self.val_loader)
         print(f"Validation Loss: {avg_loss:.4f}")

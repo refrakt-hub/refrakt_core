@@ -56,10 +56,8 @@ def handle_training_step(trainer_instance, batch: Any, step: int, epoch: int) ->
     trainer_instance.global_step += 1
 
 
-def log_training_metrics(trainer_instance, loss_output: Any, output: Any, step: int) -> None:
-    """Log training metrics."""
-    logger = trainer_instance._get_logger()
-    
+def _log_gradients_and_parameters(trainer_instance, logger: Any) -> None:
+    """Log gradients and parameters if conditions are met."""
     if logger and trainer_instance.global_step % trainer_instance.grad_log_interval == 0:
         logger.log_gradients(trainer_instance.model, step=trainer_instance.global_step, prefix="")
     if logger and trainer_instance.global_step % trainer_instance.param_log_interval == 0:
@@ -68,18 +66,33 @@ def log_training_metrics(trainer_instance, loss_output: Any, output: Any, step: 
             lr = trainer_instance.optimizer.param_groups[0]["lr"]
             logger.log_metrics({"lr": lr}, step=trainer_instance.global_step)
 
+
+def _log_loss_metrics(trainer_instance, loss_output: Any) -> None:
+    """Log loss metrics to artifact dumper."""
     loss_summary = loss_output.summary()
     if trainer_instance.artifact_dumper:
         trainer_instance.artifact_dumper.log_scalar_dict(
             loss_summary, step=trainer_instance.global_step, prefix="train"
         )
 
+
+def _log_output_metrics(trainer_instance, output: Any) -> None:
+    """Log output metrics to artifact dumper."""
     if isinstance(output, ModelOutput) and hasattr(output, "summary"):
         output_summary = output.summary()
         if trainer_instance.artifact_dumper:
             trainer_instance.artifact_dumper.log_scalar_dict(
                 output_summary, step=trainer_instance.global_step, prefix="train/output"
             )
+
+
+def log_training_metrics(trainer_instance, loss_output: Any, output: Any, step: int) -> None:
+    """Log training metrics."""
+    logger = trainer_instance._get_logger()
+    
+    _log_gradients_and_parameters(trainer_instance, logger)
+    _log_loss_metrics(trainer_instance, loss_output)
+    _log_output_metrics(trainer_instance, output)
 
 
 def log_artifacts(trainer_instance, output: Any, loss_output: Any, step: int, epoch: int) -> None:

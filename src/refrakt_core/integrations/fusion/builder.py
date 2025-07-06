@@ -5,6 +5,12 @@ from typing import Any, Dict
 from refrakt_core.integrations.gpu.wrapper import CuMLWrapper
 from refrakt_core.integrations.fusion.protocols import FusionHead
 from refrakt_core.integrations.cpu.wrapper import SklearnWrapper
+from refrakt_core.integrations.fusion.utils import (
+    create_sklearn_wrapper,
+    create_cuml_wrapper,
+    try_load_wrapper_from_path,
+    validate_head_type
+)
 
 
 def build_fusion_head(cfg: Dict[str, Any]) -> FusionHead:
@@ -27,28 +33,17 @@ def build_fusion_head(cfg: Dict[str, Any]) -> FusionHead:
     model = cfg["model"]
     params = cfg.get("params", {})
 
-    # Do not pop 'fusion_head' here; let the wrapper handle it
-    model_params = dict(params)
+    validate_head_type(head_type)
 
     if head_type == "sklearn":
-        wrapper = SklearnWrapper(model, **model_params)
-        # If a path is provided in fusion_head, try to load from path
+        wrapper = create_sklearn_wrapper(model, params)
         fusion_head_config = params.get("fusion_head", {})
-        if fusion_head_config and isinstance(fusion_head_config, dict) and fusion_head_config.get("path"):
-            try:
-                return SklearnWrapper.load(model, fusion_head_config["path"])
-            except (FileNotFoundError, ValueError):
-                return wrapper
-        return wrapper
+        return try_load_wrapper_from_path(wrapper, model, fusion_head_config)
 
     if head_type == "cuml":
-        wrapper = CuMLWrapper(model, **model_params)
+        wrapper = create_cuml_wrapper(model, params)
         fusion_head_config = params.get("fusion_head", {})
-        if fusion_head_config and isinstance(fusion_head_config, dict) and fusion_head_config.get("path"):
-            try:
-                return CuMLWrapper.load(model, fusion_head_config["path"])
-            except (FileNotFoundError, ValueError):
-                return wrapper
-        return wrapper
+        return try_load_wrapper_from_path(wrapper, model, fusion_head_config)
 
+    # This should never be reached due to validate_head_type, but kept for safety
     raise ValueError(f"[FusionBuilder] Unsupported fusion head type: {head_type}")

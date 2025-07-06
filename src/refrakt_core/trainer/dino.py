@@ -20,6 +20,10 @@ from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.utils.methods import unpack_views_from_batch
+from refrakt_core.trainer.utils.dino_utils import (
+    handle_dino_training_step,
+    handle_dino_evaluation_step,
+)
 
 
 @register_trainer("dino")
@@ -112,7 +116,7 @@ class DINOTrainer(BaseTrainer):
         """
         return getattr(self.artifact_dumper, "logger", None)
 
-    def train(self, num_epochs: int) -> None:
+    def train(self, num_epochs: int) -> Dict[str, float]:
         """
         Train the model for a specified number of epochs.
 
@@ -130,78 +134,32 @@ class DINOTrainer(BaseTrainer):
             for batch_id, batch in enumerate(loop):
                 try:
                     views = self._unpack_views(batch)
-                    with autocast(device_type=self.device.type):
-                        student_out = torch.stack(
-                            [
-                                self.model(view, teacher=False).embeddings
-                                for view in views
-                            ],
-                            dim=1,
-                        )
-                        teacher_out = self.model(
-                            views[0], teacher=True
-                        ).embeddings.unsqueeze(1)
-                        if student_out is None or teacher_out is None:
-                            loop.write("[WARNING] Skipping batch due to None outputs")
-                            continue
-                        loss_output = self.loss_fn(student_out, teacher_out)
-                        loss = loss_output.total
-                    if loss is None:
-                        continue
-                    if isinstance(self.optimizer, dict) or self.optimizer is None:
-                        raise RuntimeError(
-                            "DINOTrainer expects a single optimizer, not a dict or None."
-                        )
-                    self.optimizer.zero_grad(set_to_none=True)
-                    self.scaler.scale(loss).backward()  # type: ignore[no-untyped-call]
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                    self.model.update_teacher()
-                    total_loss += loss.item()
-                    loop.set_postfix(loss=loss.item())
-                    self.global_step += 1
-                    if self.artifact_dumper and self.artifact_dumper.should_log_step(
-                        self.global_step
-                    ):
-                        model_output = ModelOutput(
-                            embeddings=student_out,
-                            attention_maps=(
-                                getattr(
-                                    getattr(self.model.dino_model, "backbone", None),
-                                    "get_attention_maps",
-                                    lambda x: None,
-                                )(views[0])
-                                if hasattr(self.model, "dino_model")
-                                else None
-                            ),
-                            loss_components=loss_output.components,
-                            extra={
-                                "backbone": getattr(
-                                    self.model, "wrapper_config", {}
-                                ).get("backbone", "unknown")
-                            },
-                        )
-                        self.artifact_dumper.log_full_output(
-                            output=model_output,
-                            loss=loss_output,
-                            step=self.global_step,
-                            batch_id=batch_id,
-                            prefix="train",
-                        )
-                    logger = self._get_logger()
-                    if logger:
-                        if self.global_step % self.grad_log_interval == 0:
-                            logger.log_gradients(
-                                self.model, step=self.global_step, prefix=""
-                            )
-                        if self.global_step % self.param_log_interval == 0:
-                            logger.log_parameters(
-                                self.model, step=self.global_step, prefix=""
-                            )
-                            lr = self.optimizer.param_groups[0]["lr"]
-                            logger.log_metrics({"lr": lr}, step=self.global_step)
+                    
+                    loss_value, success = handle_dino_training_step(
+                        model=self.model,
+                        batch=views,
+                        device=self.device,
+                        loss_fn=self.loss_fn,
+                        optimizer=self.optimizer,
+                        scaler=self.scaler,
+                        global_step=self.global_step,
+                        artifact_dumper=self.artifact_dumper,
+                        batch_id=batch_id,
+                        grad_log_interval=self.grad_log_interval,
+                        param_log_interval=self.param_log_interval,
+                        logger=self._get_logger(),
+                    )
+                    
+                    if success:
+                        total_loss += loss_value
+                        loop.set_postfix(loss=loss_value)
+                        self.global_step += 1
+                    else:
+                        loop.write("[WARNING] Skipping batch due to None outputs")
+                        
                 except (RuntimeError, ValueError, TypeError) as e:
                     loop.write(f"[ERROR] Batch skipped due to error: {e}")
+                    
             if self.scheduler and not isinstance(self.scheduler, dict):
                 self.scheduler.step()
             current_loss = self.evaluate()
@@ -216,7 +174,7 @@ class DINOTrainer(BaseTrainer):
                 else 0.0
             )
             print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.4f}")
-        return None
+        return {"final_loss": avg_loss, "best_loss": best_loss}
 
     def evaluate(self) -> Optional[float]:
         """
@@ -236,31 +194,22 @@ class DINOTrainer(BaseTrainer):
             for batch_id, batch in enumerate(loop):
                 try:
                     views = self._unpack_views(batch)
-
-                    student_out = torch.stack(
-                        [self.model(view, teacher=False).embeddings for view in views],
-                        dim=1,
+                    
+                    loss_value, success = handle_dino_evaluation_step(
+                        model=self.model,
+                        batch=views,
+                        device=self.device,
+                        loss_fn=self.loss_fn,
+                        global_step=self.global_step,
+                        artifact_dumper=self.artifact_dumper,
+                        batch_id=batch_id,
                     )
-                    teacher_out = self.model(
-                        views[0], teacher=True
-                    ).embeddings.unsqueeze(1)
-
-                    loss_output = self.loss_fn(student_out, teacher_out)
-                    loss = loss_output.total
-                    total_loss += loss.item()
-                    loop.set_postfix(val_loss=loss.item())
-
-                    if self.artifact_dumper and self.artifact_dumper.should_log_step(
-                        self.global_step
-                    ):
-                        model_output = ModelOutput(embeddings=student_out)
-                        self.artifact_dumper.log_full_output(
-                            output=model_output,
-                            loss=loss_output,
-                            step=self.global_step,
-                            batch_id=f"val_{batch_id}",
-                            prefix="val",
-                        )
+                    
+                    if success:
+                        total_loss += loss_value
+                        loop.set_postfix(val_loss=loss_value)
+                    else:
+                        continue
 
                 except (RuntimeError, ValueError, TypeError) as e:
                     loop.write(f"[ERROR] Validation batch skipped due to error: {e}")

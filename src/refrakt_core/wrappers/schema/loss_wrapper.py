@@ -6,39 +6,13 @@ from typing import Optional
 
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.wrappers.utils.loss_utils import convert_result_to_loss_output
 
 
 def _handle_non_model_output(fn, output, target) -> LossOutput:
     """Handle case when output is not a ModelOutput."""
     result = fn(output, target)
-    return _convert_result_to_loss_output(result)
-
-
-def _convert_result_to_loss_output(result) -> LossOutput:
-    """Convert various result types to LossOutput."""
-    if isinstance(result, LossOutput):
-        return result
-    elif isinstance(result, dict):
-        if result:
-            total = sum(result.values())
-            if not isinstance(total, torch.Tensor):
-                total = torch.tensor(total)
-        else:
-            total = torch.tensor(0.0)
-        return LossOutput(total=total, components=result)
-    elif isinstance(result, tuple) and len(result) == 2:
-        total, components = result
-        if not isinstance(total, torch.Tensor):
-            total = torch.tensor(total)
-        if not isinstance(components, dict):
-            components = {}
-        return LossOutput(total=total, components=components)
-    else:
-        if result is None:
-            return LossOutput(total=torch.tensor(float('nan')))
-        if not isinstance(result, torch.Tensor):
-            result = torch.tensor(result)
-        return LossOutput(total=result)
+    return convert_result_to_loss_output(result)
 
 
 def _build_input_dict_with_field_map(fn, output: ModelOutput, target, field_map: dict) -> dict:
@@ -107,4 +81,4 @@ class LossWrapper:
             input_dict = _build_input_dict_auto(self.fn, output, target)
 
         result = self.fn(**input_dict)
-        return _convert_result_to_loss_output(result)
+        return convert_result_to_loss_output(result)

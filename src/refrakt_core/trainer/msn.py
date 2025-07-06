@@ -18,6 +18,11 @@ from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
+from refrakt_core.trainer.utils.msn_utils import (
+    handle_msn_training_step,
+    handle_msn_evaluation_step,
+    prepare_msn_inputs,
+)
 
 
 @register_trainer("msn")
@@ -79,7 +84,7 @@ class MSNTrainer(BaseTrainer):
         )
         self.global_step = 0
 
-    def train(self, num_epochs: int) -> None:
+    def train(self, num_epochs: int) -> Dict[str, float]:
         """
         Train the MSN model for a specified number of epochs.
 
@@ -93,32 +98,22 @@ class MSNTrainer(BaseTrainer):
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{num_epochs}")
 
             for step, batch in enumerate(loop):
-                inputs = self._prepare_msn_inputs(batch)
+                inputs = prepare_msn_inputs(batch)
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-                if self.optimizer is not None and isinstance(self.optimizer, Optimizer):
-                    self.optimizer.zero_grad()
-                output = self.model(inputs)
+                loss_value = handle_msn_training_step(
+                    model=self.model,
+                    inputs=inputs,
+                    loss_fn=self.loss_fn,
+                    optimizer=self.optimizer,
+                    global_step=self.global_step,
+                    artifact_dumper=self.artifact_dumper,
+                    log_every=self.log_every,
+                    epoch=epoch,
+                    step=step,
+                )
 
-                loss_output: LossOutput = self.loss_fn(output)
-                loss_output.total.backward()  # type: ignore[no-untyped-call]
-                if self.optimizer is not None and isinstance(self.optimizer, Optimizer):
-                    self.optimizer.step()
-
-                loop.set_postfix({"loss": loss_output.total.item()})
-
-                if (
-                    self.artifact_dumper
-                    and self.log_every
-                    and step % self.log_every == 0
-                ):
-                    self.artifact_dumper.log_full_output(
-                        output,
-                        loss=loss_output,
-                        step=self.global_step,
-                        batch_id=f"train_ep{epoch}_step{step}",
-                    )
-
+                loop.set_postfix({"loss": loss_value})
                 self.global_step += 1
 
             if self.scheduler:
@@ -140,6 +135,8 @@ class MSNTrainer(BaseTrainer):
 
         if self.artifact_dumper:
             self.artifact_dumper.save(filename=f"msn_final_epoch{num_epochs}.pt")
+            
+        return {"final_loss": val_loss, "best_loss": best_loss}
 
     def evaluate(self) -> float:
         """

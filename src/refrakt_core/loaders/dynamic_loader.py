@@ -19,6 +19,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
 from refrakt_core.logging_config import get_logger
+from refrakt_core.loaders.utils import find_directory_by_keywords
 
 
 @dataclass
@@ -113,29 +114,22 @@ class DatasetFormatDetector:
     def _validate_supervised_structure(self, extracted_path: Path) -> bool:
         """Validate supervised dataset structure."""
         # Try to find train directory with flexible naming
-        train_dir = None
-        for item in extracted_path.iterdir():
-            if item.is_dir() and "train" in item.name.lower():
-                train_dir = item
-                break
-        
+        keywords = ["train", "traing", "trainging", "training"]
+        train_dir = find_directory_by_keywords(extracted_path, keywords)
         if train_dir is None:
             # Fallback to exact "train" directory
             train_dir = extracted_path / "train"
             if not train_dir.exists():
                 return False
-        
         # Check for class directories in train
         train_classes = [d for d in train_dir.iterdir() if d.is_dir()]
         if not train_classes:
             return False
-        
         # Check if each class directory has images
         for class_dir in train_classes:
             images = list(class_dir.glob("*.png")) + list(class_dir.glob("*.jpg")) + list(class_dir.glob("*.jpeg"))
             if not images:
                 return False
-        
         return True
     
     def _validate_contrastive_structure(self, extracted_path: Path) -> bool:

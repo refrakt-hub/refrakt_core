@@ -17,37 +17,48 @@ class ModelOutput:
     )  # for contrastive/self-sup
     extra: Dict[str, Any] = field(default_factory=dict)
 
-    def summary(self) -> Dict[str, float]:
-        summary = {}
+    def _add_tensor_stats(self, summary: Dict[str, float], tensor: Optional[Any], prefix: str):
+        """
+        Helper method to add tensor statistics to summary.
+        """
+        if tensor is not None and isinstance(tensor, torch.Tensor):
+            summary[f"{prefix}/mean"] = tensor.mean().item()
+            if prefix != "reconstruction":  # Skip std for reconstruction
+                summary[f"{prefix}/std"] = tensor.std().item()
 
-        if self.logits is not None and isinstance(self.logits, torch.Tensor):
-            summary["logits/mean"] = self.logits.mean().item()
-            summary["logits/std"] = self.logits.std().item()
-
+    def _add_embeddings_stats(self, summary: Dict[str, float]):
+        """
+        Helper method to add embeddings statistics to summary.
+        """
         if self.embeddings is not None and isinstance(self.embeddings, torch.Tensor):
             summary["embeddings/norm_mean"] = self.embeddings.norm(dim=1).mean().item()
             summary["embeddings/std"] = self.embeddings.std().item()
 
-        if self.reconstruction is not None and isinstance(
-            self.reconstruction, torch.Tensor
-        ):
-            summary["reconstruction/mean"] = self.reconstruction.mean().item()
-
-        if self.attention_maps is not None and isinstance(
-            self.attention_maps, torch.Tensor
-        ):
-            summary["attention/mean"] = self.attention_maps.mean().item()
-            summary["attention/std"] = self.attention_maps.std().item()
-
-        # Loss components (e.g., contrastive / custom)
+    def _add_loss_components(self, summary: Dict[str, float]):
+        """
+        Helper method to add loss components to summary.
+        """
         for k, v in self.loss_components.items():
             if isinstance(v, torch.Tensor):
                 summary[f"loss_component/{k}"] = v.item()
 
-        # Extras (if scalar or single-tensor-like)
+    def _add_extra_components(self, summary: Dict[str, float]):
+        """
+        Helper method to add extra components to summary.
+        """
         for k, v in self.extra.items():
             if isinstance(v, torch.Tensor) and v.numel() == 1:
                 summary[f"extra/{k}"] = v.item()
+
+    def summary(self) -> Dict[str, float]:
+        summary = {}
+
+        self._add_tensor_stats(summary, self.logits, "logits")
+        self._add_embeddings_stats(summary)
+        self._add_tensor_stats(summary, self.reconstruction, "reconstruction")
+        self._add_tensor_stats(summary, self.attention_maps, "attention")
+        self._add_loss_components(summary)
+        self._add_extra_components(summary)
 
         return summary
 

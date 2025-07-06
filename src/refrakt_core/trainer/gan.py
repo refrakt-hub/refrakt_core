@@ -19,6 +19,10 @@ from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
+from refrakt_core.trainer.utils.gan_utils import (
+    handle_gan_epoch_training,
+    handle_gan_scheduler_step,
+)
 
 
 @register_trainer("gan")
@@ -97,7 +101,7 @@ class GANTrainer(BaseTrainer):
             "discriminator": GradScaler(enabled=(device == "cuda")),
         }
 
-    def train(self, num_epochs: int) -> None:
+    def train(self, num_epochs: int) -> Dict[str, float]:
         """
         Train the GAN model for a specified number of epochs.
 
@@ -105,171 +109,31 @@ class GANTrainer(BaseTrainer):
             num_epochs (int): Number of epochs to train.
         """
         best_psnr = float("-inf")
+        final_avg_g_loss = 0.0
+        final_avg_d_loss = 0.0
 
         for epoch in range(num_epochs):
-            self.model.train()
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
-            total_g_loss = 0.0
-            total_d_loss = 0.0
+            
+            # Train for one epoch
+            total_g_loss, total_d_loss = handle_gan_epoch_training(
+                model=self.model,
+                train_loader=self.train_loader,
+                optimizer=self.optimizer,
+                loss_fns=self.loss_fns,
+                device=self.device,
+                scaler=self.scaler,
+                global_step=self.global_step,
+                artifact_dumper=self.artifact_dumper,
+                grad_log_interval=self.grad_log_interval,
+                param_log_interval=self.param_log_interval,
+                logger=self._get_logger(),
+            )
 
-            for batch_id, batch in enumerate(loop):
-                try:
-                    device_batch = self._move_batch_to_device(batch)
+            # Update schedulers
+            handle_gan_scheduler_step(self.scheduler)
 
-                    if isinstance(device_batch, dict):
-                        lr = device_batch["lr"]
-                        hr = device_batch["hr"]
-                    elif (
-                        isinstance(device_batch, (list, tuple))
-                        and len(device_batch) >= 2
-                    ):
-                        lr = device_batch[0]
-                        hr = device_batch[1]
-                    else:
-                        raise ValueError(
-                            "Batch must be a dict with 'lr' and 'hr' keys or a list/tuple with at least 2 elements"
-                        )
-
-                    d_loss_out = None
-                    g_loss_out = None
-                    d_loss = torch.tensor(0.0, device=self.device)
-                    g_loss = torch.tensor(0.0, device=self.device)
-
-                    if (
-                        self.optimizer is not None
-                        and isinstance(self.optimizer, dict)
-                        and "discriminator" in self.optimizer
-                    ):
-                        self.optimizer["discriminator"].zero_grad(set_to_none=True)
-                        with torch.autocast(device_type=self.device.type):
-                            disc_losses = self.model.training_step(
-                                {"lr": lr, "hr": hr},
-                                optimizer=self.optimizer,
-                                loss_fn=self.loss_fns,
-                                device=self.device,
-                                phase="discriminator",
-                            )
-                            d_loss_out = disc_losses["d_loss"]
-                            d_loss = d_loss_out.total
-
-                        self.scaler["discriminator"].scale(d_loss).backward()
-                        self.scaler["discriminator"].step(
-                            self.optimizer["discriminator"]
-                        )
-                        self.scaler["discriminator"].update()
-
-                    if (
-                        self.optimizer is not None
-                        and isinstance(self.optimizer, dict)
-                        and "generator" in self.optimizer
-                    ):
-                        self.optimizer["generator"].zero_grad(set_to_none=True)
-                        with torch.autocast(device_type=self.device.type):
-                            gen_losses = self.model.training_step(
-                                {"lr": lr, "hr": hr},
-                                optimizer=self.optimizer,
-                                loss_fn=self.loss_fns,
-                                device=self.device,
-                                phase="generator",
-                            )
-                            g_loss_out = gen_losses["g_loss"]
-                            g_loss = g_loss_out.total
-
-                        self.scaler["generator"].scale(g_loss).backward()
-                        self.scaler["generator"].step(self.optimizer["generator"])
-                        self.scaler["generator"].update()
-
-                        total_g_loss += g_loss.item()
-                        total_d_loss += d_loss.item()
-
-                        loop.set_postfix(
-                            {
-                                "gen_loss": g_loss.item(),
-                                "disc_loss": d_loss.item(),
-                            }
-                        )
-                        self.global_step += 1
-
-                    if self.artifact_dumper and self.artifact_dumper.should_log_step(
-                        self.global_step
-                    ):
-                        if g_loss_out is not None and d_loss_out is not None:
-                            merged_loss = LossOutput(
-                                total=g_loss_out.total + d_loss_out.total,
-                                components={
-                                    "generator": g_loss_out.total,
-                                    "discriminator": d_loss_out.total,
-                                },
-                            )
-
-                            self.artifact_dumper.log_loss(
-                                merged_loss, step=self.global_step, prefix="train"
-                            )
-
-                            if batch_id % 100 == 0:
-                                with torch.no_grad():
-                                    sr = self.model.generate(lr)
-                                model_output = ModelOutput(
-                                    image=sr,
-                                    targets=hr,
-                                    extra={"low_res": lr},
-                                )
-                                self.artifact_dumper.log_full_output(
-                                    output=model_output,
-                                    loss=merged_loss,
-                                    step=self.global_step,
-                                    batch_id=batch_id,
-                                    prefix="train",
-                                )
-
-                    logger = self._get_logger()
-                    if logger:
-                        if self.global_step % self.grad_log_interval == 0:
-                            logger.log_gradients(
-                                self.model.generator,
-                                step=self.global_step,
-                                prefix="generator",
-                            )
-                            logger.log_gradients(
-                                self.model.discriminator,
-                                step=self.global_step,
-                                prefix="discriminator",
-                            )
-                        if self.global_step % self.param_log_interval == 0:
-                            logger.log_parameters(
-                                self.model.generator,
-                                step=self.global_step,
-                                prefix="generator",
-                            )
-                            logger.log_parameters(
-                                self.model.discriminator,
-                                step=self.global_step,
-                                prefix="discriminator",
-                            )
-                            if self.optimizer is not None and isinstance(
-                                self.optimizer, dict
-                            ):
-                                lr_g = self.optimizer["generator"].param_groups[0]["lr"]
-                                lr_d = self.optimizer["discriminator"].param_groups[0][
-                                    "lr"
-                                ]
-                                logger.log_metrics(
-                                    {"lr_generator": lr_g, "lr_discriminator": lr_d},
-                                    step=self.global_step,
-                                )
-
-                except (RuntimeError, ValueError, TypeError) as e:
-                    loop.write(f"[ERROR] Batch skipped due to error: {e}")
-
-            if self.scheduler:
-                if isinstance(self.scheduler, dict):
-                    if "generator" in self.scheduler:
-                        self.scheduler["generator"].step()
-                    if "discriminator" in self.scheduler:
-                        self.scheduler["discriminator"].step()
-                else:
-                    self.scheduler.step()
-
+            # Evaluate and save
             avg_psnr = self.evaluate()
             if avg_psnr > best_psnr:
                 best_psnr = avg_psnr
@@ -277,11 +141,13 @@ class GANTrainer(BaseTrainer):
                 print(f"New best model saved with PSNR: {best_psnr:.2f} dB")
 
             self.save(suffix="latest")
-            avg_g_loss = total_g_loss / len(self.train_loader)
-            avg_d_loss = total_d_loss / len(self.train_loader)
+            final_avg_g_loss = total_g_loss / len(self.train_loader) if len(self.train_loader) > 0 else 0.0
+            final_avg_d_loss = total_d_loss / len(self.train_loader) if len(self.train_loader) > 0 else 0.0
             print(
-                f"Epoch [{epoch+1}/{num_epochs}], G Loss: {avg_g_loss:.4f}, D Loss: {avg_d_loss:.4f}"
+                f"Epoch [{epoch+1}/{num_epochs}], G Loss: {final_avg_g_loss:.4f}, D Loss: {final_avg_d_loss:.4f}"
             )
+            
+        return {"final_g_loss": final_avg_g_loss, "final_d_loss": final_avg_d_loss, "best_psnr": best_psnr}
 
     def evaluate(self) -> float:
         """

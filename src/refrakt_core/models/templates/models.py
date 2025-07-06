@@ -295,6 +295,16 @@ class BaseGAN(BaseModel):
         self.model_type = checkpoint.get("model_type", self.model_type)
         print(f"GAN model loaded from {path}")
 
+    def _get_param_counts(self, module):
+        """
+        Helper to count total and trainable parameters for a module.
+        """
+        if module is None:
+            return 0, 0
+        total = sum(p.numel() for p in module.parameters())
+        trainable = sum(p.numel() for p in module.parameters() if p.requires_grad)
+        return total, trainable
+
     def summary(self) -> Dict[str, Any]:
         """
         Get a summary of the GAN model.
@@ -302,25 +312,8 @@ class BaseGAN(BaseModel):
         Returns:
             Dict[str, Any]: Model summary information.
         """
-        gen_params = (
-            sum(p.numel() for p in self.generator.parameters()) if self.generator else 0
-        )
-        gen_trainable = (
-            sum(p.numel() for p in self.generator.parameters() if p.requires_grad)
-            if self.generator
-            else 0
-        )
-        disc_params = (
-            sum(p.numel() for p in self.discriminator.parameters())
-            if self.discriminator
-            else 0
-        )
-        disc_trainable = (
-            sum(p.numel() for p in self.discriminator.parameters() if p.requires_grad)
-            if self.discriminator
-            else 0
-        )
-
+        gen_params, gen_trainable = self._get_param_counts(self.generator)
+        disc_params, disc_trainable = self._get_param_counts(self.discriminator)
         return {
             "model_name": self.model_name,
             "model_type": self.model_type,

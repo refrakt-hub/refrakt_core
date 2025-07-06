@@ -20,6 +20,10 @@ from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.utils.methods import unpack_views_from_batch
+from refrakt_core.trainer.utils.contrastive_utils import (
+    handle_contrastive_training_step,
+    handle_contrastive_evaluation_step,
+)
 
 
 @register_trainer("contrastive")
@@ -120,7 +124,7 @@ class ContrastiveTrainer(BaseTrainer):
         """
         return getattr(self.artifact_dumper, "logger", None)
 
-    def train(self, num_epochs: int) -> None:
+    def train(self, num_epochs: int) -> Dict[str, float]:
         """
         Train the model for a specified number of epochs.
 
@@ -138,72 +142,33 @@ class ContrastiveTrainer(BaseTrainer):
             for batch_id, batch in enumerate(loop):
                 try:
                     view1, view2 = self._unpack_views(batch)
-                    view1 = view1.to(self.device)
-                    view2 = view2.to(self.device)
-                    with torch.autocast(device_type=self.device.type):
-                        out1 = self.model(view1)
-                        out2 = self.model(view2)
-                        if out1 is None or out2 is None:
-                            loop.write("[WARNING] Skipping batch due to None outputs")
-                            continue
-                        z1 = out1.embeddings if isinstance(out1, ModelOutput) else out1
-                        z2 = out2.embeddings if isinstance(out2, ModelOutput) else out2
-                        if not isinstance(z1, torch.Tensor) or not isinstance(
-                            z2, torch.Tensor
-                        ):
-                            continue
-                        loss_output = self.loss_fn(z1, z2)
-                        if isinstance(loss_output, torch.Tensor):
-                            loss_output = LossOutput(total=loss_output)
-                        loss = loss_output.total
-                    if loss is None:
-                        continue
-                    if isinstance(self.optimizer, dict) or self.optimizer is None:
-                        raise RuntimeError(
-                            "ContrastiveTrainer expects a single optimizer, not a dict or None."
-                        )
-                    self.optimizer.zero_grad(set_to_none=True)
-                    self.scaler.scale(loss).backward()  # type: ignore[no-untyped-call]
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                    total_loss += loss.item()
-                    loop.set_postfix(loss=loss.item())
-                    self.global_step += 1
-                    if self.artifact_dumper and self.artifact_dumper.should_log_step(
-                        self.global_step
-                    ):
-                        if not isinstance(out1, ModelOutput):
-                            out1 = ModelOutput(embeddings=out1)
-                        if not isinstance(out2, ModelOutput):
-                            out2 = ModelOutput(embeddings=out2)
-                        self.artifact_dumper.log_full_output(
-                            output=out1,
-                            loss=loss_output,
-                            step=self.global_step,
-                            batch_id=batch_id,
-                            prefix="train/view1",
-                        )
-                        self.artifact_dumper.log_full_output(
-                            output=out2,
-                            loss=loss_output,
-                            step=self.global_step,
-                            batch_id=batch_id,
-                            prefix="train/view2",
-                        )
-                    logger = self._get_logger()
-                    if logger:
-                        if self.global_step % self.grad_log_interval == 0:
-                            logger.log_gradients(
-                                self.model, step=self.global_step, prefix=""
-                            )
-                        if self.global_step % self.param_log_interval == 0:
-                            logger.log_parameters(
-                                self.model, step=self.global_step, prefix=""
-                            )
-                            lr = self.optimizer.param_groups[0]["lr"]
-                            logger.log_metrics({"lr": lr}, step=self.global_step)
+                    batch_data = (view1, view2)
+                    
+                    loss_value, success = handle_contrastive_training_step(
+                        model=self.model,
+                        batch=batch_data,
+                        device=self.device,
+                        loss_fn=self.loss_fn,
+                        optimizer=self.optimizer,
+                        scaler=self.scaler,
+                        global_step=self.global_step,
+                        artifact_dumper=self.artifact_dumper,
+                        batch_id=batch_id,
+                        grad_log_interval=self.grad_log_interval,
+                        param_log_interval=self.param_log_interval,
+                        logger=self._get_logger(),
+                    )
+                    
+                    if success:
+                        total_loss += loss_value
+                        loop.set_postfix(loss=loss_value)
+                        self.global_step += 1
+                    else:
+                        loop.write("[WARNING] Skipping batch due to None outputs")
+                        
                 except (RuntimeError, ValueError, TypeError) as e:
                     loop.write(f"[ERROR] Batch skipped due to error: {e}")
+                    
             if self.scheduler and not isinstance(self.scheduler, dict):
                 self.scheduler.step()
             current_loss = self.evaluate()
@@ -218,7 +183,7 @@ class ContrastiveTrainer(BaseTrainer):
                 else 0.0
             )
             print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.4f}")
-        return None
+        return {"final_loss": avg_loss, "best_loss": best_loss}
 
     def evaluate(self) -> Optional[float]:
         """
@@ -238,48 +203,23 @@ class ContrastiveTrainer(BaseTrainer):
             for batch_id, batch in enumerate(loop):
                 try:
                     view1, view2 = self._unpack_views(batch)
-                    view1 = view1.to(self.device)
-                    view2 = view2.to(self.device)
-                    out1 = self.model(view1)
-                    out2 = self.model(view2)
-                    if out1 is None or out2 is None:
+                    batch_data = (view1, view2)
+                    
+                    loss_value, success = handle_contrastive_evaluation_step(
+                        model=self.model,
+                        batch=batch_data,
+                        device=self.device,
+                        loss_fn=self.loss_fn,
+                        global_step=self.global_step,
+                        artifact_dumper=self.artifact_dumper,
+                        batch_id=batch_id,
+                    )
+                    
+                    if success:
+                        total_loss += loss_value
+                        loop.set_postfix(val_loss=loss_value)
+                    else:
                         continue
-                    z1 = out1.embeddings if isinstance(out1, ModelOutput) else out1
-                    z2 = out2.embeddings if isinstance(out2, ModelOutput) else out2
-                    if not isinstance(z1, torch.Tensor) or not isinstance(
-                        z2, torch.Tensor
-                    ):
-                        continue
-                    loss_output = self.loss_fn(z1, z2)
-                    if isinstance(loss_output, torch.Tensor):
-                        loss_output = LossOutput(total=loss_output)
-                    loss = loss_output.total
-
-                    total_loss += loss.item()
-                    loop.set_postfix(val_loss=loss.item())
-
-                    if self.artifact_dumper and self.artifact_dumper.should_log_step(
-                        self.global_step
-                    ):
-                        if not isinstance(out1, ModelOutput):
-                            out1 = ModelOutput(embeddings=out1)
-                        if not isinstance(out2, ModelOutput):
-                            out2 = ModelOutput(embeddings=out2)
-
-                        self.artifact_dumper.log_full_output(
-                            output=out1,
-                            loss=loss_output,
-                            step=self.global_step,
-                            batch_id=f"val_{batch_id}",
-                            prefix="val/view1",
-                        )
-                        self.artifact_dumper.log_full_output(
-                            output=out2,
-                            loss=loss_output,
-                            step=self.global_step,
-                            batch_id=f"val_{batch_id}",
-                            prefix="val/view2",
-                        )
 
                 except (RuntimeError, ValueError, TypeError) as e:
                     loop.write(f"[ERROR] Validation batch skipped due to error: {e}")

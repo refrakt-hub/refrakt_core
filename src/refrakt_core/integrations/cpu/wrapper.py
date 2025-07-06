@@ -25,6 +25,7 @@ import numpy as np
 from numpy.typing import NDArray
 from refrakt_core.integrations.cpu.registry import load_sklearn_registry
 from refrakt_core.integrations.common_types import ClassifierOutput, NDArrayF
+from refrakt_core.integrations.cpu.utils import extract_wrapper_params, instantiate_sklearn_model, validate_predict_proba_support
 
 
 class SklearnEstimator(Protocol):
@@ -55,31 +56,11 @@ class SklearnWrapper:
         Raises:
             ValueError: If the model path is invalid.
         """
-        registry = load_sklearn_registry()
-        class_path = registry.get(model, model)
-
-        module_path, class_name = class_path.rsplit(".", 1)
-
-        try:
-            module = importlib.import_module(module_path)
-            model_cls: Type[object] = getattr(module, class_name)
-        except (ModuleNotFoundError, AttributeError) as e:
-            raise ValueError(f"Invalid sklearn model '{model}': {e}")
-
         # Extract wrapper-specific parameters
-        wrapper_params = {}
-        model_params = dict(params)  # Make a copy to modify
-
-        # Handle special parameters
-        if "fusion_head" in model_params:
-            fusion_head_val = model_params.pop("fusion_head")
-            if fusion_head_val is None:
-                wrapper_params["fusion_head"] = {}
-            else:
-                wrapper_params["fusion_head"] = fusion_head_val
-        print(f"DEBUG (SklearnWrapper): wrapper_params={wrapper_params}, model_params={model_params}")
-
-        model_instance = model_cls(**model_params)
+        wrapper_params, model_params = extract_wrapper_params(params)
+        
+        # Instantiate the model
+        model_instance = instantiate_sklearn_model(model, model_params)
         self.model: SklearnEstimator = cast(SklearnEstimator, model_instance)
 
         # Store wrapper configuration
@@ -107,11 +88,8 @@ class SklearnWrapper:
         Raises:
             AttributeError: If model lacks `predict_proba`.
         """
-        if hasattr(self.model, "predict_proba"):
-            return self.model.predict_proba(X)
-        raise AttributeError(
-            f"{self.model.__class__.__name__} does not support predict_proba"
-        )
+        validate_predict_proba_support(self.model)
+        return self.model.predict_proba(X)
 
     def __repr__(self) -> str:
         """
