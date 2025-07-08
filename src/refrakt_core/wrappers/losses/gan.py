@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from torch import nn
 
@@ -11,13 +11,13 @@ from refrakt_core.schema.model_output import ModelOutput
 
 @register_loss("gan_wrapped", mode="logits")
 class GANLossWrapper(BaseLoss):
-    def __init__(self, loss_params: Optional[Dict] = None):
+    def __init__(self, loss_params: Optional[Dict[str, Any]] = None) -> None:
         super().__init__()
         loss_params = loss_params or {}
         self.loss_fn = GANLoss(**loss_params)
         self.required_fields = ["logits", "target_is_real"]
 
-    def forward(self, output: ModelOutput, target=None) -> LossOutput:
+    def forward(self, output: ModelOutput, target: Any = None) -> LossOutput:
         logits = output.logits
         target_is_real = output.extra.get("target_is_real")
 

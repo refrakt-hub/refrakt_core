@@ -96,27 +96,27 @@ class VisionTransformer(BaseClassifier):
 
         return x[:, 0]  # CLS token
 
-    def forward(self, images: Tensor) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         """
         Forward pass through the full ViT classifier.
 
         Args:
-            images (Tensor): Input images.
+            x (Tensor): Input images.
 
         Returns:
             Tensor: Output logits for classification.
         """
-        cls_token = self.forward_features(images)
-        return self.mlp_head(cls_token)
+        cls_token = self.forward_features(x)
+        return self.mlp_head(cls_token)  # type: ignore[no-any-return]
 
-    def features(self, images: Tensor) -> Tensor:
+    def features(self, x: Tensor) -> Tensor:
         """
         Return features extracted by ViT (before classification head).
 
         Args:
-            images (Tensor): Input images.
+            x (Tensor): Input images.
 
         Returns:
             Tensor: CLS token embeddings.
         """
-        return self.forward_features(images)
+        return self.forward_features(x)

@@ -7,7 +7,7 @@ momentum update and normalized projection heads.
 Also contains a wrapper for ResNet backbones to integrate with DINO training.
 """
 
-from typing import Optional
+from typing import Optional, Any
 
 import torch
 import torch.nn.functional as F
@@ -102,7 +102,7 @@ class DINOModel(BaseModel):
         for param in self.teacher_head.parameters():
             param.requires_grad = False
 
-    def forward(self, x: Tensor, teacher: bool = False, **kwargs) -> Tensor:
+    def forward(self, x: Tensor, teacher: bool = False, **kwargs: Any) -> Tensor:
         """
         Forward pass through student or teacher head.
 
@@ -114,11 +114,11 @@ class DINOModel(BaseModel):
             Tensor: Projected feature of shape (B, out_dim)
         """
         features = self.backbone(x, return_features=True)
-        return self.teacher_head(features) if teacher else self.student_head(features)
+        return self.teacher_head(features) if teacher else self.student_head(features)  # type: ignore[no-any-return]
 
     def forward_for_graph(self, x: Tensor) -> Tensor:
         features = self.backbone(x, return_features=True)
-        return self.student_head(features)
+        return self.student_head(features)  # type: ignore[no-any-return]
 
     @torch.no_grad()
     def update_teacher(self, momentum: float = 0.996) -> None:
@@ -141,12 +141,12 @@ class DINOBackboneWrapper(nn.Module):
     Wraps a backbone model to expose features for DINO training.
     """
 
-    def __init__(self, backbone):
+    def __init__(self, backbone: Any) -> None:
         super().__init__()
         self.backbone = backbone
         self.feature_dim = backbone.feature_dim
 
-    def forward(self, x, **kwargs):
+    def forward(self, x: torch.Tensor, **kwargs: Any) -> torch.Tensor:
         """
         Forward pass through the wrapped backbone to extract features.
 
@@ -157,7 +157,7 @@ class DINOBackboneWrapper(nn.Module):
             Tensor: Extracted features.
         """
         kwargs["return_features"] = True
-        return self.backbone(x, **kwargs)
+        return self.backbone(x, **kwargs)  # type: ignore[no-any-return]
 
 
 @register_model("dino")
@@ -167,7 +167,7 @@ class DINOModelWrapper(DINOModel):
     Instantiates and integrates with the DINO training setup.
     """
 
-    def __init__(self, backbone="resnet18", out_dim=2048, **kwargs):
+    def __init__(self, backbone: Any = "resnet18", out_dim: int = 2048, **kwargs: Any) -> None:
         backbone_map = {
             "resnet18": ResNet18,
             "resnet50": ResNet50,
@@ -180,7 +180,7 @@ class DINOModelWrapper(DINOModel):
                 raise ValueError(f"Unsupported backbone '{backbone}' for DINO.")
             backbone_instance = backbone_map[backbone]()
         elif isinstance(backbone, nn.Module):
-            backbone_instance = backbone
+            backbone_instance = backbone  # type: ignore
         else:
             raise TypeError(
                 f"Expected backbone to be str or nn.Module, got {type(backbone)}"
@@ -189,3 +189,6 @@ class DINOModelWrapper(DINOModel):
         wrapped = DINOBackboneWrapper(backbone_instance)
         super().__init__(backbone=wrapped, model_name="dino", out_dim=out_dim)
         self._model_config = kwargs  # Store additional config
+
+    def forward(self, x: torch.Tensor, teacher: bool = False, **kwargs: Any) -> torch.Tensor:
+        return super().forward(x, teacher=teacher, **kwargs)

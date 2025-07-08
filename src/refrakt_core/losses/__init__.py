@@ -4,7 +4,7 @@ import os
 __all__ = []
 
 
-def auto_import_losses():
+def auto_import_losses() -> None:
     loss_dir = os.path.dirname(__file__)
     for filename in os.listdir(loss_dir):
         if filename.endswith(".py") and filename != "__init__.py":

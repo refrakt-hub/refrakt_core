@@ -23,7 +23,7 @@ complete inference pipelines with automatic input processing and result collecti
 """
 
 import os
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast, Union
 
 import torch
 from omegaconf import DictConfig, OmegaConf
@@ -166,21 +166,23 @@ def extract_inputs_from_batch(batch: Any) -> Optional[torch.Tensor]:
     elif isinstance(batch, dict):
         for key in ["input", "image", "lr"]:
             if key in batch and isinstance(batch[key], torch.Tensor):
-                return batch[key]
+                return cast(torch.Tensor, batch[key])
         return None
     return None
 
 
-def run_inference_loop(model: Any, data_loader: Any) -> List[Any]:
+def run_inference_loop(
+    model: torch.nn.Module, data_loader: Any
+) -> List[torch.Tensor]:
     """
     Run inference loop over a data loader.
 
     Args:
-        model (Any): The model to use for inference.
+        model (torch.nn.Module): The model to use for inference.
         data_loader (Any): The data loader to iterate over.
 
     Returns:
-        List[Any]: List of model outputs for each batch.
+        List[torch.Tensor]: List of model outputs for each batch.
     """
     results = []
     with torch.no_grad():
@@ -189,5 +191,5 @@ def run_inference_loop(model: Any, data_loader: Any) -> List[Any]:
             if inputs is None:
                 continue
             outputs = model(inputs)
-            results.append(outputs)
+            results.append(cast(torch.Tensor, outputs))
     return results

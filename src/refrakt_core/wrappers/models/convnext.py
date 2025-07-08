@@ -20,11 +20,11 @@ class ConvNeXtWrapper(nn.Module):
         model_params (dict): Parameters for the base model (e.g. in_channels, num_classes).
     """
 
-    def __init__(self, model: nn.Module):
+    def __init__(self, model: nn.Module) -> None:
         super().__init__()
         self.backbone = model
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> ModelOutput:
         """
         Forward pass for ConvNeXtWrapper.
         Returns ModelOutput with logits and embeddings.
@@ -42,4 +42,7 @@ class ConvNeXtWrapper(nn.Module):
         Returns:
             torch.Tensor: Only the logits.
         """
-        return self.forward(x).logits
+        out = self.forward(x).logits
+        if isinstance(out, torch.Tensor):
+            return out
+        raise TypeError(f"Expected torch.Tensor for logits, got {type(out)}")

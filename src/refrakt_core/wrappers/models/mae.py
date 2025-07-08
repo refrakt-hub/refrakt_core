@@ -1,4 +1,5 @@
 from torch import Tensor, nn
+from typing import Any, Dict
 
 from refrakt_core.registry.wrapper_registry import register_wrapper
 from refrakt_core.schema.model_output import ModelOutput
@@ -13,7 +14,7 @@ class MAEWrapper(nn.Module):
         model (nn.Module): The already-initialized MAE model
     """
 
-    def __init__(self, model: nn.Module, **kwargs):
+    def __init__(self, model: nn.Module, **kwargs: Any) -> None:
         super().__init__()
         self.model = model
         self.expected_input_dim = getattr(
@@ -36,7 +37,7 @@ class MAEWrapper(nn.Module):
         )
 
     def forward(self, x: Tensor) -> ModelOutput:
-        model_output = self.model(x)
+        model_output: Dict[str, Tensor] = self.model(x)
         recon = model_output["recon"]
         patches = model_output["original_patches"]
 

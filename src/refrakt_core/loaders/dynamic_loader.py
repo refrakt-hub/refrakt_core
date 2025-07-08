@@ -9,14 +9,14 @@ import os
 import zipfile
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, Callable
 from dataclasses import dataclass
 import logging
 
 import torch
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms
+from torchvision import transforms  # type: ignore
 
 from refrakt_core.logging_config import get_logger
 from refrakt_core.loaders.utils import find_directory_by_keywords
@@ -30,13 +30,13 @@ class DatasetFormat:
     description: str
     structure: Dict[str, Any]
     supported_tasks: List[str]
-    validation_rules: List[callable]
+    validation_rules: List[Callable[[Path], bool]]
 
 
 class DatasetFormatDetector:
     """Detects the format of a dataset from its structure."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = get_logger("dataset_detector")
         self.formats = self._register_formats()
     
@@ -166,7 +166,7 @@ class DatasetFormatDetector:
 class ImageSizeValidator:
     """Validates and resizes images according to size constraints."""
     
-    def __init__(self, max_size: Tuple[int, int] = (224, 224), max_ratio: float = 2.0):
+    def __init__(self, max_size: Tuple[int, int] = (224, 224), max_ratio: float = 2.0) -> None:
         """
         Initialize the image size validator.
         
@@ -228,7 +228,7 @@ class DynamicDatasetLoader:
     with support for different formats and automatic format detection.
     """
     
-    def __init__(self, max_image_size: Tuple[int, int] = (224, 224)):
+    def __init__(self, max_image_size: Tuple[int, int] = (224, 224)) -> None:
         """
         Initialize the dynamic dataset loader.
         
@@ -245,8 +245,8 @@ class DynamicDatasetLoader:
         zip_path: Union[str, Path],
         task_type: Optional[str] = None,
         transform: Optional[transforms.Compose] = None,
-        **kwargs
-    ) -> Tuple[Dataset, Optional[Dataset]]:
+        **kwargs: Any
+    ) -> Tuple[Dataset[Any], Optional[Dataset[Any]]]:
         """
         Load a dataset from a zip file.
         
@@ -332,7 +332,7 @@ class DynamicDatasetLoader:
 
     def _validate_images(self, dataset_path: Path) -> None:
         """Validate all images in the dataset."""
-        image_files = []
+        image_files: List[Path] = []
         
         # Find all image files
         for ext in [".png", ".jpg", ".jpeg"]:
@@ -342,7 +342,7 @@ class DynamicDatasetLoader:
             raise ValueError("No image files found in dataset")
         
         # Validate each image
-        invalid_images = []
+        invalid_images: List[Tuple[Path, Optional[str]]] = []
         for image_path in image_files:
             is_valid, error_msg = self.image_validator.validate_image(image_path)
             if not is_valid:
@@ -359,8 +359,8 @@ class DynamicDatasetLoader:
         self, 
         dataset_path: Path, 
         transform: Optional[transforms.Compose], 
-        **kwargs
-    ) -> Tuple[Dataset, Optional[Dataset]]:
+        **kwargs: Any
+    ) -> Tuple[Dataset[Any], Optional[Dataset[Any]]]:
         """Create a GAN dataset from the extracted files."""
         from refrakt_core.datasets import SuperResolutionDataset
         
@@ -397,8 +397,8 @@ class DynamicDatasetLoader:
         self, 
         dataset_path: Path, 
         transform: Optional[transforms.Compose], 
-        **kwargs
-    ) -> Tuple[Dataset, Optional[Dataset]]:
+        **kwargs: Any
+    ) -> Tuple[Dataset[Any], Optional[Dataset[Any]]]:
         """Create a supervised dataset from the extracted files."""
         from torchvision.datasets import ImageFolder
         
@@ -437,8 +437,8 @@ class DynamicDatasetLoader:
         self, 
         dataset_path: Path, 
         transform: Optional[transforms.Compose], 
-        **kwargs
-    ) -> Tuple[Dataset, Optional[Dataset]]:
+        **kwargs: Any
+    ) -> Tuple[Dataset[Any], Optional[Dataset[Any]]]:
         """Create a contrastive dataset from the extracted files."""
         from refrakt_core.datasets import ContrastiveDataset
         
@@ -448,15 +448,15 @@ class DynamicDatasetLoader:
             raise ValueError("Contrastive dataset must have an 'images' directory")
         
         # Create a simple dataset that returns image paths
-        class ImagePathDataset(Dataset):
-            def __init__(self, images_dir: Path):
+        class ImagePathDataset(Dataset[Path]):
+            def __init__(self, images_dir: Path) -> None:
                 self.images_dir = images_dir
-                self.image_files = list(images_dir.glob("*.png")) + list(images_dir.glob("*.jpg")) + list(images_dir.glob("*.jpeg"))
+                self.image_files: List[Path] = list(images_dir.glob("*.png")) + list(images_dir.glob("*.jpg")) + list(images_dir.glob("*.jpeg"))
             
-            def __len__(self):
+            def __len__(self) -> int:
                 return len(self.image_files)
             
-            def __getitem__(self, idx):
+            def __getitem__(self, idx: int) -> Path:
                 return self.image_files[idx]
         
         base_dataset = ImagePathDataset(images_dir)
@@ -484,12 +484,12 @@ class DynamicDatasetLoader:
     
     def create_dataloader(
         self,
-        dataset: Dataset,
+        dataset: Dataset[Any],
         batch_size: int = 32,
         shuffle: bool = True,
         num_workers: int = 4,
-        **kwargs
-    ) -> DataLoader:
+        **kwargs: Any
+    ) -> DataLoader[Any]:
         """
         Create a DataLoader from a dataset.
         

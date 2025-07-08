@@ -9,7 +9,8 @@ from typing import Dict, Tuple
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
-from torchvision import models
+from torchvision import models  # type: ignore
+from typing import cast
 
 from refrakt_core.models.templates.models import BaseContrastiveModel
 from refrakt_core.registry.model_registry import register_model
@@ -31,7 +32,7 @@ class SimCLRModel(BaseContrastiveModel):
         )
 
         self.encoder: nn.Module = models.resnet50(pretrained=False)
-        self.encoder.fc = nn.Identity()
+        self.encoder.fc = nn.Identity()  # type: ignore[assignment]
 
         self.projector: nn.Module = nn.Sequential(
             nn.Linear(2048, 2048, bias=False),
@@ -92,11 +93,11 @@ class SimCLRModel(BaseContrastiveModel):
 
     def encode(self, x: Tensor) -> Tensor:
         """Encodes input using the backbone network."""
-        return self.encoder(x)
+        return self.encoder(x)  # type: ignore[no-any-return]
 
     def project(self, h: Tensor) -> Tensor:
         """Applies the projection head to the encoded features."""
-        return self.projector(h)
+        return self.projector(h)  # type: ignore[no-any-return]
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass through encoder and projector."""

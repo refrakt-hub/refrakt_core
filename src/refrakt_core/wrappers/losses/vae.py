@@ -1,6 +1,6 @@
 # wrappers/vae.py
 
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, Any
 
 import torch
 from torch import Tensor, nn
@@ -18,7 +18,7 @@ from refrakt_core.wrappers.utils.vae_loss_utils import (
 
 @register_loss("vae_wrapped", mode="reconstruction")
 class VAELossWrapper(nn.Module):
-    def __init__(self, loss_params: Optional[Dict] = None):
+    def __init__(self, loss_params: Optional[Dict[str, Any]] = None) -> None:
         super().__init__()
         loss_params = loss_params or {}
         self.loss_fn = VAELoss(**loss_params)
@@ -26,7 +26,7 @@ class VAELossWrapper(nn.Module):
         self.recon_loss_type = self.loss_fn.recon_loss_type
 
     def forward(
-        self, output: Union[ModelOutput, Dict, Tensor], target: Tensor
+        self, output: Union[ModelOutput, Dict[str, Any], Tensor], target: Tensor
     ) -> LossOutput:
         # Extract components
         recon, mu, logvar = extract_vae_components(output)

@@ -2,7 +2,7 @@
 VAE Loss Module which includes reconstruction (MSE or L1) and KL Divergence Loss.
 """
 
-from typing import Dict, Union
+from typing import Dict, Union, Optional
 
 import torch
 import torch.nn.functional as F
@@ -34,7 +34,7 @@ class VAELoss(nn.Module):
 
     def forward(
         self, model_output: Union[Tensor, Dict[str, Tensor]], target: Tensor
-    ) -> LossOutput:
+    ) -> Tensor:
         """
         Compute the VAE loss.
 
@@ -54,8 +54,8 @@ class VAELoss(nn.Module):
         """
         if isinstance(model_output, dict):
             recon: Tensor = model_output["recon"]
-            mu: Union[Tensor, None] = model_output.get("mu")
-            logvar: Union[Tensor, None] = model_output.get("logvar")
+            mu: Optional[Tensor] = model_output.get("mu")
+            logvar: Optional[Tensor] = model_output.get("logvar")
         else:
             recon = model_output
             mu, logvar = None, None

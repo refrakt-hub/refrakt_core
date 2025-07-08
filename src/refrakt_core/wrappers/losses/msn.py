@@ -2,9 +2,10 @@
 MSNLossWrapper: A wrapper class for the Masked Siamese Network (MSN) loss.
 """
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from torch import nn
+import torch
 
 from refrakt_core.losses.msn import MSNLoss
 from refrakt_core.losses.templates.base import BaseLoss
@@ -15,7 +16,7 @@ from refrakt_core.schema.model_output import ModelOutput
 
 @register_loss("msn_wrapped", mode="embedding")
 class MSNLossWrapper(nn.Module):
-    def __init__(self, temp_anchor=0.1, temp_target=0.04, lambda_me_max=1.0, **kwargs):
+    def __init__(self, temp_anchor: float = 0.1, temp_target: float = 0.04, lambda_me_max: float = 1.0, **kwargs: Any) -> None:
         super().__init__()
 
         self.loss_fn = MSNLoss(
@@ -24,7 +25,7 @@ class MSNLossWrapper(nn.Module):
             lambda_me_max=lambda_me_max,
         )
 
-    def forward(self, output: ModelOutput, target=None) -> LossOutput:
+    def forward(self, output: ModelOutput, target: Any = None) -> LossOutput:
         # Debug: print ModelOutput contents
         # print("DEBUG ModelOutput:", output)
         z_anchor = output.embeddings
@@ -35,7 +36,11 @@ class MSNLossWrapper(nn.Module):
         # print("DEBUG prototypes:", type(prototypes), getattr(prototypes, 'shape', None))
         if None in (z_anchor, z_target, prototypes):
             raise ValueError("Missing required fields in ModelOutput")
-
+        # Cast to torch.Tensor for mypy
+        from typing import cast
+        z_anchor = cast(torch.Tensor, z_anchor)
+        z_target = cast(torch.Tensor, z_target)
+        prototypes = cast(torch.Tensor, prototypes)
         # Compute loss and components
         total_loss, components = self.loss_fn.compute_with_components(
             z_anchor, z_target, prototypes

@@ -24,7 +24,7 @@ class DefaultModelWrapper(nn.Module):
             )
         self.model = modules["get_model"](model_name, **model_params)
 
-    def forward(self, x: torch.Tensor, **kwargs) -> ModelOutput:
+    def forward(self, x: torch.Tensor, **kwargs: Any) -> ModelOutput:
         output = self.model(x, **kwargs)
 
         if isinstance(output, ModelOutput):
@@ -58,5 +58,5 @@ class DefaultModelWrapper(nn.Module):
 
         raise ValueError(f"Unsupported output type from model: {type(output)}")
 
-    def parameters(self, recurse: bool = True):
+    def parameters(self, recurse: bool = True) -> Any:
         return self.model.parameters(recurse=recurse)

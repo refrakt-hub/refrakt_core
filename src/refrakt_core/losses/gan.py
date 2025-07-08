@@ -2,7 +2,7 @@
 The GAN Loss implementation for adversarial training.
 """
 
-from typing import Dict
+from typing import Dict, Union
 
 import torch
 from torch import Tensor, nn
@@ -54,9 +54,9 @@ class GANLoss(BaseLoss):
             torch.ones_like(pred) if target_is_real else torch.zeros_like(pred)
         )
         target = target.to(pred.device)
-        return self.loss(pred, target)
+        return self.loss(pred, target)  # type: ignore[no-any-return]
 
-    def get_config(self) -> Dict[str, str]:
+    def get_config(self) -> dict[str, Union[str, bool]]:
         """
         Return configuration details of the GANLoss.
 

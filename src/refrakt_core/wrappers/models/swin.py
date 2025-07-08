@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from typing import Any
 
 from refrakt_core.registry.wrapper_registry import register_wrapper
 from refrakt_core.schema.model_output import ModelOutput
@@ -13,7 +14,7 @@ class SwinTransformerWrapper(nn.Module):
     Returns standardized ModelOutput containing logits and embeddings.
     """
 
-    def __init__(self, model: nn.Module, **kwargs):
+    def __init__(self, model: nn.Module, **kwargs: Any) -> None:
         super().__init__()
         self.backbone = model
 
@@ -49,4 +50,5 @@ class SwinTransformerWrapper(nn.Module):
         Returns:
             torch.Tensor: Only the logits.
         """
-        return self.forward(x).logits
+        logits = self.forward(x).logits
+        return torch.as_tensor(logits) if not isinstance(logits, torch.Tensor) else logits

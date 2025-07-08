@@ -60,9 +60,9 @@ class CrossEntropyLoss(BaseLoss):
                 f"Batch size mismatch: pred={pred.size(0)}, target={target.size(0)}"
             )
 
-        return self.loss(pred, target)
+        return self.loss(pred, target)  # type: ignore[no-any-return]
 
-    def get_config(self) -> Dict[str, Optional[float]]:
+    def get_config(self) -> Dict[str, object]:
         """
         Return configuration of the loss function.
 

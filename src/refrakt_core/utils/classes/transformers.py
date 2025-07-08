@@ -10,6 +10,7 @@ import math
 
 import torch
 from torch import nn
+from typing import cast
 
 
 class InputEmbeddings(nn.Module):
@@ -37,7 +38,7 @@ class InputEmbeddings(nn.Module):
         Returns:
             Tensor: Scaled embeddings of shape (batch_size, sequence_length, d_model).
         """
-        return self.embedding(x) * math.sqrt(self.d_model)
+        return cast(torch.Tensor, self.embedding(x) * math.sqrt(self.d_model))
 
 
 class PositionalEncoding(nn.Module):
@@ -84,4 +85,4 @@ class PositionalEncoding(nn.Module):
         x = (
             x + self.pe[:, : x.shape[1], :].detach()
         )  # Ensure buffer stays non-trainable
-        return self.dropout(x)
+        return cast(torch.Tensor, self.dropout(x))

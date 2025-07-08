@@ -2,6 +2,7 @@
 
 import torch
 from torch import nn
+from typing import Any, Dict
 
 from refrakt_core.registry.model_registry import MODEL_REGISTRY
 from refrakt_core.registry.wrapper_registry import register_wrapper
@@ -10,13 +11,13 @@ from refrakt_core.schema.model_output import ModelOutput
 
 @register_wrapper("autoencoder")
 class AutoencoderWrapper(nn.Module):
-    def __init__(self, model: nn.Module, variant: str = "simple"):
+    def __init__(self, model: nn.Module, variant: str = "simple") -> None:
         super().__init__()
         self.backbone = model
         self.variant = variant
 
-    def forward(self, x):
-        output = self.backbone(x)
+    def forward(self, x: torch.Tensor) -> ModelOutput:
+        output: Any = self.backbone(x)
 
         if self.variant == "vae":
             return ModelOutput(
@@ -45,4 +46,4 @@ class AutoencoderWrapper(nn.Module):
         reconstruction = self.forward(x).reconstruction
         if reconstruction is None:
             raise ValueError("Reconstruction is None")
-        return reconstruction
+        return torch.as_tensor(reconstruction) if not isinstance(reconstruction, torch.Tensor) else reconstruction

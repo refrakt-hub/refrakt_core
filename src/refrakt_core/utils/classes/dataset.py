@@ -1,16 +1,17 @@
 """Custom image classification dataset loader for structured folders."""
 
 from pathlib import Path
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, List, Dict, Any
 
 from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset
+from typing import cast
 
 from refrakt_core.utils.methods import find_classes
 
 
-class CreateDataset(Dataset):
+class CreateDataset(Dataset[Any]):
     """
     A custom dataset for loading images from a directory structured as:
     root/class_name/image.jpg
@@ -20,7 +21,7 @@ class CreateDataset(Dataset):
         transform (Optional[Callable]): Transformations to apply to each image.
     """
 
-    def __init__(self, target_dir: str, transform: Optional[Callable] = None) -> None:
+    def __init__(self, target_dir: str, transform: Optional[Callable[[Any], Tensor]] = None) -> None:
         self.paths = list(Path(target_dir).glob("*/*.jpg"))
         self.transform = transform
         self.classes, self.class_to_idx = find_classes(target_dir)
@@ -62,6 +63,6 @@ class CreateDataset(Dataset):
         class_idx = self.class_to_idx[class_name]
 
         if self.transform:
-            image = self.transform(image)
-
-        return image, class_idx
+            image_tensor = self.transform(image)
+            return image_tensor, class_idx
+        raise TypeError("Transform must be provided to return a Tensor.")

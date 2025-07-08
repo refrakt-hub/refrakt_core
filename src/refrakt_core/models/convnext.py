@@ -60,7 +60,7 @@ class ConvNeXtBlock(nn.Module):
         out = self.ln(out)
         out = out.permute(0, 3, 1, 2)  # back to (B, C, H, W)
         out = self.conv2(out)
-        return out
+        return out  # type: ignore[no-any-return]
 
 
 @register_model("convnext")
@@ -105,4 +105,4 @@ class ConvNeXt(BaseClassifier):
         x = self.gap(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
-        return x
+        return x  # type: ignore[no-any-return]

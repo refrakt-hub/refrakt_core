@@ -70,7 +70,7 @@ class Transformer(nn.Module):
         """
         src = self.src_embed(src)
         src = self.src_pos(src)
-        return self.encoder(src, src_mask)
+        return self.encoder(src, src_mask)  # type: ignore[no-any-return]
 
     def decode(
         self,
@@ -93,7 +93,7 @@ class Transformer(nn.Module):
         """
         tgt = self.tgt_embed(tgt)
         tgt = self.tgt_pos(tgt)
-        return self._decoder(tgt, enc_output, src_mask, tgt_mask)
+        return self._decoder(tgt, enc_output, src_mask, tgt_mask)  # type: ignore[no-any-return]
 
     def project(self, x: Tensor) -> Tensor:
         """
@@ -105,7 +105,7 @@ class Transformer(nn.Module):
         Returns:
             Logits for output vocabulary.
         """
-        return self.proj(x)
+        return self.proj(x)  # type: ignore[no-any-return]
 
     def forward(
         self, src: Tensor, tgt: Tensor, src_mask: Tensor, tgt_mask: Tensor

@@ -127,7 +127,7 @@ class BaseModel(nn.Module, ABC):
             BaseModel: Self reference for method chaining.
         """
         self.device = device
-        return super().to(device)  # type: ignore[return-value]
+        return super().to(device)
 
     def dummy_forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -136,7 +136,7 @@ class BaseModel(nn.Module, ABC):
         """
         return self.forward(x)
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """
         Handles both normal forward calls and special cases like model graph tracing.
         If only a single tensor is passed during a tracing context (e.g., W&B or TorchScript),

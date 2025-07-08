@@ -9,14 +9,15 @@ import os
 import zipfile
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, Callable, cast
 from dataclasses import dataclass
 import logging
 
 import torch
 from PIL import Image
+import torch.utils.data
 from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, datasets
+from torchvision import transforms, datasets  # type: ignore
 
 from refrakt_core.logging_config import get_logger
 from refrakt_core.loaders.utils import find_directory_by_keywords
@@ -30,7 +31,7 @@ class DatasetFormat:
     description: str
     structure: Dict[str, Any]
     supported_tasks: List[str]
-    validation_rules: List[callable]
+    validation_rules: List[Callable[[Path], bool]]
 
 
 def validate_gan_structure(extracted_path: Path) -> bool:
@@ -212,13 +213,12 @@ def _find_dataset_directory(temp_dir: Path) -> Path:
 
 def _has_training_data(directory: Path) -> bool:
     """Check if a directory contains training data structure."""
-    # Look for directories that might be class directories
-    subdirs = [d for d in directory.iterdir() if d.is_dir()]
+    subdirs: List[Path] = [d for d in directory.iterdir() if d.is_dir()]
     
     # If we have subdirectories, check if they contain images
     if subdirs:
         for subdir in subdirs[:3]:  # Check first 3 subdirs
-            images = list(subdir.glob("*.png")) + list(subdir.glob("*.jpg")) + list(subdir.glob("*.jpeg"))
+            images: List[Path] = list(subdir.glob("*.png")) + list(subdir.glob("*.jpg")) + list(subdir.glob("*.jpeg"))
             if images:
                 return True
     
@@ -227,7 +227,7 @@ def _has_training_data(directory: Path) -> bool:
 
 def validate_dataset_images(dataset_path: Path, max_size: Tuple[int, int] = (224, 224)) -> None:
     """Validate all images in the dataset."""
-    image_files = []
+    image_files: List[Path] = []
     
     # Find all image files
     for ext in [".png", ".jpg", ".jpeg"]:
@@ -237,7 +237,7 @@ def validate_dataset_images(dataset_path: Path, max_size: Tuple[int, int] = (224
         raise ValueError("No image files found in dataset")
     
     # Validate each image
-    invalid_images = []
+    invalid_images: List[Tuple[Path, Optional[str]]] = []
     for image_path in image_files:
         is_valid, error_msg = validate_image_size(image_path, max_size)
         if not is_valid:
@@ -255,8 +255,8 @@ def load_custom_dataset(
     zip_path: Union[str, Path],
     task_type: Optional[str] = None,
     transform: Optional[transforms.Compose] = None,
-    **kwargs
-) -> Tuple[Dataset, Optional[Dataset]]:
+    **kwargs: Any
+) -> Tuple[Dataset[Any], Optional[Dataset[Any]]]:
     """
     Load a custom dataset from a zip file.
     
@@ -275,7 +275,7 @@ def load_custom_dataset(
         raise FileNotFoundError(f"Zip file not found: {zip_path}")
     
     # Extract zip file
-    extracted_path = extract_zip_file(zip_path)
+    extracted_path: Path = extract_zip_file(zip_path)
     
     # Detect format if not specified
     if task_type is None:
@@ -302,19 +302,19 @@ def load_custom_dataset(
 def _create_gan_dataset(
     dataset_path: Path, 
     transform: Optional[transforms.Compose], 
-    **kwargs
-) -> Tuple[Dataset, Optional[Dataset]]:
+    **kwargs: Any
+) -> Tuple[Dataset[Any], Optional[Dataset[Any]]]:
     """Create a GAN dataset from the extracted files."""
     from refrakt_core.datasets import SuperResolutionDataset
     
-    lr_dir = dataset_path / "lr"
-    hr_dir = dataset_path / "hr"
+    lr_dir: Path = dataset_path / "lr"
+    hr_dir: Path = dataset_path / "hr"
     
     if not lr_dir.exists() or not hr_dir.exists():
         raise ValueError("GAN dataset must have 'lr' and 'hr' directories")
     
     # Create train dataset
-    train_dataset = SuperResolutionDataset(
+    train_dataset: Dataset[Any] = SuperResolutionDataset(
         lr_dir=lr_dir,
         hr_dir=hr_dir,
         transform=transform,
@@ -322,9 +322,9 @@ def _create_gan_dataset(
     )
     
     # Create validation dataset if val directory exists
-    val_dataset = None
-    val_lr_dir = dataset_path / "val" / "lr"
-    val_hr_dir = dataset_path / "val" / "hr"
+    val_dataset: Optional[Dataset[Any]] = None
+    val_lr_dir: Path = dataset_path / "val" / "lr"
+    val_hr_dir: Path = dataset_path / "val" / "hr"
     
     if val_lr_dir.exists() and val_hr_dir.exists():
         val_dataset = SuperResolutionDataset(
@@ -338,84 +338,73 @@ def _create_gan_dataset(
 
 
 def _create_supervised_dataset(
-    dataset_path: Path, 
-    transform: Optional[transforms.Compose], 
-    **kwargs
-) -> Tuple[Dataset, Optional[Dataset]]:
+    dataset_path: Path,
+    transform: Optional[transforms.Compose],
+    **kwargs: Any
+) -> Tuple[Dataset[Any], Optional[Dataset[Any]]]:
     """Create a supervised dataset from the extracted files."""
-    # Find train directory with flexible naming
-    train_dir = _find_train_directory(dataset_path)
+    train_dir: Optional[Path] = _find_train_directory(dataset_path)
     print(f"[DEBUG] train_dir: {train_dir}")
     if train_dir is None:
-        # Fallback to exact "train" directory
         train_dir = dataset_path / "train"
-    
     if not train_dir.exists():
         raise ValueError("Supervised dataset must have a directory containing 'train' in its name")
-    
-    # Find validation directory with flexible naming
-    val_dir = _find_val_directory(dataset_path)
+    val_dir: Optional[Path] = _find_val_directory(dataset_path)
     if val_dir is None:
-        # Fallback to exact "val" directory
         val_dir = dataset_path / "val"
-    
-    # Create train dataset
-    train_dataset = datasets.ImageFolder(
+    train_dataset: Dataset[Any] = datasets.ImageFolder(
         root=train_dir,
         transform=transform
     )
-    
-    # Create validation dataset if val directory exists
-    val_dataset = None
+    val_dataset: Optional[Dataset[Any]] = None
     if val_dir.exists():
         val_dataset = datasets.ImageFolder(
             root=val_dir,
             transform=transform
         )
-    
     return train_dataset, val_dataset
 
 
 def _create_contrastive_dataset(
     dataset_path: Path, 
     transform: Optional[transforms.Compose], 
-    **kwargs
-) -> Tuple[Dataset, Optional[Dataset]]:
+    **kwargs: Any
+) -> Tuple[Dataset[Any], Optional[Dataset[Any]]]:
     """Create a contrastive dataset from the extracted files."""
     from refrakt_core.datasets import ContrastiveDataset
     
-    images_dir = dataset_path / "images"
+    images_dir: Path = dataset_path / "images"
     
     if not images_dir.exists():
         raise ValueError("Contrastive dataset must have an 'images' directory")
     
     # Create a simple dataset that returns image paths
-    class ImagePathDataset(Dataset):
-        def __init__(self, images_dir: Path):
-            self.images_dir = images_dir
-            self.image_files = list(images_dir.glob("*.png")) + list(images_dir.glob("*.jpg")) + list(images_dir.glob("*.jpeg"))
+    class ImagePathDataset(Dataset[Any]):
+        def __init__(self, images_dir: Path) -> None:
+            self.images_dir: Path = images_dir
+            self.image_files: List[Path] = list(images_dir.glob("*.png")) + list(images_dir.glob("*.jpg")) + list(images_dir.glob("*.jpeg"))
         
-        def __len__(self):
+        def __len__(self) -> int:
             return len(self.image_files)
         
-        def __getitem__(self, idx):
+        def __getitem__(self, idx: int) -> Path:
             return self.image_files[idx]
     
-    base_dataset = ImagePathDataset(images_dir)
+    base_dataset: Dataset[Any] = ImagePathDataset(images_dir)
     
     # Create train dataset
-    train_dataset = ContrastiveDataset(
+    train_dataset: Dataset[Any] = ContrastiveDataset(
         base_dataset=base_dataset,
         transform=transform,
         train=True
     )
     
     # Create validation dataset if val directory exists
-    val_dataset = None
-    val_dir = dataset_path / "val"
+    val_dataset: Optional[Dataset[Any]] = None
+    val_dir: Path = dataset_path / "val"
     
     if val_dir.exists():
-        val_base_dataset = ImagePathDataset(val_dir)
+        val_base_dataset: Dataset[Any] = ImagePathDataset(val_dir)
         val_dataset = ContrastiveDataset(
             base_dataset=val_base_dataset,
             transform=transform,
@@ -431,8 +420,8 @@ def load_torchvision_dataset(
     train: bool = True,
     transform: Optional[transforms.Compose] = None,
     download: bool = True,
-    **kwargs
-) -> Dataset:
+    **kwargs: Any
+) -> Dataset[Any]:
     """
     Load a torchvision dataset.
     
@@ -464,26 +453,26 @@ def load_torchvision_dataset(
     # Special handling for STL10 (no train parameter)
     if dataset_name == "stl10":
         split = "train" if train else "test"
-        return dataset_cls(root=root, split=split, transform=transform, download=download, **kwargs)
+        return cast(Dataset[Any], dataset_cls(root=root, split=split, transform=transform, download=download, **kwargs))
     
     # Special handling for ImageNet (requires specific structure)
     elif dataset_name == "imagenet":
         if not os.path.exists(os.path.join(root, "train")):
             raise ValueError("ImageNet dataset not found. Please ensure the dataset is properly structured.")
-        return dataset_cls(root=root, split="train" if train else "val", transform=transform, **kwargs)
+        return cast(Dataset[Any], dataset_cls(root=root, split="train" if train else "val", transform=transform, **kwargs))
     
     # Standard datasets
     else:
-        return dataset_cls(root=root, train=train, transform=transform, download=download, **kwargs)
+        return cast(Dataset[Any], dataset_cls(root=root, train=train, transform=transform, download=download, **kwargs))
 
 
 def create_dataloader(
-    dataset: Dataset,
+    dataset: Dataset[Any],
     batch_size: int = 32,
     shuffle: bool = True,
     num_workers: int = 4,
-    **kwargs
-) -> DataLoader:
+    **kwargs: Any
+) -> DataLoader[Any]:
     """
     Create a DataLoader from a dataset.
     
@@ -510,8 +499,8 @@ def load_dataset(
     dataset_path: Union[str, Path],
     dataset_type: str = "auto",
     transform: Optional[transforms.Compose] = None,
-    **kwargs
-) -> Tuple[Dataset, Optional[Dataset]]:
+    **kwargs: Any
+) -> Tuple[Dataset[Any], Optional[Dataset[Any]]]:
     """
     Load a dataset (custom or torchvision).
     
@@ -538,8 +527,8 @@ def load_dataset(
     if dataset_type == "custom":
         return load_custom_dataset(dataset_path, transform=transform, **kwargs)
     elif dataset_type == "torchvision":
-        train_dataset = load_torchvision_dataset(dataset_path, train=True, transform=transform, **kwargs)
-        val_dataset = load_torchvision_dataset(dataset_path, train=False, transform=transform, **kwargs)
+        train_dataset: Dataset[Any] = load_torchvision_dataset(dataset_path, train=True, transform=transform, **kwargs)
+        val_dataset: Optional[Dataset[Any]] = load_torchvision_dataset(dataset_path, train=False, transform=transform, **kwargs)
         return train_dataset, val_dataset
     else:
         raise ValueError(f"Unsupported dataset type: {dataset_type}") 

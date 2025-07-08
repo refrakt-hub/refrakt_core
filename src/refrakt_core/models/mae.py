@@ -5,7 +5,7 @@ This module implements the core MAE architecture for image reconstruction from
 randomly masked patches using a vision transformer encoder-decoder setup.
 """
 
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any
 
 import torch
 from einops import rearrange
@@ -48,7 +48,7 @@ class MAE(BaseModel):
         decoder_num_heads: int = 16,
         mask_ratio: float = 0.75,
     ) -> None:
-        super().__init__({})
+        super().__init__()
         self.mask_ratio = mask_ratio
 
         self.num_patches: int = (img_size // patch_size) ** 2
@@ -130,12 +130,12 @@ class MAE(BaseModel):
             patches, "b (h w) (p1 p2 c) -> b c (h p1) (w p2)", h=h, w=w, p1=p, p2=p, c=3
         )
 
-    def forward(self, imgs: Tensor) -> Dict[str, Tensor]:
+    def forward(self, x: Tensor) -> Tensor:
         """
         Forward pass through the MAE model.
 
         Args:
-            imgs (Tensor): Input images of shape (B, 3, H, W)
+            x (Tensor): Input images of shape (B, 3, H, W)
 
         Returns:
             dict: {
@@ -145,12 +145,12 @@ class MAE(BaseModel):
             }
         """
         # === Patch embedding ===
-        x = self.patch_embed(imgs)  # [B, C, H', W']
-        x = x.flatten(2).transpose(1, 2)  # [B, N, embed_dim]
-        x = x + self.pos_embed_enc.unsqueeze(0)
+        x_patch = self.patch_embed(x)  # [B, C, H', W']
+        x_patch = x_patch.flatten(2).transpose(1, 2)  # [B, N, embed_dim]
+        x_patch = x_patch + self.pos_embed_enc.unsqueeze(0)
 
         # === Random masking ===
-        x_masked, mask, ids_restore, _ = random_masking(x, self.mask_ratio)
+        x_masked, mask, ids_restore, _ = random_masking(x_patch, self.mask_ratio)
 
         # === Encoder ===
         encoded = self.encoder(x_masked)
@@ -163,7 +163,7 @@ class MAE(BaseModel):
         mask_tokens = self.mask_token.expand(batch_size, num_masked, -1)
 
         full_tokens = torch.zeros(
-            batch_size, self.num_patches, channels, device=imgs.device
+            batch_size, self.num_patches, channels, device=x.device
         )
         full_tokens.scatter_(
             1,
@@ -180,5 +180,5 @@ class MAE(BaseModel):
         return {
             "recon": pred,
             "mask": mask,
-            "original_patches": self.patchify(imgs),
-        }
+            "original_patches": self.patchify(x),
+        }  # type: ignore[return-value]

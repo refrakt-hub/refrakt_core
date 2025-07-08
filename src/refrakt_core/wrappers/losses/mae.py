@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 import torch
 from torch import nn
@@ -11,7 +11,7 @@ from refrakt_core.schema.model_output import ModelOutput
 
 @register_loss("mae_wrapped", mode="reconstruction")
 class MAELossWrapper(nn.Module):
-    def __init__(self, **loss_params):
+    def __init__(self, **loss_params: Any) -> None:
         super().__init__()
         self.loss_fn = MAELoss(**(loss_params or {}))
 

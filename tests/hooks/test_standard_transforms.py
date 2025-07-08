@@ -34,7 +34,7 @@ def test_image_size_config_smoke():
     config = ImageSizeConfig()
     assert config.standard_size == (224, 224)
     assert config.max_size == (448, 448)
-    assert config.min_size == (32, 32)
+    assert config.min_size == (28, 28)
     assert config.aspect_ratio_tolerance == 0.1
     assert config.interpolation_method == "lanczos"
 

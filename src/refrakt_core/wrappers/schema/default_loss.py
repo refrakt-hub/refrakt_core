@@ -24,7 +24,7 @@ class DefaultLossWrapper(nn.Module):
 
     def forward(
         self,
-        output: Union[torch.Tensor, ModelOutput, Dict],
+        output: Union[torch.Tensor, ModelOutput, Dict[str, Any]],
         target: Optional[torch.Tensor] = None,
         **kwargs: Any,
     ) -> LossOutput:
@@ -36,8 +36,13 @@ class DefaultLossWrapper(nn.Module):
 
         if isinstance(output, ModelOutput):
             output_tensor = extract_tensor_from_model_output(output)
-        else:
+        elif isinstance(output, torch.Tensor):
             output_tensor = output
+        elif isinstance(output, dict):
+            # If output is a dict, try to extract 'logits' or use as is
+            output_tensor = output.get('logits', output)
+        else:
+            raise TypeError(f"Unsupported output type: {type(output)}")
 
         effective_target = target if target is not None else output_tensor
         result = self.loss_fn(output_tensor, effective_target)

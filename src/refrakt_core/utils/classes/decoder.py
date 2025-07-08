@@ -6,7 +6,7 @@ Modules:
 - Decoder
 """
 
-from typing import Optional
+from typing import Optional, cast
 
 from torch import Tensor, nn
 
@@ -61,7 +61,7 @@ class DecoderBlock(nn.Module):
             x, lambda x: self.cross_att(x, enc_output, enc_output, src_mask)
         )
         x = self.skip_conn[2](x, self.feed_forw)
-        return x
+        return x # type: ignore[no-any-return]
 
 
 class Decoder(nn.Module):
@@ -98,4 +98,4 @@ class Decoder(nn.Module):
         """
         for layer in self.layers:
             x = layer(x, enc_output, src_mask, tgt_mask)
-        return self.norm(x)
+        return cast(Tensor, self.norm(x))

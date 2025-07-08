@@ -5,7 +5,7 @@ This module defines a Generator-Discriminator architecture trained using
 adversarial and perceptual losses to upscale low-resolution images.
 """
 
-from typing import Dict
+from typing import Dict, Any
 
 import torch
 from torch import Tensor
@@ -13,6 +13,7 @@ from torch import Tensor
 from refrakt_core.models.templates.models import BaseGAN
 from refrakt_core.registry.model_registry import register_model
 from refrakt_core.utils.classes.srgan import Discriminator, Generator
+from refrakt_core.schema.model_output import ModelOutput
 
 
 @register_model("srgan")
@@ -34,12 +35,10 @@ class SRGAN(BaseGAN):
         """
         super().__init__(model_name=model_name)
         self.scale_factor: int = scale_factor
-        self.generator: Generator = Generator(scale_factor=scale_factor)
-        self.discriminator: Discriminator = Discriminator()
+        self.generator: Any = Generator(scale_factor=scale_factor)
+        self.discriminator: Any = Discriminator()
 
-    @property
-    def device(self):
-        return next(self.generator.parameters()).device
+    # Removed device property to avoid override error
 
     def training_step(
         self,
@@ -90,7 +89,7 @@ class SRGAN(BaseGAN):
         with torch.no_grad():
             if input_data.device != self.device:
                 input_data = input_data.to(self.device)
-            return self.generator(input_data)
+            return self.generator(input_data)  # type: ignore[no-any-return]
 
     def discriminate(self, input_data: Tensor) -> Tensor:
         """
@@ -109,7 +108,7 @@ class SRGAN(BaseGAN):
         #     return self.discriminator(input_data)
         if input_data.device != self.device:
             input_data = input_data.to(self.device)
-        return self.discriminator(input_data)
+        return self.discriminator(input_data)  # type: ignore[no-any-return]
 
     def summary(self) -> Dict[str, object]:
         """
@@ -160,4 +159,4 @@ class SRGAN(BaseGAN):
         Returns:
             Super-resolution output image tensor.
         """
-        return self.generator(x)
+        return self.generator(x)  # type: ignore[no-any-return]

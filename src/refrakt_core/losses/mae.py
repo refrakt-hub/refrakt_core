@@ -2,7 +2,7 @@
 Loss implementation for the masked autoencoder.
 """
 
-from typing import Dict
+from typing import Dict, Optional
 
 import torch
 from torch import Tensor
@@ -48,7 +48,7 @@ class MAELoss(BaseLoss):
             .reshape(B, h * w, p * p * C)
         )
 
-    def forward(self, predictions: Dict[str, Tensor], targets: Tensor = None) -> Tensor:
+    def forward(self, predictions: Dict[str, Tensor], targets: Optional[Tensor] = None) -> Tensor:
         """
         Compute reconstruction loss over masked patches.
 
@@ -76,7 +76,7 @@ class MAELoss(BaseLoss):
         loss: Tensor = ((pred_patches - original) ** 2) * mask
         return loss.sum() / mask.sum()
 
-    def get_config(self) -> Dict[str, bool]:
+    def get_config(self) -> dict[str, bool]:
         """
         Return the configuration of the MAELoss.
 

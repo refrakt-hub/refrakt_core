@@ -2,7 +2,7 @@
 Wrapper for CrossEntropyLoss using register_loss with mode='logits'.
 """
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 import torch
 from torch import Tensor, nn
@@ -57,7 +57,7 @@ class CrossEntropyLossWrapper(BaseLoss):
 
         return LossOutput(total=loss, components={"cross_entropy": loss})
 
-    def get_config(self) -> Dict[str, Optional[float]]:
+    def get_config(self) -> Dict[str, Any]:
         return {
             **super().get_config(),
             "label_smoothing": self.label_smoothing,

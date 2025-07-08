@@ -42,6 +42,7 @@ class DINOLoss(BaseLoss):
         self.student_temp: float = student_temp
         self.teacher_temp: float = teacher_temp
         self.center_momentum: float = center_momentum
+        self.center: Tensor
         self.register_buffer("center", torch.zeros(1, out_dim))
 
     def forward(self, student_output: Tensor, teacher_output: Tensor) -> Tensor:

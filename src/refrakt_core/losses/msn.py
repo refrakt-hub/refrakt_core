@@ -2,7 +2,7 @@
 Masked Siamese Network (MSN) Loss Implementation.
 """
 
-from typing import Dict
+from typing import Dict, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -14,7 +14,7 @@ from refrakt_core.registry.loss_registry import register_loss
 
 @register_loss("msn")
 class MSNLoss(BaseLoss):
-    def __init__(self, temp_anchor=0.1, temp_target=0.04, lambda_me_max=1.0) -> None:
+    def __init__(self, temp_anchor: float = 0.1, temp_target: float = 0.04, lambda_me_max: float = 1.0) -> None:
         super().__init__()
         self.temp_anchor = temp_anchor
         self.temp_target = temp_target
@@ -29,7 +29,7 @@ class MSNLoss(BaseLoss):
 
     def compute_with_components(
         self, z_anchor: Tensor, z_target: Tensor, prototypes: Tensor
-    ):
+    ) -> Tuple[Tensor, Dict[str, Tensor]]:
         if z_anchor.ndim != 2 or z_target.ndim != 2 or prototypes.ndim != 2:
             raise ValueError("All inputs must be 2D tensors.")
 

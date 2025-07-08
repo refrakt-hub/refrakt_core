@@ -2,7 +2,7 @@
 and Shifted Window MSA, used across transformer and vision transformer models."""
 
 import math
-from typing import Tuple
+from typing import Tuple, cast
 
 import torch
 from einops import rearrange
@@ -156,7 +156,7 @@ class MHA(nn.Module):
         output = (
             output.transpose(1, 2).contiguous().view(output.shape[0], -1, self.d_model)
         )
-        return self.w_o(output)
+        return cast(Tensor, self.w_o(output))
 
 
 class ShiftedWindowMSA(nn.Module):
@@ -252,4 +252,4 @@ class ShiftedWindowMSA(nn.Module):
                 x, shifts=(self.window_size // 2, self.window_size // 2), dims=(1, 2)
             )
 
-        return self.proj2(rearrange(x, "b h w c -> b (h w) c"))
+        return cast(Tensor, self.proj2(rearrange(x, "b h w c -> b (h w) c")))

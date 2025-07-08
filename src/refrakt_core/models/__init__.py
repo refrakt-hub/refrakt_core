@@ -6,7 +6,7 @@ from refrakt_core.registry.model_registry import register_model
 __all__ = ["register_model"]
 
 
-def auto_import_models():
+def auto_import_models() -> None:
     model_dir = os.path.dirname(__file__)
     for filename in os.listdir(model_dir):
         if filename.endswith(".py") and filename != "__init__.py":

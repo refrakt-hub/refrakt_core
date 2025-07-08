@@ -3,11 +3,12 @@ Perceptual loss implementation using a pre-trained VGG19 network.
 """
 
 from typing import Dict
+from typing import Any
 
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
-from torchvision.models import vgg19
+from torchvision.models import vgg19  # type: ignore
 
 from refrakt_core.losses.templates.base import BaseLoss
 from refrakt_core.registry.loss_registry import register_loss
@@ -29,7 +30,7 @@ class PerceptualLoss(BaseLoss):
         """
         super().__init__(name="PerceptualLoss")
 
-        vgg_full: nn.Sequential = vgg19(pretrained=True).features
+        vgg_full: nn.Module = vgg19(pretrained=True).features
         # Extract features up to layer 36 (before the last maxpool)
         self.vgg = nn.Sequential(*list(vgg_full.children())[:36]).to(device).eval()
         for param in self.vgg.parameters():
@@ -64,7 +65,7 @@ class PerceptualLoss(BaseLoss):
 
         return F.mse_loss(sr_features, hr_features)
 
-    def get_config(self) -> Dict[str, str]:
+    def get_config(self) -> dict[str, Any]:
         """
         Get the configuration of the loss function.
 

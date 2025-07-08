@@ -6,7 +6,7 @@ projector + prototypes for clustering and contrastive learning.
 """
 
 import copy
-from typing import Optional
+from typing import Optional, Tuple, Any
 
 import torch
 import torch.nn.functional as F
@@ -67,28 +67,14 @@ class MSNModel(BaseModel):
         self.prototypes: nn.Parameter = nn.Parameter(torch.randn(num_prototypes, dim))
         nn.init.xavier_uniform_(self.prototypes)
 
-    def forward(self, x_anchor: torch.Tensor, x_target: Optional[torch.Tensor] = None):
-        """
-        Forward pass for MSNModel.
-
-        If x_target is None, it assumes x_target = x_anchor. This helps for model graph logging or inference hooks.
-
-        Args:
-            x_anchor (Tensor): Masked input.
-            x_target (Tensor): Unmasked input.
-        Returns:
-            z_anchor, z_target, prototypes
-        """
-        if x_target is None:
-            x_target = x_anchor
-
+    def forward(self, *args: Any, **kwargs: Any) -> Any:
+        # Forward pass for MSNModel.
+        x_anchor = args[0] if len(args) > 0 else None
+        x_target = args[1] if len(args) > 1 else x_anchor
         z_anchor = self.projector(self.encoder(x_anchor))  # (B*M, D)
         with torch.no_grad():
             z_target = self.target_projector(self.target_encoder(x_target))  # (B, D)
-
-        # Normalize outputs
         z_anchor = F.normalize(z_anchor, dim=-1)
         z_target = F.normalize(z_target, dim=-1)
         prototypes = F.normalize(self.prototypes, dim=-1)
-
         return z_anchor, z_target, prototypes

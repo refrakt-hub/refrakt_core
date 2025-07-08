@@ -3,7 +3,7 @@ Templates for foundational model types in Refrakt: classifiers, autoencoders, co
 """
 
 from abc import abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, Tuple, Optional, Union
 
 import torch
 
@@ -67,7 +67,7 @@ class BaseAutoEncoder(BaseModel):
         self.model_name = model_name
 
     @abstractmethod
-    def encode(self, x: torch.Tensor) -> torch.Tensor:
+    def encode(self, x: torch.Tensor) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
         Encode input to latent representation.
 
@@ -75,7 +75,7 @@ class BaseAutoEncoder(BaseModel):
             x (torch.Tensor): Input tensor.
 
         Returns:
-            torch.Tensor: Latent representation.
+            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: Latent representation or (mu, sigma) for VAE.
         """
         raise NotImplementedError("Subclasses must implement `encode`.")
 
@@ -92,7 +92,7 @@ class BaseAutoEncoder(BaseModel):
         """
         raise NotImplementedError("Subclasses must implement `decode`.")
 
-    def get_latent(self, x: torch.Tensor) -> torch.Tensor:
+    def get_latent(self, x: torch.Tensor) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
         Get latent representation for input.
 
@@ -100,7 +100,7 @@ class BaseAutoEncoder(BaseModel):
             x (torch.Tensor): Input tensor.
 
         Returns:
-            torch.Tensor: Latent representation.
+            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: Latent representation or (mu, sigma) for VAE.
         """
         self.eval()
         with torch.no_grad():
@@ -171,13 +171,13 @@ class BaseContrastiveModel(BaseModel):
         """
         raise NotImplementedError("Subclasses must implement `project`.")
 
-    def predict(self, x: torch.Tensor, return_embedding: bool = False) -> torch.Tensor:
+    def predict(self, x: torch.Tensor, **kwargs: Any) -> torch.Tensor:
         """
         Predict projection or raw embedding depending on flag.
 
         Args:
             x (torch.Tensor): Input tensor.
-            return_embedding (bool): If True, returns raw backbone features.
+            return_embedding (bool): If True, returns raw backbone features (from kwargs).
 
         Returns:
             torch.Tensor: Projected or raw embedding.
@@ -186,7 +186,7 @@ class BaseContrastiveModel(BaseModel):
         with torch.no_grad():
             x = x.to(self.device)
             h = self.encode(x)
-            return h if return_embedding else self.forward(x)
+            return h if kwargs.get('return_embedding', False) else self.forward(x)
 
     def summary(self) -> Dict[str, Any]:
         """
@@ -205,9 +205,11 @@ class BaseGAN(BaseModel):
     Base class for Generative Adversarial Network models.
 
     Attributes:
-        generator (torch.nn.Module): Generator network.
-        discriminator (torch.nn.Module): Discriminator network.
+        generator (Optional[torch.nn.Module]): Generator network.
+        discriminator (Optional[torch.nn.Module]): Discriminator network.
     """
+    generator: Optional[torch.nn.Module]
+    discriminator: Optional[torch.nn.Module]
 
     def __init__(self, model_name: str = "base_gan"):
         """
@@ -217,8 +219,8 @@ class BaseGAN(BaseModel):
             model_name (str): Model name.
         """
         super().__init__(model_name=model_name, model_type="gan")
-        self.generator = None
-        self.discriminator = None
+        self.generator: Optional[torch.nn.Module] = None
+        self.discriminator: Optional[torch.nn.Module] = None
 
     @abstractmethod
     def generate(self, input_data: torch.Tensor) -> torch.Tensor:
@@ -286,16 +288,18 @@ class BaseGAN(BaseModel):
             path (str): Load path.
         """
         checkpoint = torch.load(path, map_location=self.device)
-        if self.generator and "generator_state_dict" in checkpoint:
-            self.generator.load_state_dict(checkpoint["generator_state_dict"])
-        if self.discriminator and "discriminator_state_dict" in checkpoint:
-            self.discriminator.load_state_dict(checkpoint["discriminator_state_dict"])
+        if self.generator:
+            if "generator_state_dict" in checkpoint:
+                self.generator.load_state_dict(checkpoint["generator_state_dict"])
+        if self.discriminator:
+            if "discriminator_state_dict" in checkpoint:
+                self.discriminator.load_state_dict(checkpoint["discriminator_state_dict"])
 
         self.model_name = checkpoint.get("model_name", self.model_name)
         self.model_type = checkpoint.get("model_type", self.model_type)
         print(f"GAN model loaded from {path}")
 
-    def _get_param_counts(self, module):
+    def _get_param_counts(self, module: Any) -> Tuple[int, int]:
         """
         Helper to count total and trainable parameters for a module.
         """
@@ -337,8 +341,8 @@ class BaseGAN(BaseModel):
             BaseGAN: Self.
         """
         self.device = device
-        if self.generator:
+        if self.generator is not None:
             self.generator.to(device)
-        if self.discriminator:
+        if self.discriminator is not None:
             self.discriminator.to(device)
         return self

@@ -2,7 +2,7 @@
 Utility functions for VAE loss wrappers.
 """
 
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, Tuple, Any
 
 import torch
 from torch import Tensor, nn
@@ -11,7 +11,7 @@ from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 
 
-def extract_vae_components(output: Union[ModelOutput, Dict, Tensor]) -> tuple:
+def extract_vae_components(output: Union[ModelOutput, Dict[str, Any], Tensor]) -> Tuple[Tensor, Optional[Tensor], Optional[Tensor]]:
     """Extract reconstruction, mu, and logvar from output."""
     if isinstance(output, ModelOutput):
         recon = output.reconstruction

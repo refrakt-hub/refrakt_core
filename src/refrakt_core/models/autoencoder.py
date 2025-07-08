@@ -5,7 +5,7 @@ Defines a basic feed-forward auto-encoder or a variational auto-encoder (VAE),
 depending on the selected mode / type.
 """
 
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple, Union, Any, cast
 
 import torch
 from torch import Tensor, nn
@@ -115,21 +115,21 @@ class AutoEncoder(BaseAutoEncoder):
     # forward helpers
     # ──────────────────────────────────────────────────────────────────────
     def encode(self, x: Tensor) -> Union[Tensor, Tuple[Tensor, Tensor]]:
-        encoded = self.encoder_layers(x)
+        encoded = cast(Tensor, self.encoder_layers(x))
         if self.mode == "vae":
             mu, sigma = self.mu(encoded), self.sigma(encoded)
             return mu, sigma
         return encoded
 
-    def decode(self, z: Tensor) -> Tensor:
-        return self.decoder_layers(z)
+    def decode(self, z: Any) -> Tensor:
+        return self.decoder_layers(z)  # type: ignore[no-any-return]
 
     @staticmethod
     def _reparameterize(mu: Tensor, sigma: Tensor) -> Tensor:
         std = torch.exp(0.5 * sigma)
         return mu + torch.randn_like(std) * std
 
-    def get_latent(self, x: Tensor) -> Tensor:
+    def get_latent(self, x: Tensor) -> Union[Tensor, Tuple[Tensor, Tensor]]:
         """Return latent representation (μ for VAE, encoded vector otherwise)"""
         if self.mode == "vae":
             mu, _ = self.encode(x)
@@ -175,7 +175,7 @@ class AutoEncoder(BaseAutoEncoder):
 
     # ──────────────────────────────────────────────────────────────────────
     # autoencoder.py - Update the forward method
-    def forward(self, x: Tensor) -> Union[Tensor, Dict[str, Tensor]]:
+    def forward(self, x: Tensor) -> Any:
         # Store original shape
         original_shape = x.shape
 

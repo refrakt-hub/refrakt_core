@@ -83,4 +83,4 @@ class SwinTransformer(nn.Module):
 
         x = x.mean(dim=1)  # global average pooling over patch tokens
         x = self.head(x)
-        return x
+        return x  # type: ignore[no-any-return]

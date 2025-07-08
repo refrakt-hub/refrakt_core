@@ -5,7 +5,7 @@ Includes ResNet18, ResNet50, ResNet101, and ResNet152 with support for custom
 block definitions (Basic and Bottleneck), custom input channels, and projection layers.
 """
 
-from typing import List, Optional, Type, Union
+from typing import List, Optional, Type, Union, Any
 
 import torch
 from torch import Tensor, nn
@@ -54,7 +54,7 @@ class ResNet(BaseClassifier):
 
         self.feature_dim: int = 512  # Required by DINOModel
         self.projection: nn.Module = nn.Identity()
-        self.fc: nn.Linear = nn.Linear(self.feature_dim, num_classes)
+        self.fc: nn.Module = nn.Linear(self.feature_dim, num_classes)
 
     def _make_layer(
         self, block: Type[nn.Module], planes: int, blocks: int, stride: int = 1
@@ -73,14 +73,9 @@ class ResNet(BaseClassifier):
 
         return nn.Sequential(*layers)
 
-    @property
-    def device(self) -> torch.device:
-        """Get the device the model is on."""
-        return self._device
-
     def forward(
-        self, x: Tensor, return_features: bool = False, **kwargs
-    ) -> Union[Tensor, Tensor]:
+        self, x: Tensor, return_features: bool = False, **kwargs: Any
+    ) -> torch.Tensor:
         # print("[DEBUG ResNet] return_features:", return_features)
 
         x = self.conv1(x)
@@ -93,8 +88,8 @@ class ResNet(BaseClassifier):
         x = x.view(x.size(0), -1)
 
         if return_features:
-            return x
-        return self.fc(x)
+            return x  # type: ignore[no-any-return]
+        return self.fc(x)  # type: ignore[no-any-return]
 
 
 @register_model("resnet18")

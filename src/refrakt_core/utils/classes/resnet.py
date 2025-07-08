@@ -8,7 +8,7 @@ Includes:
 - ViTResidual block (Norm -> MHSA -> Norm -> MLP)
 """
 
-from typing import Callable, Optional
+from typing import Callable, Optional, cast
 
 from torch import Tensor, nn
 
@@ -63,7 +63,7 @@ class ResidualBlock(nn.Module):
 
         out += residual
         out = self.relu(out)
-        return out
+        return cast(Tensor, out)
 
 
 class BottleneckBlock(nn.Module):
@@ -122,7 +122,7 @@ class BottleneckBlock(nn.Module):
 
         out += residual
         out = self.relu(out)
-        return out
+        return cast(Tensor, out)
 
 
 class SkipConnections(nn.Module):
@@ -152,7 +152,7 @@ class SkipConnections(nn.Module):
         y = self.norm(x)
         y = sublayer(y)
         y = self.dropout(y)
-        return x + y
+        return cast(Tensor, x + y)
 
 
 class ViTResidual(nn.Module):
@@ -188,4 +188,4 @@ class ViTResidual(nn.Module):
         """
         out = x + self.mhsa(self.norm1(x))
         out = out + self.mlp(self.norm2(out))
-        return out
+        return cast(Tensor, out)

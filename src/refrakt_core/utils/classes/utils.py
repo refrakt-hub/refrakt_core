@@ -14,6 +14,7 @@ import math
 import torch
 from einops import rearrange
 from torch import Tensor, nn
+from typing import cast
 
 
 class LayerNormalization(nn.Module):
@@ -85,7 +86,7 @@ class MLPHead(nn.Module):
         Returns:
             Tensor: Output tensor.
         """
-        return self.net(x)
+        return cast(Tensor, self.net(x))
 
 
 class Merge(nn.Module):
@@ -117,7 +118,7 @@ class Merge(nn.Module):
         )
         x = self.linear(x)
         x = self.norm(x)
-        return x
+        return cast(Tensor, x)
 
 
 class Projection(nn.Module):
@@ -175,4 +176,4 @@ class FeedForward(nn.Module):
         x = self.linear_1(x)
         x = self.dropout(torch.relu(x))
         x = self.linear_2(x)
-        return x
+        return cast(Tensor, x)

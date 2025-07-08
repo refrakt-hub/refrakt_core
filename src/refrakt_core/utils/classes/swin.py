@@ -8,6 +8,7 @@ Modules:
 
 import torch
 from torch import Tensor, nn
+from typing import cast
 
 from refrakt_core.utils.classes.attention import ShiftedWindowMSA
 
@@ -49,7 +50,7 @@ class SwinBlock(nn.Module):
         res1 = self.dropout(self.wmsa(self.layer_norm(x)) + x)
         x = self.layer_norm(res1)
         x = self.mlp(x)
-        return self.dropout(x + res1)
+        return cast(Tensor, self.dropout(x + res1))
 
 
 class AlternateSwin(nn.Module):
@@ -88,4 +89,4 @@ class AlternateSwin(nn.Module):
         Returns:
             Tensor: Output tensor after two Swin blocks.
         """
-        return self.wmsa(self.wsa(x))
+        return cast(Tensor, self.wmsa(self.wsa(x)))

@@ -2,7 +2,7 @@
 Utility functions for default loss wrappers.
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, Callable
 
 import torch
 
@@ -10,14 +10,14 @@ from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 
 
-def handle_mae_loss(loss_fn, output: Union[torch.Tensor, ModelOutput, Dict]) -> LossOutput:
+def handle_mae_loss(loss_fn: Callable[[Union[torch.Tensor, ModelOutput, Dict[str, Any]]], LossOutput], output: Union[torch.Tensor, ModelOutput, Dict[str, Any]]) -> LossOutput:
     """Handle MAE loss computation."""
     return loss_fn(output)
 
 
 def handle_vae_loss(
-    loss_fn, 
-    output: Union[torch.Tensor, ModelOutput, Dict], 
+    loss_fn: Callable[[Union[torch.Tensor, ModelOutput, Dict[str, Any]], Optional[torch.Tensor]], LossOutput],
+    output: Union[torch.Tensor, ModelOutput, Dict[str, Any]],
     target: Optional[torch.Tensor]
 ) -> LossOutput:
     """Handle VAE loss computation."""
@@ -31,11 +31,11 @@ def handle_vae_loss(
 def extract_tensor_from_model_output(output: ModelOutput) -> torch.Tensor:
     """Extract tensor from ModelOutput based on available attributes."""
     if hasattr(output, "logits") and output.logits is not None:
-        return output.logits
+        return output.logits  # type: ignore[no-any-return]
     elif hasattr(output, "reconstruction") and output.reconstruction is not None:
-        return output.reconstruction
+        return output.reconstruction  # type: ignore[no-any-return]
     elif hasattr(output, "embeddings") and output.embeddings is not None:
-        return output.embeddings
+        return output.embeddings  # type: ignore[no-any-return]
     else:
         raise ValueError("Cannot extract tensor from ModelOutput")
 

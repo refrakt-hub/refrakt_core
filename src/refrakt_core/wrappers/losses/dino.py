@@ -10,6 +10,8 @@ from refrakt_core.registry.loss_registry import register_loss
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 
+__all__ = ["DINOLoss", "DINOLossWrapper"]
+
 
 @register_loss("dino_wrapped", mode="embedding")
 class DINOLossWrapper(BaseLoss):

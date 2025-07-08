@@ -1,5 +1,5 @@
 # wrappers/perceptual.py
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 import torch
 from torch import nn
@@ -12,13 +12,13 @@ from refrakt_core.schema.model_output import ModelOutput
 
 @register_loss("perceptual", mode="features")
 class PerceptualLossWrapper(nn.Module):
-    def __init__(self, loss_params: Optional[Dict] = None):
+    def __init__(self, loss_params: Optional[Dict[str, Any]] = None) -> None:
         super().__init__()
         loss_params = loss_params or {}
         self.loss_fn = PerceptualLoss(**loss_params)
         self.required_fields = ["sr", "hr"]
 
-    def forward(self, output: ModelOutput, target=None) -> LossOutput:
+    def forward(self, output: ModelOutput, target: Any = None) -> LossOutput:
         sr = output.reconstruction
         hr = target  # Use target for high-res images
 

@@ -2,23 +2,28 @@
 
 import torch
 from inspect import signature
-from typing import Optional
+from typing import Optional, Dict, Any, Callable
 
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.wrappers.utils.loss_utils import convert_result_to_loss_output
 
 
-def _handle_non_model_output(fn, output, target) -> LossOutput:
+def _handle_non_model_output(fn: Callable[[Any, Any], Any], output: Any, target: Any) -> LossOutput:
     """Handle case when output is not a ModelOutput."""
     result = fn(output, target)
     return convert_result_to_loss_output(result)
 
 
-def _build_input_dict_with_field_map(fn, output: ModelOutput, target, field_map: dict) -> dict:
+def _build_input_dict_with_field_map(
+    fn: Callable[..., Any],
+    output: ModelOutput,
+    target: Any,
+    field_map: Dict[str, Optional[str]]
+) -> Dict[str, Any]:
     """Build input dictionary using field mapping."""
     args = signature(fn).parameters.keys()
-    input_dict = {}
+    input_dict: Dict[str, Any] = {}
 
     for k, v in field_map.items():
         if v is None:
@@ -36,10 +41,14 @@ def _build_input_dict_with_field_map(fn, output: ModelOutput, target, field_map:
     return input_dict
 
 
-def _build_input_dict_auto(fn, output: ModelOutput, target) -> dict:
+def _build_input_dict_auto(
+    fn: Callable[..., Any],
+    output: ModelOutput,
+    target: Any
+) -> Dict[str, Any]:
     """Build input dictionary automatically from ModelOutput attributes."""
     args = signature(fn).parameters.keys()
-    input_dict = {}
+    input_dict: Dict[str, Any] = {}
 
     for arg in args:
         if arg == "target":
@@ -60,7 +69,7 @@ class LossWrapper:
     Returns a LossOutput with total + breakdowns.
     """
 
-    def __init__(self, fn, field_map: Optional[dict] = None):
+    def __init__(self, fn: Callable[..., Any], field_map: Optional[Dict[str, Optional[str]]] = None) -> None:
         """
         Args:
             fn: The actual loss function or class instance.
@@ -70,9 +79,9 @@ class LossWrapper:
         self.fn = fn
         self.field_map = field_map or {}
 
-    def __call__(self, output: ModelOutput, target=None) -> LossOutput:
+    def __call__(self, output: ModelOutput, target: Any = None) -> LossOutput:
         if not isinstance(output, ModelOutput):
-            return _handle_non_model_output(self.fn, output, target)
+            return _handle_non_model_output(self.fn, output, target) # type: ignore[unreachable]
 
         # Build input dictionary based on field mapping
         if self.field_map:

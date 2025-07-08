@@ -9,6 +9,7 @@ Modules:
 import torch
 from einops import rearrange
 from torch import Tensor, nn
+from typing import cast
 
 
 class Embedding(nn.Module):
@@ -42,7 +43,7 @@ class Embedding(nn.Module):
         x = self.linear(x)
         x = rearrange(x, "b c h w -> b (h w) c")
         x = self.relu(self.layer_norm(x))
-        return x
+        return x # type: ignore[no-any-return]
 
 
 class RelativeEmbedding(nn.Module):
