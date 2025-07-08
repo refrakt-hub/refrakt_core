@@ -66,3 +66,32 @@ class PatchifyTransform:
         p = self.patch_size
         assert h % p == 0 and w % p == 0, "Image dims must be divisible by patch size"
         return img
+
+# ONLY FOR TESTING PURPOSES
+@register_transform("dummy")
+class DummyTransform:
+    """
+    Dummy transform for testing purposes.
+    
+    Args:
+        **kwargs: Any additional arguments (ignored)
+    """
+    
+    def __init__(self, **kwargs):
+        pass
+    
+    def __call__(self, x):
+        return x
+
+
+@register_transform("PairedTransform")
+class PairedTransformWrapper:
+    """
+    Wrapper for PairedTransform to match the expected name in tests.
+    """
+    
+    def __init__(self, **kwargs):
+        self.transform = PairedTransform(**kwargs)
+    
+    def __call__(self, lr, hr):
+        return self.transform(lr, hr)

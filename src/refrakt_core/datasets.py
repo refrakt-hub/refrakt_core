@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 from PIL import Image
+import torch
 from torch import Tensor, nn
 from torch.utils.data import Dataset
 
@@ -213,3 +214,39 @@ class TabularMLDataset:
         return self.X[idx], self.y[idx]
     def get_numpy(self):
         return self.X, self.y
+
+
+@register_dataset("dummy")
+class DummyDataset(Dataset):
+    """
+    Dummy dataset for testing purposes.
+    
+    Args:
+        size (int): Number of samples in the dataset
+        transform (Optional[Callable]): Transform to apply
+        train (Optional[bool]): Whether this is for training (unused, for compatibility)
+    """
+    
+    def __init__(
+        self,
+        size: int = 100,
+        transform: Optional[Callable] = None,
+        train: Optional[bool] = None,
+        **kwargs
+    ) -> None:
+        self.size = size
+        self.transform = transform
+        self.data = torch.randn(size, 3, 32, 32)  # Random images
+        self.targets = torch.randint(0, 10, (size,))  # Random labels
+    
+    def __len__(self) -> int:
+        return self.size
+    
+    def __getitem__(self, idx: int) -> Any:
+        data = self.data[idx]
+        target = self.targets[idx]
+        
+        if self.transform:
+            data = self.transform(data)
+        
+        return data, target

@@ -8,10 +8,6 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
-import torch.nn.functional as F
-from PIL import Image
-from refrakt_core.api.core.extras import flatten_and_filter_config
-from refrakt_core.utils.methods import extract_visual_tensor
 from torch import Tensor, nn
 
 
@@ -111,9 +107,7 @@ class RefraktLogger:
             self.error(f"WandB init failed: {e}")
 
     def _init_tensorboard(self) -> None:
-        """
-        Initialize TensorBoard logging if available.
-        """
+        """Initialize TensorBoard writer."""
         try:
             from torch.utils.tensorboard.writer import SummaryWriter
 
@@ -121,7 +115,7 @@ class RefraktLogger:
                 self.log_dir, "tensorboard", datetime.now().strftime("%Y%m%d_%H%M%S")
             )
             os.makedirs(tb_path, exist_ok=True)
-            self.tb_writer = SummaryWriter(log_dir=tb_path)
+            self.tb_writer = SummaryWriter(log_dir=tb_path)  # type: ignore[no-untyped-call]
             self.info(f"TensorBoard initialized at {tb_path}")
         except Exception as e:
             self.error(f"TensorBoard init failed: {e}")
@@ -138,6 +132,7 @@ class RefraktLogger:
             Optional[Tensor]: Extracted tensor or None if not found.
         """
         from .utils.logging_utils import extract_tensor_from_model_output
+
         return extract_tensor_from_model_output(output)
 
     def log_metrics(
@@ -151,12 +146,9 @@ class RefraktLogger:
             step (int): Training step or epoch.
             prefix (Optional[str], optional): Prefix for metric names. Defaults to None.
         """
-        from .utils.logger_helpers import (
-            _initialize_logged_metrics,
-            _create_metrics_to_log,
-            _log_to_tensorboard,
-            _log_to_wandb,
-        )
+        from .utils.logger_helpers import (_create_metrics_to_log,
+                                           _initialize_logged_metrics,
+                                           _log_to_tensorboard, _log_to_wandb)
 
         logged_metrics = _initialize_logged_metrics(self)
         metrics_to_log = _create_metrics_to_log(metrics, step, prefix, logged_metrics)
@@ -177,7 +169,7 @@ class RefraktLogger:
             config (Dict[str, Any]): Configuration dictionary.
         """
         from .utils.logging_utils import create_scalar_config
-        
+
         if self.wandb_run:
             self.wandb_run.config.update(config)
 
@@ -215,15 +207,9 @@ class RefraktLogger:
             input_tensor (Union[torch.Tensor, Dict[str, torch.Tensor]]): Input for tracing.
             model_output (Optional[Any], optional): Model output for graph extraction. Defaults to None.
         """
-        from .utils.logger_helpers import (
-            _prepare_input_tensor_for_graph,
-            _log_to_tensorboard_graph,
-            _log_to_wandb_watch,
-        )
-
-        if not isinstance(model, nn.Module):
-            self.warning("Model graph logging skipped: model is not nn.Module.")
-            return
+        from .utils.logger_helpers import (_log_to_tensorboard_graph,
+                                           _log_to_wandb_watch,
+                                           _prepare_input_tensor_for_graph)
 
         try:
             input_tensor = _prepare_input_tensor_for_graph(model, input_tensor)
@@ -232,14 +218,15 @@ class RefraktLogger:
         except Exception as e:
             self.error(f"Model graph logging failed: {e}")
 
-    def _to_wandb_image(self, img):
+    def _to_wandb_image(self, img: Any) -> Any:
         from .utils.logging_utils import convert_to_wandb_image
+
         return convert_to_wandb_image(img)
 
     def log_images(
         self,
         tag: str,
-        images: Union[Tensor, np.ndarray],
+        images: Union[Tensor, np.ndarray[Any, Any]],
         step: int,
         dataformats: str = "NCHW",
     ) -> None:
@@ -248,19 +235,19 @@ class RefraktLogger:
 
         Args:
             tag (str): Tag for the images.
-            images (Union[Tensor, np.ndarray]): Images to log.
+            images (Union[Tensor, np.ndarray[Any, Any]]): Images to log.
             step (int): Training step or epoch.
             dataformats (str, optional): Data format. Defaults to "NCHW".
         """
-        from .utils.logger_helpers import (
-            _prepare_images_for_logging,
-            _log_images_to_tensorboard,
-            _log_images_to_wandb,
-        )
+        from .utils.logger_helpers import (_log_images_to_tensorboard,
+                                           _log_images_to_wandb,
+                                           _prepare_images_for_logging)
 
         images_seq = _prepare_images_for_logging(images)
         _log_images_to_tensorboard(self.tb_writer, tag, images_seq, step, dataformats)
-        _log_images_to_wandb(self.wandb_run, tag, images_seq, step, self._to_wandb_image)
+        _log_images_to_wandb(
+            self.wandb_run, tag, images_seq, step, self._to_wandb_image
+        )
 
     def log_inference_results(
         self,
@@ -281,7 +268,6 @@ class RefraktLogger:
             max_images (int, optional): Maximum number of images to log. Defaults to 8.
         """
         try:
-            import torch.nn.functional as F
 
             # Convert tensors to numpy arrays and then to lists for Sequence compatibility
             in_imgs = inputs.detach().cpu().numpy()

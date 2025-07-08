@@ -1,33 +1,51 @@
 """
 Refrakt CLI entry point for training, testing, and inference.
 
-This module parses command-line arguments and dispatches to the appropriate pipeline stage.
+This module serves as the command-line interface entry point for the Refrakt framework.
+It parses command-line arguments, sets up logging and configuration, and dispatches
+to the appropriate pipeline stage (train, test, or inference).
+
+The module handles:
+- Command-line argument parsing and validation
+- Configuration loading and override application
+- Logging setup and configuration
+- Pipeline mode execution and error handling
+- Memory cleanup and resource management
 """
 
 import gc
-from typing import cast
 
 import torch
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 
-from refrakt_core.api.utils.pipeline_utils import (
-    setup_logger_and_config,
-)
-from refrakt_core.api.helpers.cli_helpers import (
-    _setup_argument_parser,
-    _extract_overrides,
-    _apply_config_overrides,
-    _extract_runtime_config,
-    _setup_logging_config,
-    _execute_pipeline_mode,
-)
+from refrakt_core.api.helpers.cli_helpers import (_apply_config_overrides,
+                                                  _execute_pipeline_mode,
+                                                  _extract_overrides,
+                                                  _extract_runtime_config,
+                                                  _setup_argument_parser,
+                                                  _setup_logging_config)
+from refrakt_core.api.utils.pipeline_utils import setup_logger_and_config
 
 
 def main() -> None:
     """
     Main entry point for the Refrakt CLI.
 
-    Parses command-line arguments, sets up logging, and dispatches to train, test, or inference.
+    This function serves as the primary command-line interface for the Refrakt framework.
+    It parses command-line arguments, sets up logging and configuration, and dispatches
+    to the appropriate pipeline stage (train, test, or inference).
+
+    The function handles the complete CLI workflow including:
+    - Argument parsing and validation
+    - Configuration loading and override application
+    - Logging setup and configuration
+    - Pipeline execution with error handling
+    - Resource cleanup and memory management
+
+    Raises:
+        SystemExit: If the pipeline fails due to configuration errors, argument
+                   validation issues, or other critical failures. The function will
+                   log detailed error information before exiting.
     """
     try:
         print("==> Refrakt CLI launched")
@@ -35,21 +53,22 @@ def main() -> None:
         parser = _setup_argument_parser()
         args, remaining = parser.parse_known_args()
 
-        # Extract overrides from remaining arguments
         all_overrides = _extract_overrides(args, remaining)
 
-        # Load and apply configuration
         cfg = OmegaConf.load(args.config)
         cfg = _apply_config_overrides(cfg, all_overrides)
 
-        # Extract runtime parameters from YAML config
         runtime_cfg = _extract_runtime_config(cfg)
-        mode, log_dir, log_types, console, model_path, debug = _setup_logging_config(runtime_cfg, args.log_dir)
+        mode, log_dir, log_types, console, model_path, debug = _setup_logging_config(
+            runtime_cfg, args.log_dir
+        )
 
-        # Override debug flag if provided in args
         debug = args.debug or debug
 
-        model_name = cfg.model.name
+        if OmegaConf.is_config(cfg):
+            model_name = cfg.model.name
+        else:
+            model_name = cfg.get("model", {}).get("name", "unknown")
 
         # Setup logger
         logger = setup_logger_and_config(
@@ -57,7 +76,7 @@ def main() -> None:
         )
 
         try:
-            _execute_pipeline_mode(mode, cfg, model_path, logger)
+            _execute_pipeline_mode(mode, cfg, model_path or "", logger)
 
         except KeyboardInterrupt:
             logger.warning("Training interrupted by user")

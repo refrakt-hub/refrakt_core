@@ -4,6 +4,14 @@ Scheduler builder for Refrakt.
 This module provides utilities to construct learning rate schedulers from configuration dictionaries.
 It supports a variety of PyTorch schedulers and ensures robust type checking for all parameters.
 
+The module handles:
+- Scheduler configuration validation and parsing
+- Learning rate scheduler instantiation (CosineAnnealingLR, StepLR, etc.)
+- Parameter type checking and validation
+- Optimizer integration and setup
+- Supported scheduler types and their parameters
+- Optional scheduler configuration (returns None if not specified)
+
 Typical usage involves passing a configuration (OmegaConf) and an optimizer to build a scheduler for training.
 """
 
@@ -17,18 +25,28 @@ def build_scheduler(cfg: OmegaConf, optimizer: Any) -> Optional[Any]:
     """
     Build a learning rate scheduler from configuration for a given optimizer.
 
-    This function supports several PyTorch learning rate schedulers and ensures all parameters are type-checked.
+    This function supports several PyTorch learning rate schedulers and ensures all
+    parameters are type-checked and compatible with the provided optimizer.
+
+    Supported scheduler types:
+    - cosine: CosineAnnealingLR for cosine annealing learning rate
+    - steplr: StepLR for step-based learning rate decay
+    - multisteplr: MultiStepLR for multi-step learning rate decay
+    - exponential: ExponentialLR for exponential learning rate decay
 
     Args:
-        cfg (OmegaConf): Configuration specifying the scheduler type and parameters.
-        optimizer (Any): The optimizer to which the scheduler will be attached.
+        cfg: Configuration object (OmegaConf) specifying the scheduler type,
+             parameters, and optional settings
+        optimizer: The optimizer to which the scheduler will be attached.
+                  Can be any PyTorch optimizer or optimizer dictionary
 
     Returns:
-        Optional[Any]: Instantiated scheduler object, or None if no scheduler is specified.
+        The instantiated scheduler object if configuration is provided,
+        None if no scheduler is specified in the configuration
 
     Raises:
-        TypeError: If the configuration or its fields are not of the expected type.
-        ValueError: If the specified scheduler type is not supported.
+        TypeError: If the configuration or its fields are not of the expected type
+        ValueError: If the specified scheduler type is not supported
     """
     scheduler = None
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)

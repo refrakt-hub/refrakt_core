@@ -14,7 +14,7 @@ import torch
 from PIL import Image
 import torchvision.transforms as T
 
-from refrakt_core.transforms.standard_transforms import (
+from refrakt_core.resizers.standard_transforms import (
     ImageSizeConfig,
     validate_image_size,
     resize_image_maintain_aspect,

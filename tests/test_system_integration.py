@@ -31,7 +31,7 @@ from refrakt_core.hooks.hyperparameter_override import (
     extract_overrides_from_args
 )
 from refrakt_core.loaders.dataset_loader import load_dataset
-from refrakt_core.transforms.standard_transforms import create_standard_transform
+from refrakt_core.resizers.standard_transforms import create_standard_transform
 
 # Smoke Tests
 def test_registry_and_logging_integration_smoke():

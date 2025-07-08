@@ -2,10 +2,11 @@
 Utility functions for setting up and initializing datasets, dataloaders, and model components.
 """
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, cast
 
 import torch
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
+
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.builders.loss_builder import build_loss
@@ -32,7 +33,7 @@ def import_modules() -> Dict[str, Any]:
         "get_loss": get_loss,
         "get_model": get_model,
         "build_dataset": build_dataset,
-        "build_dataloader": build_dataloaders,
+        "build_dataloader": build_dataloader,
     }
 
 
@@ -65,7 +66,7 @@ def build_datasets(cfg: OmegaConf) -> Tuple[Any, Any]:
     val_cfg = OmegaConf.merge(
         cfg.dataset, OmegaConf.create({"params": {"train": False}})  # type: ignore[attr-defined]
     )
-    val_dataset = build_dataset(val_cfg)  # type: ignore[attr-defined]
+    val_dataset = build_dataset(cast(DictConfig, val_cfg))
 
     return train_dataset, val_dataset
 
@@ -108,7 +109,7 @@ def build_model_components(cfg: OmegaConf) -> ModelComponents:
     loss_fn = build_loss(cfg, modules, device)
     if isinstance(loss_fn, dict):
         loss_fn = next(iter(loss_fn.values()))
-    optimizer = build_optimizer(cfg, model)  # type: ignore[attr-defined]
+    optimizer = build_optimizer(cast(DictConfig, cfg), model)
     if isinstance(optimizer, dict):
         optimizer = optimizer["optimizer"]
     scheduler = build_scheduler(cfg, optimizer)

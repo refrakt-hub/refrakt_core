@@ -1,20 +1,40 @@
 """
-Utility functions for testing in Refrakt.
+Test utilities for Refrakt.
 
-Includes config loading, test dataloader building, and model checkpoint loading helpers.
+This module provides comprehensive utility functions for model evaluation, checkpoint loading,
+batch extraction, and manual evaluation. It supports both deep learning and ML pipelines,
+and provides helpers for extracting model inputs, outputs, and metrics in a robust and
+type-safe manner.
+
+The module handles:
+- Model checkpoint loading with fallback logic
+- Model name resolution for evaluation
+- Pure ML pipeline testing and evaluation
+- Fusion model evaluation and setup
+- Batch data extraction and logits processing
+- Manual evaluation with accuracy computation
+- Test dataloader building with automatic resizing
+- Configuration loading and validation
+
+These utilities ensure robust testing pipeline operations with proper error handling,
+automatic dataset optimization, and comprehensive evaluation capabilities.
+
+Typical usage involves calling these utility functions to set up and execute
+complete testing pipelines with automatic optimization and evaluation.
 """
 
 import glob
 import os
-from typing import Any, Optional
+from typing import Any, Optional, Tuple, cast
 
 import torch
 from omegaconf import DictConfig, OmegaConf
+
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.api.utils.train_utils import analyze_and_resize_dataset_images
-from refrakt_core.utils.methods import extract_visual_tensor
+from refrakt_core.api.utils.train_utils import \
+    analyze_and_resize_dataset_images
 
 """
 Test utilities for Refrakt API.
@@ -23,15 +43,10 @@ This module provides utility functions for testing operations including
 model name resolution, fusion evaluation, batch data extraction, and manual evaluation.
 """
 
-import os
-import torch
-from typing import Any, Dict, Optional, Tuple, cast
-from omegaconf import DictConfig
+from typing import Dict
 
-from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.integrations.fusion.trainer import FusionTrainer
-from refrakt_core.integrations.fusion.builder import build_fusion_head
 from refrakt_core.integrations.cpu.wrapper import SklearnWrapper
+from refrakt_core.integrations.fusion.trainer import FusionTrainer
 from refrakt_core.integrations.gpu.wrapper import CuMLWrapper
 
 
@@ -93,16 +108,16 @@ def _build_test_loader_with_resize(config: Any, logger: RefraktLogger) -> Any:
         test_cfg = OmegaConf.create(OmegaConf.to_container(test_cfg, resolve=True))
     if not isinstance(test_cfg, DictConfig):
         raise TypeError("test_cfg must be a DictConfig after conversion.")
-    
+
     # Build dataset
     dataset = build_dataset(test_cfg)
-    
+
     # Analyze and resize if needed
     test_resized, dataset = analyze_and_resize_dataset_images(dataset, logger)
-    
+
     if test_resized:
         logger.info("🔄 Using resized test dataset")
-    
+
     return build_dataloader(dataset, config.dataloader)
 
 
@@ -113,45 +128,17 @@ def _load_model_checkpoint(
     logger: Any,
 ) -> int:
     """
-    Load a model checkpoint, with fallback logic for missing files and variants.
+    Load model checkpoint with fallback logic.
 
     Args:
-        model (torch.nn.Module): The model to load weights into.
-        model_path (Optional[str]): Path to the checkpoint file.
-        device (torch.device): Device to map the checkpoint to.
-        logger (Any): Logger for warnings and info.
+        model: The model to load state dict into
+        model_path: Path to checkpoint file
+        device: Device to load checkpoint on
+        logger: Logger instance
 
     Returns:
-        int: The global step from the checkpoint, or 0 if not found.
-
-    Raises:
-        FileNotFoundError: If no valid checkpoint is found.
+        Global step from checkpoint
     """
-    import typing
-    from collections import defaultdict
-
-    from omegaconf import DictConfig, ListConfig
-    from omegaconf.base import ContainerMetadata, Metadata
-    from omegaconf.nodes import AnyNode
-    from torch.serialization import add_safe_globals
-
-    # Allow OmegaConf configs to be unpickled safely
-    add_safe_globals(
-        [
-            ListConfig,
-            DictConfig,
-            ContainerMetadata,
-            typing.Any,
-            list,
-            dict,
-            defaultdict,
-            int,
-            float,
-            AnyNode,
-            Metadata,
-        ]
-    )
-
     if model_path is None:
         logger.warning("No model checkpoint provided — using random init weights")
         return 0
@@ -160,7 +147,7 @@ def _load_model_checkpoint(
         checkpoint = torch.load(model_path, map_location=device)
         model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
         logger.info(f"Loaded model from {model_path}")
-        return checkpoint.get("global_step", 0)
+        return cast(int, checkpoint.get("global_step", 0))
 
     # If file doesn't exist, try fallback logic
     base_dir = os.path.dirname(model_path)
@@ -172,7 +159,7 @@ def _load_model_checkpoint(
         checkpoint = torch.load(exact_match, map_location=device)
         model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
         logger.warning(f"⚠️ Falling back to exact checkpoint: {exact_match}")
-        return checkpoint.get("global_step", 0)
+        return cast(int, checkpoint.get("global_step", 0))
 
     # Try matching variants like _latest, _final
     pattern = os.path.join(base_dir, f"{base_name}_*.pth")
@@ -185,7 +172,7 @@ def _load_model_checkpoint(
         checkpoint = torch.load(fallback_path, map_location=device)
         model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
         logger.warning(f"⚠️ Falling back to available checkpoint: {fallback_path}")
-        return checkpoint.get("global_step", 0)
+        return cast(int, checkpoint.get("global_step", 0))
 
     logger.error(f"Model path does not exist: {model_path}")
     raise FileNotFoundError(model_path)
@@ -198,65 +185,84 @@ def _resolve_model_name(config: DictConfig) -> str:
         resolved_model_name = f"autoencoder_{variant}"
     else:
         resolved_model_name = config.model.name
-    
+
     # Check if using custom dataset and append _custom suffix
-    dataset_params = config.dataset.params if hasattr(config, "dataset") and hasattr(config.dataset, "params") else {}
+    dataset_params = (
+        config.dataset.params
+        if hasattr(config, "dataset") and hasattr(config.dataset, "params")
+        else {}
+    )
     dataset_path = dataset_params.get("path", "") or dataset_params.get("zip_path", "")
     if dataset_path and str(dataset_path).endswith(".zip"):
         resolved_model_name = f"{resolved_model_name}_custom"
-    
+
     return resolved_model_name
 
 
-def _handle_pure_ml_pipeline(config: DictConfig, resolved_model_name: str, logger: RefraktLogger) -> None:
+def _handle_pure_ml_pipeline(
+    config: DictConfig, resolved_model_name: str, logger: RefraktLogger
+) -> None:
     """Handle pure ML pipeline testing."""
-    import joblib
+    import joblib  # type: ignore[import-untyped]
+
     # Load pipeline
-    save_dir = config.trainer.params.save_dir if hasattr(config.trainer, 'params') and hasattr(config.trainer.params, 'save_dir') else './checkpoints'
+    save_dir = (
+        config.trainer.params.save_dir
+        if hasattr(config.trainer, "params")
+        and hasattr(config.trainer.params, "save_dir")
+        else "./checkpoints"
+    )
     pipeline_path = os.path.join(save_dir, f"{resolved_model_name}_ml.joblib")
     pipeline = joblib.load(pipeline_path)
-    feature_pipeline = pipeline['feature_pipeline']
-    ml_model = pipeline['model']
+    feature_pipeline = pipeline["feature_pipeline"]
+    ml_model = pipeline["model"]
     # Load data
     from refrakt_core.api.utils.train_utils import build_ml_numpy_splits
+
     _, _, X_val, y_val = build_ml_numpy_splits(config)
     preds = ml_model.predict(feature_pipeline.transform(X_val))
     acc = (preds == y_val).mean() if y_val is not None else None
     logger.info(f"[ML] Test complete. Accuracy: {acc}")
-    print("\nEvaluation Results:", {'accuracy': acc})
+    print("\nEvaluation Results:", {"accuracy": acc})
 
 
-def _setup_fusion_evaluation(config: DictConfig, model: torch.nn.Module, dataloader: Any, 
-                           device: torch.device, artifact_dumper: Any, logger: RefraktLogger) -> Optional[float]:
+def _setup_fusion_evaluation(
+    config: DictConfig,
+    model: torch.nn.Module,
+    dataloader: Any,
+    device: torch.device,
+    artifact_dumper: Any,
+    logger: RefraktLogger,
+) -> Optional[float]:
     """Setup and run fusion evaluation if applicable."""
     fusion_cfg = getattr(config.model, "fusion", None)
     if not fusion_cfg:
         return None
-    
+
     fusion_type = fusion_cfg.type
     fusion_model_key = fusion_cfg.model
     fusion_model_path = os.path.join(
         config.trainer.params.save_dir, f"{config.model.name}_fusion.joblib"
     )
-    
+
     if not os.path.exists(fusion_model_path):
         logger.warning(f"[FUSION] No fusion model found at: {fusion_model_path}")
         return None
-    
+
     logger.info(f"[FUSION] Found fusion head at {fusion_model_path}")
     if fusion_type == "sklearn":
         fusion_head = SklearnWrapper.load(fusion_model_key, fusion_model_path)
     elif fusion_type == "cuml":
-        fusion_head = CuMLWrapper.load(fusion_model_key, fusion_model_path)
+        fusion_head = CuMLWrapper.load(fusion_model_key, fusion_model_path)  # type: ignore[assignment]
     else:
         raise ValueError(f"[FUSION] Unsupported fusion type: {fusion_type}")
-    
+
     fusion_trainer = FusionTrainer(
         model=model,
         fusion_head=fusion_head,
         train_loader=dataloader,
         val_loader=dataloader,
-        device=device,
+        device=str(device),
         artifact_dumper=artifact_dumper,
         model_name=config.model.name,
     )
@@ -265,7 +271,9 @@ def _setup_fusion_evaluation(config: DictConfig, model: torch.nn.Module, dataloa
     return fusion_acc
 
 
-def _extract_batch_data(batch: Any, logger: RefraktLogger) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+def _extract_batch_data(
+    batch: Any, logger: RefraktLogger
+) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
     """Extract inputs and targets from batch."""
     if isinstance(batch, torch.Tensor):
         return batch, None
@@ -285,8 +293,8 @@ def _extract_batch_data(batch: Any, logger: RefraktLogger) -> Tuple[Optional[tor
 
 def _extract_logits(outputs: Any, logger: RefraktLogger) -> Optional[torch.Tensor]:
     """Extract logits from model outputs."""
-    if hasattr(outputs, 'logits'):
-        return outputs.logits
+    if hasattr(outputs, "logits"):
+        return cast(Optional[torch.Tensor], outputs.logits)
     elif isinstance(outputs, torch.Tensor):
         return outputs
     else:
@@ -294,55 +302,58 @@ def _extract_logits(outputs: Any, logger: RefraktLogger) -> Optional[torch.Tenso
         return None
 
 
-def _run_manual_evaluation(model: torch.nn.Module, dataloader: Any, device: torch.device, 
-                          logger: RefraktLogger) -> Dict[str, Any]:
+def _run_manual_evaluation(
+    model: torch.nn.Module, dataloader: Any, device: torch.device, logger: RefraktLogger
+) -> Dict[str, Any]:
     """Run manual evaluation when trainer's evaluate method is not available."""
     model.eval()
-    eval_results = {}
+    eval_results: Dict[str, Any] = {}
     correct = 0
     total = 0
-    
+
     with torch.no_grad():
         for batch in dataloader:
             inputs, targets = _extract_batch_data(batch, logger)
             if inputs is None:
                 continue
-            
+
             inputs = inputs.to(device)
             if targets is not None:
                 targets = targets.to(device)
-            
+
             outputs = model(inputs)
             logits = _extract_logits(outputs, logger)
             if logits is None:
                 continue
-            
+
             if targets is not None:
                 preds = torch.argmax(logits, dim=1)
-                correct += (preds == targets).sum().item()
+                correct += int((preds == targets).sum().item())
                 total += targets.size(0)
-    
+
     if total > 0:
         accuracy = correct / total
-        eval_results['accuracy'] = accuracy
+        eval_results["accuracy"] = accuracy
         logger.info(f"Manual evaluation - Accuracy: {accuracy:.4f}")
     else:
         logger.warning("No valid samples for accuracy calculation")
-        eval_results['accuracy'] = None
-    
+        eval_results["accuracy"] = None
+
     return eval_results
 
 
-def _manual_evaluation(model: torch.nn.Module, dataloader: Any, device: torch.device, logger: RefraktLogger) -> Dict[str, Any]:
+def _manual_evaluation(
+    model: torch.nn.Module, dataloader: Any, device: torch.device, logger: RefraktLogger
+) -> Dict[str, Any]:
     """
     Manually evaluate the model when trainer's evaluate method is not available.
-    
+
     Args:
         model: The model to evaluate
         dataloader: DataLoader for evaluation
         device: Device to run evaluation on
         logger: Logger instance
-        
+
     Returns:
         Dict containing evaluation metrics
     """

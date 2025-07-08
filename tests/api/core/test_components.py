@@ -1,55 +1,50 @@
+import importlib
 import pytest
-from torch import nn
-from torch.optim import SGD
-from torch.optim.lr_scheduler import StepLR
+import torch
+from torch.optim.lr_scheduler import StepLR, _LRScheduler
+from src.refrakt_core.api.core.components import ModelComponents
 
-from refrakt_core.api.core.components import ModelComponents
-
-
-class DummyModel(nn.Module):
+class DummyModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.linear = nn.Linear(2, 2)
-
+        self.linear = torch.nn.Linear(2, 2)
     def forward(self, x):
         return self.linear(x)
 
-
-class DummyLoss(nn.Module):
+class DummyLoss(torch.nn.Module):
     def forward(self, x, y):
-        return ((x - y) ** 2).mean()
+        return (x - y).abs().mean()
 
+class TestComponents:
+    # Smoke Tests
+    def test_import_components(self):
+        import src.refrakt_core.api.core.components as components
+        importlib.reload(components)
 
-def test_model_components_smoke():
-    model = DummyModel()
-    loss_fn = DummyLoss()
-    optimizer = SGD(model.parameters(), lr=0.01)
-    scheduler = StepLR(optimizer, step_size=1)
-    mc = ModelComponents(model, loss_fn, optimizer, scheduler, device="cpu")
-    assert mc.model is model
-    assert mc.loss_fn is loss_fn
-    assert mc.optimizer is optimizer
-    assert mc.scheduler is scheduler
-    assert mc.device == "cpu"
+    def test_components_has_any_symbol(self):
+        import src.refrakt_core.api.core.components as components
+        symbols = [s for s in dir(components) if not s.startswith('__')]
+        assert symbols
 
+    # Sanity Tests
+    def test_model_components_construction(self):
+        model = DummyModel()
+        loss_fn = DummyLoss()
+        optimizer = torch.optim.Adam(model.parameters())
+        scheduler: _LRScheduler = StepLR(optimizer, step_size=1)  # type: ignore
+        device = 'cpu'
+        mc = ModelComponents(model, loss_fn, optimizer, scheduler, device)
+        assert mc.model is model
+        assert mc.loss_fn is loss_fn
+        assert mc.optimizer is optimizer
+        assert mc.scheduler is scheduler
+        assert mc.device == device
 
-def test_model_components_sanity():
-    model = DummyModel()
-    loss_fn = DummyLoss()
-    optimizer = SGD(model.parameters(), lr=0.01)
-    mc = ModelComponents(model, loss_fn, optimizer)
-    assert isinstance(mc.model, nn.Module)
-    assert isinstance(mc.loss_fn, nn.Module)
-    assert isinstance(mc.optimizer, SGD)
-    assert mc.scheduler is None
-    assert mc.device == "cuda" or mc.device == "cpu"
-
-
-def test_model_components_unit():
-    model = DummyModel()
-    loss_fn = DummyLoss()
-    optimizer = SGD(model.parameters(), lr=0.01)
-    mc = ModelComponents(model, loss_fn, optimizer, device="cpu")
-    # Test attribute assignment
-    mc.device = "cuda"
-    assert mc.device == "cuda"
+    # Unit Tests
+    def test_model_components_defaults(self):
+        model = DummyModel()
+        loss_fn = DummyLoss()
+        optimizer = torch.optim.Adam(model.parameters())
+        mc = ModelComponents(model, loss_fn, optimizer)
+        assert mc.scheduler is None
+        assert mc.device == 'cuda' or mc.device == 'cpu' 

@@ -1,11 +1,26 @@
+"""
+Refrakt API Module
+
+This module provides the main entry points for the Refrakt framework, including training,
+testing, and inference pipelines. It serves as the primary interface for users to interact
+with the Refrakt system.
+
+The module includes:
+- Main CLI entry point for different pipeline modes
+- Configuration management and validation
+- Integration with PyTorch and CUDA memory management
+- Error handling and logging setup
+"""
+
 import gc
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Union
 
 import torch
 from omegaconf import OmegaConf
+
 from refrakt_core.api.inference import inference
 from refrakt_core.api.test import test
 from refrakt_core.api.train import train
@@ -17,18 +32,31 @@ gc.collect()
 torch.cuda.empty_cache()
 
 
-def main(config_path: str, mode: str = "train"):
+def main(config_path: str, mode: str = "train") -> Optional[Dict[str, Any]]:
     """
-    Main function for CLI usage
+    Main function for CLI usage of the Refrakt framework.
+
+    This function serves as the primary entry point for running different pipeline modes
+    including training, testing, and inference. It handles configuration loading,
+    mode validation, and dispatches to the appropriate pipeline function.
 
     Args:
-        config_path: Path to configuration file
-        mode: One of 'train', 'test', 'inference'
+        config_path: Path to the configuration YAML file containing all pipeline parameters
+        mode: Pipeline mode to execute. Must be one of 'train', 'test', or 'inference'
+
+    Returns:
+        Dictionary containing training results and metrics if mode is 'train',
+        None for 'test' and 'inference' modes
+
+    Raises:
+        ValueError: If an invalid mode is provided or if inference mode is used
+                   without proper model_path parameter
     """
     if mode == "train":
         return train(config_path)
     elif mode == "test":
-        return test(config_path)
+        test(config_path)
+        return None
     elif mode == "inference":
         raise ValueError(
             "Inference mode requires model_path parameter. Use inference() function directly."
@@ -42,7 +70,9 @@ def main(config_path: str, mode: str = "train"):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Refrakt CLI - Training, Testing, and Inference Framework"
+    )
     parser.add_argument(
         "--config", type=str, required=True, help="Path to configuration YAML file"
     )

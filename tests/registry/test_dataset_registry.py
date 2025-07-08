@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, Mock
 
 import pytest
 
@@ -14,6 +14,24 @@ def mock_logger():
         logger = MagicMock()
         mock_logger.return_value = logger
         yield logger
+
+
+class DatasetMock:
+    def __init__(self, *args, **kwargs):
+        pass
+    def __len__(self):
+        return 100
+    def __getitem__(self, idx):
+        if idx < 0 or idx >= 100:
+            raise IndexError('Index out of range')
+        import torch
+        return torch.randn(3, 224, 224), torch.tensor(0)
+
+
+@pytest.fixture(autouse=True)
+def patch_dataset_registry():
+    with patch('refrakt_core.registry.dataset_registry.DATASET_REGISTRY', {"cifar10": DatasetMock, "mnist": DatasetMock, "FakeData": DatasetMock}):
+        yield
 
 
 @patch("refrakt_core.registry.dataset_registry.get_global_logger")
