@@ -2,7 +2,8 @@
 Optimizer utilities for Refrakt.
 
 This module provides utility functions for optimizer building and configuration,
-extracted from the main optimizer_builder to reduce complexity and improve maintainability.
+extracted from the main optimizer_builder to reduce complexity and improve \
+    maintainability.
 
 The module handles:
 - Optimizer class mapping and registry
@@ -68,7 +69,9 @@ def validate_optimizer_params(
         isinstance(k, str) for k in opt_params.keys()
     ):
         raise TypeError(
-            f"opt_params must be a dict with str keys, got {type(opt_params)} and keys {list(opt_params.keys()) if isinstance(opt_params, dict) else 'N/A'}"
+            f"opt_params must be a dict with str keys, got {type(opt_params)} \
+                and keys {list(opt_params.keys()) \
+                if isinstance(opt_params, dict) else 'N/A'}"
         )
     return typing.cast(Dict[str, Any], opt_params)
 
@@ -154,7 +157,8 @@ def build_gan_style_optimizer(
     for cases where only one component is specified.
 
     Args:
-        optimizer_cfg: Optimizer configuration dictionary containing generator/discriminator settings
+        optimizer_cfg: Optimizer configuration dictionary containing \
+            generator/discriminator settings
         model: Model object containing generator and discriminator components
         opt_map: Dictionary mapping optimizer names to classes
 
@@ -187,7 +191,8 @@ def build_multi_component_optimizer(
     using an explicit 'components' configuration structure.
 
     Args:
-        optimizer_cfg: Optimizer configuration dictionary containing component specifications
+        optimizer_cfg: Optimizer configuration dictionary containing \
+            component specifications
         model: Model object containing the components
         opt_map: Dictionary mapping optimizer names to classes
 

@@ -1,8 +1,10 @@
 """
 Transform builder for Refrakt.
 
-This module provides utilities to construct data transformation pipelines from configuration dictionaries.
-It supports both simple and nested transforms, including custom and registry-based transforms, and integrates with PyTorch Compose.
+This module provides utilities to construct data transformation pipelines \
+    from configuration dictionaries. It supports both simple and nested \
+    transforms, including custom and registry-based transforms, and integrates \
+    with PyTorch Compose.
 
 The module handles:
 - Transform configuration validation and parsing
@@ -13,7 +15,8 @@ The module handles:
 - Recursive transform building for complex configurations
 - Custom transform integration and parameter passing
 
-Typical usage involves passing a configuration (list, dict, or ListConfig) describing the transform sequence or components.
+Typical usage involves passing a configuration (list, dict, or ListConfig) \
+    sdescribing the transform sequence or components.
 """
 
 from typing import Any, Callable, Dict, List, Union

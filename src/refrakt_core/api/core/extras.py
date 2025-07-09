@@ -1,5 +1,6 @@
 """
-Utility functions for setting up and initializing datasets, dataloaders, and model components.
+Utility functions for setting up and initializing datasets, dataloaders, and \
+    model components.
 """
 
 from typing import Any, Dict, Tuple, cast
@@ -22,7 +23,8 @@ def import_modules() -> Dict[str, Any]:
     Dynamically import and return registries and builder references.
 
     Returns:
-        dict: A dictionary containing registry getter functions and dataset/dataloader builders.
+        dict: A dictionary containing registry getter functions and \
+            dataset/dataloader builders.
     """
     from refrakt_core.registry.loss_registry import get_loss
     from refrakt_core.registry.model_registry import get_model
@@ -94,7 +96,8 @@ def build_dataloaders(
 
 def build_model_components(cfg: OmegaConf) -> ModelComponents:
     """
-    Assemble the model, loss function, optimizer, scheduler, and device into a unified object.
+    Assemble the model, loss function, optimizer, scheduler, and device into a \
+        unified object.
 
     Args:
         cfg (OmegaConf): Configuration for all components.

@@ -1,8 +1,9 @@
 """
 Loss utilities for Refrakt.
 
-This module provides utility functions for loss function building and wrapping operations,
-extracted from the main loss_builder to reduce complexity and improve maintainability.
+This module provides utility functions for loss function building and wrapping \
+    operations, extracted from the main loss_builder to reduce complexity and \
+    improve maintainability.
 
 The module handles:
 - Loss configuration validation and parsing
@@ -57,7 +58,8 @@ def _create_wrapped_loss(
         return raw_loss.to(device)
 
     print(
-        f"[DEBUG] Loss is not a full nn.Module, wrapping with DefaultLossWrapper: {type(raw_loss)}"
+        f"[DEBUG] Loss is not a full nn.Module, wrapping with \
+            DefaultLossWrapper: {type(raw_loss)}"
     )
     return DefaultLossWrapper(raw_loss).to(device)
 
@@ -102,7 +104,8 @@ def _build_gan_style_loss(
     for cases where only one component is specified.
 
     Args:
-        loss_cfg: Loss configuration dictionary containing generator/discriminator settings
+        loss_cfg: Loss configuration dictionary containing \
+            generator/discriminator settings
         modules: Registry dictionary containing available loss functions
         device: Target device string for loss function placement
 

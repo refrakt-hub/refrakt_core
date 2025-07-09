@@ -1,8 +1,9 @@
 """
 Scheduler builder for Refrakt.
 
-This module provides utilities to construct learning rate schedulers from configuration dictionaries.
-It supports a variety of PyTorch schedulers and ensures robust type checking for all parameters.
+This module provides utilities to construct learning rate schedulers from \
+    configuration dictionaries. It supports a variety of PyTorch schedulers \
+    and ensures robust type checking for all parameters.
 
 The module handles:
 - Scheduler configuration validation and parsing
@@ -12,7 +13,8 @@ The module handles:
 - Supported scheduler types and their parameters
 - Optional scheduler configuration (returns None if not specified)
 
-Typical usage involves passing a configuration (OmegaConf) and an optimizer to build a scheduler for training.
+Typical usage involves passing a configuration (OmegaConf) and an optimizer to \
+    build a scheduler for training.
 """
 
 from typing import Any, Optional

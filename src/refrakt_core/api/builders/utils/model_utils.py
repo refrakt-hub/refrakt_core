@@ -38,7 +38,8 @@ def validate_model_config(cfg_dict: Any) -> tuple[str, Dict[str, Any], Optional[
 
     Args:
         cfg_dict: Configuration dictionary containing model specifications.
-                  Expected to have a 'model' key with 'name', 'params', and optional 'wrapper' fields.
+                  Expected to have a 'model' key with 'name', 'params', and \
+                  optional 'wrapper' fields.
 
     Returns:
         Tuple containing:
@@ -182,7 +183,8 @@ def wrap_model(
 
     wrapper_args = {k: v for k, v in model_params.items() if k in valid_params}
 
-    # Special handling for autoencoder wrapper: set 'variant' from model_params['mode'] if present
+    # Special handling for autoencoder wrapper: set 'variant' from \
+    # model_params['mode'] if present
     if wrapper_name == "autoencoder" and "mode" in model_params:
         wrapper_args["variant"] = model_params["mode"]
 
@@ -215,7 +217,8 @@ def create_default_wrapper(
         a custom wrapper, ensuring all models have a consistent interface.
     """
     print(
-        f"[INFO] No wrapper specified. Using DefaultModelWrapper for model '{model_name}'"
+        f"[INFO] No wrapper specified. Using DefaultModelWrapper for model \
+            '{model_name}'"
     )
     model = DefaultModelWrapper(
         model_name=model_name, model_params=model_params, modules=modules

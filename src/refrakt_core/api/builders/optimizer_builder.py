@@ -2,7 +2,8 @@
 Optimizer builder for Refrakt.
 
 This module provides utilities to construct optimizers from configuration dictionaries.
-It supports standard, multi-component, and GAN-style optimizers, and ensures robust type checking for all parameters.
+It supports standard, multi-component, and GAN-style optimizers, and ensures robust type
+checking for all parameters.
 
 The module handles:
 - Optimizer configuration validation and parsing
@@ -13,7 +14,8 @@ The module handles:
 - Learning rate and weight decay configuration
 - Model parameter filtering and grouping
 
-Typical usage involves passing a configuration (OmegaConf DictConfig) and a model to build optimizers for training.
+Typical usage involves passing a configuration (OmegaConf DictConfig) and a \
+    model to build optimizers for training.
 """
 
 from typing import Any, Dict, Union
@@ -32,8 +34,9 @@ def build_optimizer(cfg: DictConfig, model: Any) -> Union[Any, Dict[str, Any]]:
     """
     Build optimizer(s) from configuration for a given model.
 
-    This function supports standard optimizers, multi-component optimizers (e.g., for GANs),
-    and ensures all optimizer parameters are type-checked and compatible with PyTorch.
+    This function supports standard optimizers, multi-component optimizers \
+        (e.g., for GANs), and ensures all optimizer parameters are type-checked \
+        and compatible with PyTorch.
 
     The function automatically detects the optimizer type based on configuration:
     - Standard: Single optimizer for the entire model
@@ -53,7 +56,8 @@ def build_optimizer(cfg: DictConfig, model: Any) -> Union[Any, Dict[str, Any]]:
 
     Raises:
         TypeError: If the configuration or its fields are not of the expected type
-        ValueError: If required optimizer components are missing or not found in the registry
+        ValueError: If required optimizer components are missing or not found \
+            in the registry
     """
     print("Building optimizer...")
 

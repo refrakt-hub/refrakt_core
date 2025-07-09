@@ -2,7 +2,8 @@
 Trainer utilities for Refrakt.
 
 This module provides utility functions for trainer initialization and configuration,
-extracted from the main trainer_builder to reduce complexity and improve maintainability.
+extracted from the main trainer_builder to reduce complexity and improve \
+    maintainability.
 
 The module handles:
 - Trainer configuration validation and parsing
@@ -31,9 +32,9 @@ def validate_trainer_config(cfg_dict: Any) -> tuple[str, Dict[str, Any]]:
     """
     Validate and extract trainer configuration parameters.
 
-    This function parses the trainer configuration dictionary to extract the trainer name
-    and parameters. It performs type validation to ensure the configuration structure
-    is correct before trainer instantiation.
+    This function parses the trainer configuration dictionary to extract the \
+        trainer name and parameters. It performs type validation to ensure the \
+        configuration structure is correct before trainer instantiation.
 
     Args:
         cfg_dict: Configuration dictionary containing trainer specifications.
@@ -248,7 +249,9 @@ def setup_fusion_trainer(
         isinstance(k, str) for k in fusion_params.keys()
     ):
         raise TypeError(
-            f"fusion_params must be a dict with str keys, got {type(fusion_params)} and keys {list(fusion_params.keys()) if isinstance(fusion_params, dict) else 'N/A'}"
+            f"fusion_params must be a dict with str keys, got {type(fusion_params)} \
+                and keys {list(fusion_params.keys()) \
+                if isinstance(fusion_params, dict) else 'N/A'}"
         )
     fusion_params = typing.cast(Dict[str, Any], fusion_params)
 

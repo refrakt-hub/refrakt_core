@@ -1,7 +1,11 @@
 """
 Logging utilities for Refrakt.
 
-This module provides utility functions for complex logging operations, including extraction of tensors from model outputs, scalar config creation, and image conversion for logging with TensorBoard and WandB. These utilities are used throughout the logging and visualization pipeline to ensure consistent and robust logging of metrics, images, and model graphs.
+This module provides utility functions for complex logging operations, 
+including extraction of tensors from model outputs, scalar config creation, 
+and image conversion for logging with TensorBoard and WandB. 
+These utilities are used throughout the logging and visualization pipeline 
+to ensure consistent and robust logging of metrics, images, and model graphs.
 
 The module handles:
 - Tensor extraction from various model output formats

@@ -1,9 +1,10 @@
 """
 Train API for Refrakt.
 
-This module provides the main train function for training models using the Refrakt framework.
-It orchestrates the complete training pipeline including configuration management,
-model building, dataset preparation, optimizer setup, and training execution.
+This module provides the main train function for training models 
+using the Refrakt framework. It orchestrates the complete training 
+pipeline including configuration management, model building, 
+dataset preparation, optimizer setup, and training execution.
 
 The module handles:
 - Configuration loading and validation
@@ -47,8 +48,9 @@ def train(
     Orchestrate the training pipeline for Refrakt.
 
     This function serves as the main entry point for training models using the Refrakt
-    framework. It handles the complete training workflow including configuration management,
-    model and dataset preparation, optimizer setup, and training execution.
+    framework. It handles the complete training workflow including 
+    configuration management, model and dataset preparation, 
+    optimizer setup, and training execution.
 
     The function supports both deep learning and pure ML training modes, automatically
     detecting the appropriate pipeline based on configuration.

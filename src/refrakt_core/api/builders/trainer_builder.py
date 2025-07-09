@@ -1,8 +1,9 @@
 """
 Trainer builder for Refrakt.
 
-This module provides utilities to construct and initialize trainers from configuration dictionaries.
-It supports standard, GAN, and fusion trainers, and ensures robust type checking and flexible parameter handling.
+This module provides utilities to construct and initialize trainers from \
+    configuration dictionaries. It supports standard, GAN, and fusion trainers, \
+    and ensures robust type checking and flexible parameter handling.
 
 The module handles:
 - Trainer configuration validation and parsing
@@ -13,13 +14,9 @@ The module handles:
 - Device placement and trainer optimization
 - Fallback trainer configuration for unsupported types
 
-Typical usage involves passing a configuration (OmegaConf), model, dataloaders, loss, optimizer, scheduler, and other components to build a trainer for training or evaluation.
-
-Example:
-    >>> from refrakt_core.api.builders.trainer_builder import initialize_trainer
-    >>> trainer = initialize_trainer(config.trainer, model, train_loader, val_loader,
-    ...                             loss_fn, optimizer, scheduler, "cuda", modules, save_dir)
-    >>> print(f"Built trainer: {type(trainer)}")
+Typical usage involves passing a configuration (OmegaConf), model, dataloaders, \
+    loss, optimizer, scheduler, and other components to build a trainer for \
+    training or evaluation.s
 """
 
 from typing import Any, Dict, Optional
@@ -69,9 +66,10 @@ def initialize_trainer(
     """
     Initialize a trainer based on configuration and provided components.
 
-    This function supports standard, GAN, and fusion trainers, and ensures all parameters
-    are type-checked and compatible with the training pipeline. It handles special cases
-    for GAN and fusion trainers, including artifact dumping and fusion head construction.
+    This function supports standard, GAN, and fusion trainers, and ensures all \
+        parameters are type-checked and compatible with the training pipeline. \
+        It handles special cases for GAN and fusion trainers, including artifact \
+        dumping and fusion head construction.
 
     The function automatically detects the trainer type and sets up the appropriate
     configuration:
@@ -86,11 +84,14 @@ def initialize_trainer(
         model: The model to be trained. Can be a single model or model components
         train_loader: DataLoader for training data
         val_loader: DataLoader for validation data
-        loss_fn: Loss function or dictionary of loss functions for multi-component setups
-        optimizer: Optimizer or dictionary of optimizers for multi-component setups
+        loss_fn: Loss function or dictionary of loss functions for \
+            multi-component setups
+        optimizer: Optimizer or dictionary of optimizers for \
+            multi-component setups
         scheduler: Learning rate scheduler or dictionary of schedulers
         device: Target device string (e.g., "cuda", "cpu") for trainer placement
-        modules: Registry dictionary containing available trainer, artifact, and utility functions
+        modules: Registry dictionary containing available trainer, artifact, and \
+            utility functions
         save_dir: Optional directory path for saving checkpoints and artifacts
 
     Returns:

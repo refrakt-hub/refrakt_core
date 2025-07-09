@@ -1,9 +1,9 @@
 """
 Refrakt API Module
 
-This module provides the main entry points for the Refrakt framework, including training,
-testing, and inference pipelines. It serves as the primary interface for users to interact
-with the Refrakt system.
+This module provides the main entry points for the Refrakt framework, \
+    including training, testing, and inference pipelines. It serves as the \
+    primary interface for users to interassct with the Refrakt system.
 
 The module includes:
 - Main CLI entry point for different pipeline modes
@@ -58,7 +58,8 @@ def main(config_path: str, mode: str = "train") -> Optional[Dict[str, Any]]:
         return None
     elif mode == "inference":
         raise ValueError(
-            "Inference mode requires model_path parameter. Use inference() function directly."
+            "Inference mode requires model_path parameter. Use inference() function "
+            "directly."
         )
     else:
         raise ValueError(

@@ -33,9 +33,10 @@ def main() -> None:
     """
     Main entry point for the Refrakt CLI.
 
-    This function serves as the primary command-line interface for the Refrakt framework.
-    It parses command-line arguments, sets up logging and configuration, and dispatches
-    to the appropriate pipeline stage (train, test, or inference).
+    This function serves as the primary command-line interface for the Refrakt \
+        framework. It parses command-line arguments, sets up logging and \
+        configuration, and dispatches to the appropriate pipeline stage \
+        (train, test, or inference).
 
     The function handles the complete CLI workflow including:
     - Argument parsing and validation

@@ -1,10 +1,12 @@
 """
 Test utilities for Refrakt.
 
-This module provides comprehensive utility functions for model evaluation, checkpoint loading,
-batch extraction, and manual evaluation. It supports both deep learning and ML pipelines,
-and provides helpers for extracting model inputs, outputs, and metrics in a robust and
-type-safe manner.
+This module provides comprehensive utility functions for model evaluation, 
+checkpoint loading, batch extraction, and manual evaluation. 
+
+It supports both deep learning and ML pipelines,
+and provides helpers for extracting model inputs, outputs, 
+and metrics in a robust and type-safe manner.
 
 The module handles:
 - Model checkpoint loading with fallback logic
@@ -25,7 +27,7 @@ complete testing pipelines with automatic optimization and evaluation.
 
 import glob
 import os
-from typing import Any, Optional, Tuple, cast
+from typing import Any, Dict, Optional, Tuple, cast
 
 import torch
 from omegaconf import DictConfig, OmegaConf
@@ -34,16 +36,6 @@ from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.utils.train_utils import analyze_and_resize_dataset_images
-
-"""
-Test utilities for Refrakt API.
-
-This module provides utility functions for testing operations including
-model name resolution, fusion evaluation, batch data extraction, and manual evaluation.
-"""
-
-from typing import Dict
-
 from refrakt_core.integrations.cpu.wrapper import SklearnWrapper
 from refrakt_core.integrations.fusion.trainer import FusionTrainer
 from refrakt_core.integrations.gpu.wrapper import CuMLWrapper

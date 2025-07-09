@@ -1,8 +1,9 @@
 """
 Transform utilities for Refrakt.
 
-This module provides utility functions for transform building and composition operations,
-extracted from the main transform_builder to reduce complexity and improve maintainability.
+This module provides utility functions for transform building and composition \
+    operations, extracted from the main transform_builder to reduce complexity \
+    and improve maintainability.
 
 The module handles:
 - Transform configuration parsing and validation

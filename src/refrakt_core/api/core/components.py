@@ -11,7 +11,8 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 class ModelComponents:
     """
-    Container for model-related components including model, loss function, optimizer, scheduler, and device.
+    Container for model-related components including model, loss function, 
+    optimizer, scheduler, and device.
 
     Attributes:
         model (nn.Module): The neural network model.
@@ -36,7 +37,8 @@ class ModelComponents:
             model (nn.Module): The neural network model.
             loss_fn (nn.Module): The loss function.
             optimizer (Optimizer): The optimizer for training.
-            scheduler (Optional[_LRScheduler], optional): The learning rate scheduler. Defaults to None.
+            scheduler (Optional[_LRScheduler], optional): The learning rate scheduler. \
+                Defaults to None.
             device (str, optional): The device to use. Defaults to 'cuda'.
         """
         self.model: nn.Module = model

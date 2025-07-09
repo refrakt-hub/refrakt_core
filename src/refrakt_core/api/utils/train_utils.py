@@ -148,7 +148,8 @@ def analyze_and_resize_dataset_images(
 
     if needs_resize:
         logger.info(
-            "🔄 Dataset contains images outside acceptable size range (28x28 to 448x448)"
+            "🔄 Dataset contains images outside acceptable size range \
+                (28x28 to 448x448)"
         )
         logger.info(f"📏 Resizing images to {target_size[0]}x{target_size[1]}...")
 
@@ -337,12 +338,16 @@ def load_fusion_head(path: str) -> Any:
 
 class CustomImageDataset(Dataset[Any]):
     """
-    A PyTorch Dataset for loading images from a list of file paths, with optional transforms and channel selection.
+    A PyTorch Dataset for loading images from a list of file paths, 
+    with optional transforms and channel selection.
 
     Args:
         image_paths (list[str]): List of image file paths.
         transform (callable, optional): Transform to apply to each image.
-        expected_channels (int, optional): Number of channels (1 for grayscale, 3 for RGB). Defaults to 3.
+        
+        expected_channels (int, optional): 
+        Number of channels (1 for grayscale, 3 for RGB). 
+        Defaults to 3.
     """
 
     def __init__(
@@ -360,7 +365,8 @@ class CustomImageDataset(Dataset[Any]):
         return len(self.image_paths)
 
     def __getitem__(self, idx: int) -> Any:
-        """Load and return an image, applying transform and channel conversion if needed."""
+        """Load and return an image, applying transform and 
+        channel conversion if needed."""
         img = Image.open(self.image_paths[idx])
         img = img.convert("L") if self.expected_channels == 1 else img.convert("RGB")
         if self.transform:
@@ -372,7 +378,8 @@ def setup_data_loader_for_inference_with_resize(
     config: DictConfig, data: Any = None, logger: Optional[RefraktLogger] = None
 ) -> Any:
     """
-    Set up a data loader for inference with automatic image resizing, supporting custom data or test dataset.
+    Set up a data loader for inference with automatic image resizing, 
+    supporting custom data or test dataset.
     """
     if data is not None:
         return data
@@ -532,7 +539,8 @@ def _handle_pure_ml_training(
     artifact_dumper = setup_artifact_dumper(cfg, resolved_model_name, logger)
 
     # Train ML model
-    trainer = MLTrainer(feature_pipeline, ml_model, X_train, y_train, X_val, y_val, artifact_dumper)  # type: ignore[no-untyped-call]
+    trainer = MLTrainer(feature_pipeline, ml_model, X_train, 
+                        y_train, X_val, y_val, artifact_dumper)  # type: ignore[no-untyped-call]
     metrics = trainer.train()  # type: ignore[no-untyped-call]
 
     logger.info(f"[ML] Training complete. Metrics: {metrics}")
@@ -552,7 +560,8 @@ def _handle_pure_ml_training(
         os.path.join(save_dir, f"{resolved_model_name}_ml.joblib"),
     )
     logger.info(
-        f"[ML] Saved ML pipeline to {os.path.join(save_dir, f'{resolved_model_name}_ml.joblib')}"
+        f"[ML] Saved ML pipeline to {os.path.join(save_dir, \
+        f'{resolved_model_name}_ml.joblib')}"
     )
 
 

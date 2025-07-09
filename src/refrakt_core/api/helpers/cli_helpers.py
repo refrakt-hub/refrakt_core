@@ -42,7 +42,7 @@ def _setup_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--override",
         nargs="+",
-        help="Override configuration values (format: path.to.param=value). Can specify multiple overrides.",
+        help="Specify multiple override values (format: path.to.param=value).",
     )
     return parser
 
@@ -100,16 +100,10 @@ def _apply_config_overrides(cfg: Any, all_overrides: List[str]) -> Any:
     if all_overrides:
         cfg_dict = OmegaConf.to_container(cfg, resolve=True)
         if isinstance(cfg_dict, dict):
-            print(
-                f"DEBUG: Before overrides - batch_size: {cfg_dict.get('dataloader', {}).get('params', {}).get('batch_size', 'NOT_FOUND')}"
-            )
             from refrakt_core.hooks.hyperparameter_override import apply_overrides
 
             cfg_dict = apply_overrides(OmegaConf.create(cfg_dict), all_overrides)
             cfg = OmegaConf.create(cfg_dict)
-            print(
-                f"DEBUG: After overrides - batch_size: {cfg_dict.get('dataloader', {}).get('params', {}).get('batch_size', 'NOT_FOUND')}"
-            )
     return cfg
 
 

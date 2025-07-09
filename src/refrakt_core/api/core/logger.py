@@ -40,7 +40,8 @@ class RefraktLogger:
         Args:
             model_name (str): Name of the model for logging context.
             log_dir (str, optional): Directory for logs. Defaults to './logs'.
-            log_types (Optional[List[str]], optional): Types of logging to enable. Defaults to None.
+            log_types (Optional[List[str]], optional): Types of logging to enable. \
+                Defaults to None.
             console (bool, optional): Whether to log to console. Defaults to False.
             debug (bool, optional): Enable debug logging. Defaults to False.
         """
@@ -207,8 +208,10 @@ class RefraktLogger:
 
         Args:
             model (nn.Module): The model to log.
-            input_tensor (Union[torch.Tensor, Dict[str, torch.Tensor]]): Input for tracing.
-            model_output (Optional[Any], optional): Model output for graph extraction. Defaults to None.
+            input_tensor (Union[torch.Tensor, Dict[str, torch.Tensor]]): Input for \
+                tracing.
+            model_output (Optional[Any], optional): Model output for graph extraction. \
+                Defaults to None.
         """
         from .utils.logger_helpers import (
             _log_to_tensorboard_graph,
@@ -276,7 +279,8 @@ class RefraktLogger:
         """
         try:
 
-            # Convert tensors to numpy arrays and then to lists for Sequence compatibility
+            # Convert tensors to numpy arrays and then to lists for \
+            # Sequence compatibility
             in_imgs = inputs.detach().cpu().numpy()
             out_imgs = outputs.detach().cpu().numpy()
             in_imgs_seq = in_imgs.tolist()
