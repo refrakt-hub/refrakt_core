@@ -22,11 +22,12 @@ dependencies = [
     "numpy",
     "requests",
     "pillow",
-    "tqdm", 
-    "omegaconf", 
-    "timm", 
-    "pydantic", 
-    "scikit-learn", 
+    "pandas",
+    "tqdm",
+    "omegaconf",
+    "timm",
+    "pydantic",
+    "scikit-learn",
     "xgboost"
 ]
 
