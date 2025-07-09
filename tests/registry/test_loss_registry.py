@@ -4,8 +4,7 @@ import pytest
 import torch
 from torch import nn
 
-from refrakt_core.registry.loss_registry import (LOSS_REGISTRY, get_loss,
-                                                 register_loss)
+from refrakt_core.registry.loss_registry import LOSS_REGISTRY, get_loss, register_loss
 
 
 def test_custom_loss_registration():

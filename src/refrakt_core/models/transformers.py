@@ -5,7 +5,6 @@ Combines embedding, positional encoding, encoder, and decoder blocks,
 mirroring the original Transformer architecture.
 """
 
-
 from torch import Tensor, nn
 
 from refrakt_core.utils.classes.decoder import Decoder

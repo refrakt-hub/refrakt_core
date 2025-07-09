@@ -55,15 +55,13 @@ def _resolve_transform_sequence(
     """
     if isinstance(cfg, (list, ListConfig)):
         return cfg
-    elif isinstance(cfg, dict):
+    if isinstance(cfg, dict):
         if "views" in cfg:
             return cast(Union[List[Any], ListConfig], cfg["views"][0])
-        elif "components" in cfg:
+        if "components" in cfg:
             return cast(Union[List[Any], ListConfig], cfg["components"])
-        else:
-            raise ValueError(f"Unsupported transform configuration format: {cfg}")
-    else:
-        raise TypeError(f"Invalid transform config type: {type(cfg)}")
+        raise ValueError(f"Unsupported transform configuration format: {cfg}")
+    raise TypeError(f"Invalid transform config type: {type(cfg)}")
 
 
 def _build_nested_transform(

@@ -1,9 +1,9 @@
 """
 Test API for Refrakt.
 
-This module provides the main test function for evaluating 
-trained models using the Refrakt framework. It orchestrates the 
-complete testing pipeline including model loading, dataset preparation, 
+This module provides the main test function for evaluating
+trained models using the Refrakt framework. It orchestrates the
+complete testing pipeline including model loading, dataset preparation,
 evaluation execution, and results reporting.
 
 The module handles:

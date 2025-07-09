@@ -92,8 +92,7 @@ def build_dataset(cfg: DictConfig) -> Any:
 
         # Pass base_dataset to wrapper
         return wrapper_cls(base_dataset, transform=transform_fn)
-    else:
-        # For non-wrapped datasets, apply transform directly
-        if transform_fn:
-            dataset_params["transform"] = transform_fn
-        return get_dataset(dataset_name, **dataset_params)
+    # For non-wrapped datasets, apply transform directly
+    if transform_fn:
+        dataset_params["transform"] = transform_fn
+    return get_dataset(dataset_name, **dataset_params)

@@ -5,29 +5,31 @@ This module contains comprehensive tests for the improved registry system
 including smoke tests, sanity checks, and unit tests.
 """
 
-import pytest
 import threading
 import time
 from unittest.mock import Mock
 
+import pytest
+
 from refrakt_core.registry.improved_registry import (
     SafeRegistry,
-    get_registry,
-    register_component,
-    get_component,
-    list_components,
     clear_registry,
-    register_model,
-    get_model,
-    register_dataset,
+    get_component,
     get_dataset,
-    register_loss,
     get_loss,
-    register_trainer,
+    get_model,
+    get_registry,
     get_trainer,
+    get_transform,
+    list_components,
+    register_component,
+    register_dataset,
+    register_loss,
+    register_model,
+    register_trainer,
     register_transform,
-    get_transform
 )
+
 
 # Smoke Tests
 def test_safe_registry_singleton_smoke():
@@ -42,10 +44,14 @@ def test_safe_registry_thread_safety_smoke():
     """Smoke test: Verify thread safety of registry operations."""
     registry = SafeRegistry()
     registry.clear("test")
+
     def worker(worker_id: int):
         for i in range(5):
-            registry.register("test", f"component_{worker_id}_{i}", f"value_{worker_id}_{i}")
+            registry.register(
+                "test", f"component_{worker_id}_{i}", f"value_{worker_id}_{i}"
+            )
             time.sleep(0.001)
+
     threads = [threading.Thread(target=worker, args=(i,)) for i in range(2)]
     for t in threads:
         t.start()
@@ -63,6 +69,7 @@ def test_register_and_get_component_smoke():
     registry.register("test_registry", "test_component", test_component)
     retrieved = registry.get("test_registry", "test_component")
     assert retrieved == test_component
+
 
 # Sanity Tests
 def test_get_nonexistent_component_sanity():
@@ -93,13 +100,16 @@ def test_clear_registry_sanity():
     components = registry.list_components("test_registry")
     assert len(components) == 0
 
+
 # Unit Tests
 def test_register_component_decorator_unit():
     """Unit test: Register component decorator."""
+
     @register_component("test_registry", "test_component")
     class TestComponent:
         def __init__(self):
             self.value = 123
+
     instance = TestComponent()
     result = get_component("test_registry", "test_component")
     assert result is TestComponent
@@ -108,17 +118,21 @@ def test_register_component_decorator_unit():
 
 def test_register_model_unit():
     """Unit test: Register model decorator."""
+
     @register_model("test_model")
     class TestModel:
         pass
+
     assert get_model("test_model") is TestModel
 
 
 def test_register_dataset_unit():
     """Unit test: Register dataset decorator."""
+
     @register_dataset("test_dataset")
     class TestDataset:
         pass
+
     assert get_dataset("test_dataset") is TestDataset
 
 
@@ -128,8 +142,10 @@ def test_import_callback_unit():
     # Clear all registries to ensure fresh state
     registry.clear()
     callback_called = []
+
     def mock_callback():
         callback_called.append(True)
+
     registry.register_import_callback("test_registry", mock_callback)
     # Access the registry to trigger the callback
     registry.list_components("test_registry")
@@ -147,4 +163,4 @@ def test_temporary_registry_context_unit():
         assert "temp" in components
     components = registry.list_components("test_registry")
     assert "original" in components
-    assert "temp" not in components 
+    assert "temp" not in components

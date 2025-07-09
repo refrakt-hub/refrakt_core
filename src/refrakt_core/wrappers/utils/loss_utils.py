@@ -2,7 +2,6 @@
 Utility functions for loss wrappers.
 """
 
-
 import torch
 
 from refrakt_core.schema.loss_output import LossOutput

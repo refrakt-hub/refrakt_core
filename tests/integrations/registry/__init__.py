@@ -1,1 +1,1 @@
-# Tests for YAML registry files 
+# Tests for YAML registry files

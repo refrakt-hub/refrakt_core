@@ -1,17 +1,23 @@
 import importlib
+from types import SimpleNamespace
+
 import pytest
 import torch
-from types import SimpleNamespace
+
 import src.refrakt_core.api.utils.image_analysis_utils as image_analysis_utils
+
 
 class DummyDataset:
     def __init__(self, n=10, shape=(3, 32, 32)):
         self.n = n
         self.shape = shape
+
     def __len__(self):
         return self.n
+
     def __getitem__(self, idx):
         return torch.ones(*self.shape)
+
 
 class TestImageAnalysisUtils:
     # Smoke Test
@@ -21,7 +27,9 @@ class TestImageAnalysisUtils:
     # Sanity Tests
     def test_analyze_image_sizes_empty(self):
         ds = DummyDataset(n=0)
-        sizes, needs_resize, oversized_count, undersized_count = image_analysis_utils.analyze_image_sizes(ds)
+        sizes, needs_resize, oversized_count, undersized_count = (
+            image_analysis_utils.analyze_image_sizes(ds)
+        )
         assert sizes == []
         assert needs_resize is False
         assert oversized_count == 0
@@ -29,7 +37,9 @@ class TestImageAnalysisUtils:
 
     def test_analyze_image_sizes_nonempty(self):
         ds = DummyDataset(n=5)
-        sizes, needs_resize, oversized_count, undersized_count = image_analysis_utils.analyze_image_sizes(ds, sample_count=2)
+        sizes, needs_resize, oversized_count, undersized_count = (
+            image_analysis_utils.analyze_image_sizes(ds, sample_count=2)
+        )
         assert isinstance(sizes, list)
         assert isinstance(needs_resize, bool)
         assert isinstance(oversized_count, int)
@@ -70,4 +80,4 @@ class TestImageAnalysisUtils:
         assert hasattr(resized_ds, "__getitem__")
         assert hasattr(resized_ds, "__len__")
         sample = resized_ds[0]
-        assert sample is not None 
+        assert sample is not None

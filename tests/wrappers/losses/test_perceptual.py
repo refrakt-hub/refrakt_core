@@ -1,37 +1,45 @@
 import pytest
 import torch
-from refrakt_core.wrappers.losses.perceptual import PerceptualLossWrapper
+
 from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.wrappers.losses.perceptual import PerceptualLossWrapper
+
 
 @pytest.fixture
 def sr():
     return torch.randn(2, 3, 64, 64)
 
+
 @pytest.fixture
 def hr():
     return torch.randn(2, 3, 64, 64)
+
 
 @pytest.fixture
 def model_output(sr):
     return ModelOutput(reconstruction=sr)
 
+
 # Smoke Tests
 def test_perceptual_loss_wrapper_smoke_initialization():
     wrapper = PerceptualLossWrapper()
-    assert hasattr(wrapper, 'loss_fn')
+    assert hasattr(wrapper, "loss_fn")
+
 
 def test_perceptual_loss_wrapper_smoke_forward(model_output, hr):
     wrapper = PerceptualLossWrapper()
     loss = wrapper(model_output, hr)
-    assert hasattr(loss, 'total')
-    assert hasattr(loss, 'components')
+    assert hasattr(loss, "total")
+    assert hasattr(loss, "components")
+
 
 # Sanity Tests
 def test_perceptual_loss_wrapper_sanity_loss_value(model_output, hr):
     wrapper = PerceptualLossWrapper()
     loss = wrapper(model_output, hr)
     assert loss.total is not None
-    assert 'perceptual' in loss.components
+    assert "perceptual" in loss.components
+
 
 # Unit Tests
 def test_perceptual_loss_wrapper_unit_missing_fields():
@@ -40,7 +48,8 @@ def test_perceptual_loss_wrapper_unit_missing_fields():
     with pytest.raises(ValueError):
         wrapper(bad_output, None)
 
+
 def test_perceptual_loss_wrapper_unit_required_fields(model_output, hr):
     wrapper = PerceptualLossWrapper()
-    assert 'sr' in wrapper.required_fields
-    assert 'hr' in wrapper.required_fields 
+    assert "sr" in wrapper.required_fields
+    assert "hr" in wrapper.required_fields

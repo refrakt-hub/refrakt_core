@@ -1,15 +1,20 @@
 import importlib
+from types import SimpleNamespace
+
 import pytest
 import torch
-from types import SimpleNamespace
+
 import src.refrakt_core.api.helpers.image_analysis_helpers as img_helpers
+
 
 class DummyDataset:
     def __getitem__(self, idx):
         # Returns (image, label) tuple
         return (torch.ones(3, 32, 32), 1)
+
     def __len__(self):
         return 10
+
 
 class TestImageAnalysisHelpers:
     # Smoke Test
@@ -46,7 +51,9 @@ class TestImageAnalysisHelpers:
         size = (32, 32)
         max_size = (64, 64)
         min_size = (16, 16)
-        needs_resize, is_oversized, is_undersized = img_helpers._check_size_bounds(size, max_size, min_size)
+        needs_resize, is_oversized, is_undersized = img_helpers._check_size_bounds(
+            size, max_size, min_size
+        )
         assert needs_resize is False
         assert is_oversized is False
         assert is_undersized is False
@@ -55,7 +62,9 @@ class TestImageAnalysisHelpers:
         size = (128, 128)
         max_size = (64, 64)
         min_size = (16, 16)
-        needs_resize, is_oversized, is_undersized = img_helpers._check_size_bounds(size, max_size, min_size)
+        needs_resize, is_oversized, is_undersized = img_helpers._check_size_bounds(
+            size, max_size, min_size
+        )
         assert needs_resize is True
         assert is_oversized is True
         assert is_undersized is False
@@ -64,7 +73,9 @@ class TestImageAnalysisHelpers:
         size = (8, 8)
         max_size = (64, 64)
         min_size = (16, 16)
-        needs_resize, is_oversized, is_undersized = img_helpers._check_size_bounds(size, max_size, min_size)
+        needs_resize, is_oversized, is_undersized = img_helpers._check_size_bounds(
+            size, max_size, min_size
+        )
         assert needs_resize is True
         assert is_oversized is False
         assert is_undersized is True
@@ -83,8 +94,10 @@ class TestImageAnalysisHelpers:
         indices = [0, 1, 2]
         max_size = (64, 64)
         min_size = (16, 16)
-        sizes, needs_resize, oversized_count, undersized_count = img_helpers._analyze_sample_sizes(dataset, indices, max_size, min_size)
+        sizes, needs_resize, oversized_count, undersized_count = (
+            img_helpers._analyze_sample_sizes(dataset, indices, max_size, min_size)
+        )
         assert all(isinstance(s, tuple) for s in sizes)
         assert needs_resize is False
         assert oversized_count == 0
-        assert undersized_count == 0 
+        assert undersized_count == 0

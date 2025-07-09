@@ -1,8 +1,12 @@
 import pytest
 import torch
 
-from refrakt_core.utils.methods import (patchify, positional_embeddings,
-                                        random_masking, random_patch_masking)
+from refrakt_core.utils.methods import (
+    patchify,
+    positional_embeddings,
+    random_masking,
+    random_patch_masking,
+)
 
 
 def test_patchify():

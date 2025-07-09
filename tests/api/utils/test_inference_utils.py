@@ -1,23 +1,29 @@
 import importlib
+from types import SimpleNamespace
+
 import pytest
 import torch
 from omegaconf import DictConfig
-from types import SimpleNamespace
+
 import src.refrakt_core.api.utils.inference_utils as inference_utils
 from src.refrakt_core.api.core.logger import RefraktLogger
+
 
 class DummyLogger(RefraktLogger):
     def info(self, msg):
         self.info_called = True
 
+
 class DummyModel(torch.nn.Module):
     def forward(self, x):
         return x + 1
+
 
 class DummyDataLoader:
     def __iter__(self):
         for i in range(3):
             yield torch.ones(2, 2)
+
 
 class TestInferenceUtils:
     # Smoke Test
@@ -26,7 +32,9 @@ class TestInferenceUtils:
 
     # Sanity Tests
     def test_resolve_model_name_for_inference_autoencoder(self):
-        cfg = DictConfig({"model": {"name": "autoencoder", "params": {"variant": "foo"}}})
+        cfg = DictConfig(
+            {"model": {"name": "autoencoder", "params": {"variant": "foo"}}}
+        )
         name = inference_utils.resolve_model_name_for_inference(cfg)
         assert name == "autoencoder_foo"
 
@@ -61,4 +69,4 @@ class TestInferenceUtils:
         results = inference_utils.run_inference_loop(model, loader)
         assert isinstance(results, list)
         assert len(results) == 3
-        assert torch.equal(results[0], torch.ones(2, 2) + 1) 
+        assert torch.equal(results[0], torch.ones(2, 2) + 1)

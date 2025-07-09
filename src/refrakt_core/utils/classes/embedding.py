@@ -6,7 +6,6 @@ Modules:
 - RelativeEmbedding
 """
 
-
 import torch
 from einops import rearrange
 from torch import Tensor, nn

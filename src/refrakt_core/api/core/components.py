@@ -11,7 +11,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 class ModelComponents:
     """
-    Container for model-related components including model, loss function, 
+    Container for model-related components including model, loss function,
     optimizer, scheduler, and device.
 
     Attributes:

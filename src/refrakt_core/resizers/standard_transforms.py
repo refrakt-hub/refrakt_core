@@ -181,14 +181,20 @@ def create_standard_transform(
 
     # Resize transform
     if resize_strategy == "maintain_aspect":
-        def resize_fn(img):
+
+        def resize_fn(img: Image.Image) -> Image.Image:
             return resize_image_maintain_aspect(img, target_size)
+
     elif resize_strategy == "crop":
-        def resize_fn(img):
+
+        def resize_fn(img: Image.Image) -> Image.Image:
             return resize_image_crop(img, target_size)
+
     elif resize_strategy == "stretch":
-        def resize_fn(img):
+
+        def resize_fn(img: Image.Image) -> Image.Image:
             return resize_image_stretch(img, target_size)
+
     else:
         raise ValueError(f"Unknown resize strategy: {resize_strategy}")
 

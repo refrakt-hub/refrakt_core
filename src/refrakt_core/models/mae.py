@@ -5,7 +5,6 @@ This module implements the core MAE architecture for image reconstruction from
 randomly masked patches using a vision transformer encoder-decoder setup.
 """
 
-
 import torch
 from einops import rearrange
 from torch import Tensor, nn

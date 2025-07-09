@@ -5,7 +5,6 @@ Implements a hierarchical vision transformer using shifted windows, with
 custom embedding, patch merging, and stacked Swin stages.
 """
 
-
 from torch import Tensor, nn
 
 from refrakt_core.registry.model_registry import register_model

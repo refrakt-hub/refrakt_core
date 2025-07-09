@@ -16,7 +16,7 @@ The module handles:
 
 Typical usage involves passing a configuration (OmegaConf), model, dataloaders, \
     loss, optimizer, scheduler, and other components to build a trainer for \
-    training or evaluation.s
+    training or evaluation.
 """
 
 from typing import Any, Dict, Optional
@@ -40,15 +40,15 @@ class DummyMLTrainer:
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize dummy trainer with any arguments."""
-        pass
+        pass  # Dummy trainer does nothing
 
     def train(self, *args: Any, **kwargs: Any) -> Any:
         """Dummy training method that does nothing."""
-        pass
+        pass  # Dummy training method
 
     def evaluate(self, *args: Any, **kwargs: Any) -> Any:
         """Dummy evaluation method that does nothing."""
-        pass
+        pass  # Dummy evaluation method
 
 
 def initialize_trainer(
@@ -129,7 +129,6 @@ def initialize_trainer(
             train_loader,
             val_loader,
             loss_fn,
-            optimizer,
             scheduler,
             final_device,
             artifact_dumper,

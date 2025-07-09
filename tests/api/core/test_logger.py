@@ -1,15 +1,20 @@
 import importlib
-import pytest
 import logging
+
+import pytest
 import torch
+
 from src.refrakt_core.api.core.logger import RefraktLogger
+
 
 class DummyModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
         self.linear = torch.nn.Linear(2, 2)
+
     def forward(self, x):
         return self.linear(x)
+
 
 def make_logger(tmp_path, log_types=None, console=False, debug=False):
     return RefraktLogger(
@@ -20,15 +25,22 @@ def make_logger(tmp_path, log_types=None, console=False, debug=False):
         debug=debug,
     )
 
+
 class TestRefraktLogger:
     # Smoke Tests
     def test_import_logger(self):
         import src.refrakt_core.api.core.logger as logger_mod
+
         importlib.reload(logger_mod)
 
     def test_logger_has_any_class(self):
         import src.refrakt_core.api.core.logger as logger_mod
-        classes = [c for c in dir(logger_mod) if isinstance(getattr(logger_mod, c), type) and not c.startswith('__')]
+
+        classes = [
+            c
+            for c in dir(logger_mod)
+            if isinstance(getattr(logger_mod, c), type) and not c.startswith("__")
+        ]
         assert classes
 
     # Sanity Tests
@@ -77,4 +89,4 @@ class TestRefraktLogger:
         model = DummyModel()
         x = torch.randn(1, 2)
         # Should not raise
-        logger.log_model_graph(model, x) 
+        logger.log_model_graph(model, x)

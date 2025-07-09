@@ -76,9 +76,8 @@ def build_optimizer(cfg: DictConfig, model: Any) -> Union[Any, Dict[str, Any]]:
         return build_gan_style_optimizer(optimizer_cfg, model, opt_map)
 
     # Handle multi-component optimizer (GAN)
-    elif optimizer_cfg.get("components"):
+    if optimizer_cfg.get("components"):
         return build_multi_component_optimizer(optimizer_cfg, model, opt_map)
 
     # Standard single optimizer (VAE, AE, etc.)
-    else:
-        return build_standard_optimizer(optimizer_cfg, model, opt_map)
+    return build_standard_optimizer(optimizer_cfg, model, opt_map)

@@ -8,7 +8,6 @@ MODEL_REGISTRY: Dict[str, Type[Any]] = {}
 _IMPORTED: bool = False
 
 
-
 def register_model(name: str) -> Callable[[Type[Any]], Type[Any]]:
     """Register a model class with the given name.
 

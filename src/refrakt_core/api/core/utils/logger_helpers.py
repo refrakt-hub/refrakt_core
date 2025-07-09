@@ -1,10 +1,10 @@
 """
 Logger helper functions for Refrakt.
 
-This module contains internal helper functions used by the 
-RefraktLogger class and related logging utilities. 
-It provides helpers for logging metrics, images, and model 
-graphs to TensorBoard and WandB, as well as for managing 
+This module contains internal helper functions used by the
+RefraktLogger class and related logging utilities.
+It provides helpers for logging metrics, images, and model
+graphs to TensorBoard and WandB, as well as for managing
 logged metrics and preparing data for visualization.
 
 The module handles:

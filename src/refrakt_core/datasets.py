@@ -8,17 +8,7 @@ Available dataset classes:
 
 import os
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Sized,
-    Tuple,
-    Union,
-    cast,
-)
+from typing import Any, Callable, Dict, List, Optional, Sized, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd

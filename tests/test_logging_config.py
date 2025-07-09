@@ -5,27 +5,29 @@ This module contains comprehensive tests for the improved logging configuration
 including smoke tests, sanity checks, and unit tests.
 """
 
-import pytest
 import logging
-import tempfile
 import os
+import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 from refrakt_core.logging_config import (
     RefraktLoggingManager,
-    get_logging_manager,
     configure_logger,
-    get_logger,
     get_config,
-    update_config,
-    remove_logger,
-    list_loggers,
-    temporary_logger,
     get_global_logger,
+    get_logger,
+    get_logging_manager,
+    list_loggers,
+    remove_logger,
+    reset_global_logger,
     set_global_logger,
-    reset_global_logger
+    temporary_logger,
+    update_config,
 )
+
 
 # Smoke Tests
 def test_logging_manager_singleton_smoke():
@@ -52,6 +54,7 @@ def test_get_logger_existing_smoke():
     retrieved_logger = manager.get_logger("test_logger")
     assert retrieved_logger is original_logger
 
+
 # Sanity Tests
 def test_configure_logger_with_options_sanity():
     """Sanity test: Configure logger with custom options."""
@@ -61,7 +64,7 @@ def test_configure_logger_with_options_sanity():
         log_dir="./test_logs",
         console=True,
         debug=True,
-        log_types=["tensorboard"]
+        log_types=["tensorboard"],
     )
     assert logger is not None
     assert logger.level == logging.DEBUG
@@ -88,15 +91,14 @@ def test_remove_logger_sanity():
     loggers = manager.list_loggers()
     assert "test_logger" not in loggers
 
+
 # Unit Tests
 def test_logger_file_output_unit():
     """Unit test: Test logger file output."""
     with tempfile.TemporaryDirectory() as temp_dir:
         manager = RefraktLoggingManager()
         logger = manager.configure_logger(
-            "test_logger",
-            log_dir=temp_dir,
-            console=False
+            "test_logger", log_dir=temp_dir, console=False
         )
         test_message = "Test log message"
         logger.info(test_message)
@@ -137,4 +139,4 @@ def test_remove_nonexistent_logger_unit():
     """Unit test: Remove nonexistent logger (should not raise)."""
     manager = RefraktLoggingManager()
     manager.remove_logger("nonexistent_logger")
-    # Should not raise 
+    # Should not raise

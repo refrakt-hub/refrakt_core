@@ -1,11 +1,11 @@
 """
 Test utilities for Refrakt.
 
-This module provides comprehensive utility functions for model evaluation, 
-checkpoint loading, batch extraction, and manual evaluation. 
+This module provides comprehensive utility functions for model evaluation,
+checkpoint loading, batch extraction, and manual evaluation.
 
 It supports both deep learning and ML pipelines,
-and provides helpers for extracting model inputs, outputs, 
+and provides helpers for extracting model inputs, outputs,
 and metrics in a robust and type-safe manner.
 
 The module handles:

@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+
 from refrakt_core.integrations.ml.trainer import MLTrainer
 
 
@@ -35,8 +36,8 @@ def test_ml_trainer_with_validation_sanity():
     model = LogisticRegression(max_iter=100)
     trainer = MLTrainer(feature_pipeline, model, X, y, X_val, y_val)
     metrics = trainer.train()
-    assert 'ml_accuracy' in metrics
-    assert 0.0 <= metrics['ml_accuracy'] <= 1.0
+    assert "ml_accuracy" in metrics
+    assert 0.0 <= metrics["ml_accuracy"] <= 1.0
 
 
 def test_ml_trainer_predict_sanity():
@@ -59,8 +60,8 @@ def test_ml_trainer_evaluate_unit():
     trainer = MLTrainer(feature_pipeline, model, X, y, X_val, y_val)
     trainer.train()
     metrics = trainer.evaluate()
-    assert 'ml_accuracy' in metrics
-    assert 0.0 <= metrics['ml_accuracy'] <= 1.0
+    assert "ml_accuracy" in metrics
+    assert 0.0 <= metrics["ml_accuracy"] <= 1.0
 
 
 def test_ml_trainer_artifact_dumper_unit():
@@ -69,13 +70,18 @@ def test_ml_trainer_artifact_dumper_unit():
     X_val, y_val = generate_dummy_data()
     feature_pipeline = StandardScaler()
     model = LogisticRegression(max_iter=100)
+
     class DummyDumper:
         def __init__(self):
             self.logged = False
+
         def log_scalar_dict(self, d, step, prefix):
             self.logged = True
+
     dumper = DummyDumper()
-    trainer = MLTrainer(feature_pipeline, model, X, y, X_val, y_val, artifact_dumper=dumper)
+    trainer = MLTrainer(
+        feature_pipeline, model, X, y, X_val, y_val, artifact_dumper=dumper
+    )
     trainer.train()
     assert dumper.logged
 
@@ -83,6 +89,7 @@ def test_ml_trainer_artifact_dumper_unit():
 def test_ml_trainer_predict_before_train_unit():
     """Unit test: Predict before train raises NotFittedError."""
     from sklearn.exceptions import NotFittedError
+
     X, y = generate_dummy_data()
     feature_pipeline = StandardScaler()
     model = LogisticRegression(max_iter=100)
@@ -98,4 +105,4 @@ def test_ml_trainer_evaluate_without_validation_unit():
     model = LogisticRegression(max_iter=100)
     trainer = MLTrainer(feature_pipeline, model, X, y)
     with pytest.raises(AttributeError):
-        trainer.evaluate() 
+        trainer.evaluate()

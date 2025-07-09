@@ -4,7 +4,6 @@ Vision Transformer (ViT) model implementation for image classification.
 This module defines a ViT-based classifier registered as "vit" in the model registry.
 """
 
-
 import torch
 from torch import Tensor, nn
 

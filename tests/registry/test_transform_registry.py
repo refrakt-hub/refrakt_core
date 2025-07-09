@@ -2,9 +2,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from refrakt_core.registry.transform_registry import (TRANSFORM_REGISTRY,
-                                                      get_transform,
-                                                      register_transform)
+from refrakt_core.registry.transform_registry import (
+    TRANSFORM_REGISTRY,
+    get_transform,
+    register_transform,
+)
 
 
 def test_torchvision_fallback():

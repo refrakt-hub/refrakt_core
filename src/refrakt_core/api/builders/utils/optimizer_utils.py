@@ -69,10 +69,14 @@ def validate_optimizer_params(
         isinstance(k, str) for k in opt_params.keys()
     ):
         raise TypeError(
-            f"opt_params must be a dict with str keys, got {type(opt_params)} \
-                and keys {list(opt_params.keys()) \
-                if isinstance(opt_params, dict) else 'N/A'}"
+            (
+                "opt_params must be a dict with str keys, got "
+                f"{type(opt_params)} "
+                "and keys "
+                f"{list(opt_params.keys()) if isinstance(opt_params, dict) else 'N/A'}"
+            )
         )
+
     return typing.cast(Dict[str, Any], opt_params)
 
 
@@ -96,10 +100,9 @@ def get_model_parameters(model: Any, component_name: str) -> Any:
     """
     if component_name == "generator":
         return model.generator.parameters()
-    elif component_name == "discriminator":
+    if component_name == "discriminator":
         return model.discriminator.parameters()
-    else:
-        raise ValueError(f"Unknown optimizer component: {component_name}")
+    raise ValueError(f"Unknown optimizer component: {component_name}")
 
 
 def build_component_optimizer(

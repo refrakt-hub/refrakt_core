@@ -7,9 +7,7 @@ while using the new safe logging system underneath.
 
 import logging
 
-from refrakt_core.logging_config import (
-    get_logger,
-)
+from refrakt_core.logging_config import get_logger
 from refrakt_core.logging_config import reset_global_logger as _reset_global_logger
 from refrakt_core.logging_config import (
     set_global_logger as _set_global_logger,

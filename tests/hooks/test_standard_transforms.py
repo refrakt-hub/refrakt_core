@@ -5,28 +5,29 @@ This module contains comprehensive tests for the standard transforms system
 including smoke tests, sanity checks, and unit tests.
 """
 
-import pytest
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
 import torch
-from PIL import Image
 import torchvision.transforms as T
+from PIL import Image
 
 from refrakt_core.resizers.standard_transforms import (
     ImageSizeConfig,
-    validate_image_size,
-    resize_image_maintain_aspect,
-    resize_image_crop,
-    resize_image_stretch,
-    create_standard_transform,
+    StandardImageTransform,
     create_classification_transform,
     create_contrastive_transform,
     create_gan_transform,
+    create_standard_transform,
+    resize_image_crop,
+    resize_image_maintain_aspect,
+    resize_image_stretch,
+    validate_image_size,
     validate_transform_input,
-    StandardImageTransform
 )
+
 
 # Smoke Tests
 def test_image_size_config_smoke():
@@ -49,7 +50,7 @@ def test_validate_image_size_smoke():
 
 def test_resize_image_maintain_aspect_smoke():
     """Smoke test: Resize image maintaining aspect ratio."""
-    img = Image.new('RGB', (200, 100), color='red')
+    img = Image.new("RGB", (200, 100), color="red")
     target_size = (224, 224)
     resized = resize_image_maintain_aspect(img, target_size)
     assert resized.size == target_size
@@ -62,6 +63,7 @@ def test_create_standard_transform_smoke():
     assert isinstance(transform, T.Compose)
     assert len(transform.transforms) > 0
 
+
 # Sanity Tests
 def test_image_size_config_sanity():
     """Sanity test: Create custom image size config."""
@@ -70,7 +72,7 @@ def test_image_size_config_sanity():
         max_size=(1024, 1024),
         min_size=(64, 64),
         aspect_ratio_tolerance=0.2,
-        interpolation_method="bilinear"
+        interpolation_method="bilinear",
     )
     assert config.standard_size == (512, 512)
     assert config.max_size == (1024, 1024)
@@ -97,7 +99,7 @@ def test_validate_image_size_sanity():
 
 def test_resize_image_crop_sanity():
     """Sanity test: Resize image with cropping."""
-    img = Image.new('RGB', (100, 200), color='blue')
+    img = Image.new("RGB", (100, 200), color="blue")
     target_size = (224, 224)
     resized = resize_image_crop(img, target_size)
     assert resized.size == target_size
@@ -107,13 +109,11 @@ def test_resize_image_crop_sanity():
 def test_create_standard_transform_with_options_sanity():
     """Sanity test: Create standard transform with options."""
     transform = create_standard_transform(
-        target_size=(512, 512),
-        resize_strategy="crop",
-        normalize=False,
-        augment=True
+        target_size=(512, 512), resize_strategy="crop", normalize=False, augment=True
     )
     assert isinstance(transform, T.Compose)
     assert len(transform.transforms) > 0
+
 
 # Unit Tests
 def test_validate_image_size_with_path_unit():
@@ -128,7 +128,7 @@ def test_validate_image_size_with_path_unit():
 
 def test_resize_image_stretch_unit():
     """Unit test: Resize image with stretching."""
-    img = Image.new('RGB', (100, 200), color='green')
+    img = Image.new("RGB", (100, 200), color="green")
     target_size = (224, 224)
     resized = resize_image_stretch(img, target_size)
     assert resized.size == target_size
@@ -137,8 +137,8 @@ def test_resize_image_stretch_unit():
 
 def test_standard_image_transform_call_unit():
     """Unit test: StandardImageTransform __call__ with PIL image."""
-    img = Image.new('RGB', (224, 224), color='red')
+    img = Image.new("RGB", (224, 224), color="red")
     transform = StandardImageTransform()
     result = transform(img)
     assert isinstance(result, torch.Tensor)
-    assert result.shape[1:] == (224, 224) 
+    assert result.shape[1:] == (224, 224)

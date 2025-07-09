@@ -4,8 +4,8 @@ import copy
 import pytest
 import torch
 
-from refrakt_core.models.resnet import ResNet18
 from refrakt_core.models.dino import DINOBackboneWrapper, DINOModelWrapper
+from refrakt_core.models.resnet import ResNet18
 
 
 @pytest.fixture

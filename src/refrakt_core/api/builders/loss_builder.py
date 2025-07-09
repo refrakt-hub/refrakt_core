@@ -70,9 +70,8 @@ def build_loss(
         return _build_gan_style_loss(loss_cfg, modules, device)
 
     # Multi-component losses
-    elif loss_cfg.get("components"):
+    if loss_cfg.get("components"):
         return _build_multi_component_loss(loss_cfg, modules, device)
 
     # Single loss
-    else:
-        return _build_single_loss(loss_cfg, modules, device)
+    return _build_single_loss(loss_cfg, modules, device)

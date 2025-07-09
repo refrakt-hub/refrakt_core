@@ -1,7 +1,6 @@
 import torch
 
-from refrakt_core.utils.classes.transformers import (InputEmbeddings,
-                                                     PositionalEncoding)
+from refrakt_core.utils.classes.transformers import InputEmbeddings, PositionalEncoding
 
 
 def test_InputEmbeddings():

@@ -70,7 +70,6 @@ def setup_standard_trainer(
     train_loader: Any,
     val_loader: Any,
     loss_fn: Any,
-    optimizer: Any,
     scheduler: Any,
     device: str,
     artifact_dumper: Optional[Any],
@@ -90,7 +89,6 @@ def setup_standard_trainer(
         train_loader: Training data loader
         val_loader: Validation data loader
         loss_fn: Loss function for training
-        optimizer: Optimizer object (not used directly, extracted from config)
         scheduler: Learning rate scheduler
         device: Target device string (e.g., "cuda", "cpu")
         artifact_dumper: Optional artifact dumper for saving outputs
@@ -248,11 +246,15 @@ def setup_fusion_trainer(
     if not isinstance(fusion_params, dict) or not all(
         isinstance(k, str) for k in fusion_params.keys()
     ):
-        raise TypeError(
-            f"fusion_params must be a dict with str keys, got {type(fusion_params)} \
-                and keys {list(fusion_params.keys()) \
-                if isinstance(fusion_params, dict) else 'N/A'}"
+        keys = list(fusion_params.keys()) if isinstance(fusion_params, dict) else "N/A"
+        keys_str = f"{keys}"
+        msg = (
+            "fusion_params must be a dict with str keys, got "
+            f"{type(fusion_params)} "
+            "and keys "
+            f"{keys_str}"
         )
+        raise TypeError(msg)
     fusion_params = typing.cast(Dict[str, Any], fusion_params)
 
     model_name = fusion_cfg.get("model")

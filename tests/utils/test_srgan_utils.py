@@ -1,7 +1,11 @@
 import torch
 
-from refrakt_core.utils.classes.srgan import (Discriminator, Generator,
-                                              SRResidualBlock, UpsampleBlock)
+from refrakt_core.utils.classes.srgan import (
+    Discriminator,
+    Generator,
+    SRResidualBlock,
+    UpsampleBlock,
+)
 
 
 def test_UpsampleBlock():
