@@ -41,14 +41,20 @@ class FusionBlock(nn.Module):
         self.add_module("backbone", backbone)
 
     @property
-    def device(self):
+    def device(self) -> torch.device:
         # Delegate to backbone if possible, else default to cpu
         if hasattr(self.backbone, "device"):
-            return self.backbone.device
+            dev = self.backbone.device
+            if isinstance(dev, torch.device):
+                return dev
+            try:
+                return torch.device(dev)
+            except Exception:
+                pass
         return torch.device("cpu")
 
     @device.setter
-    def device(self, value):
+    def device(self, value: torch.device) -> None:
         # Set device on backbone if possible
         if hasattr(self.backbone, "to_device"):
             self.backbone.to_device(value)

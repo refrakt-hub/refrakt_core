@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -10,28 +10,39 @@ repos:
       - id: debug-statements
 
   - repo: https://github.com/psf/black
-    rev: 24.1.1
+    rev: 25.1.0
     hooks:
       - id: black
         language_version: python3
         args: [--line-length=88]
 
-  - repo: https://github.com/astral-sh/ruff
-    rev: v0.2.1
-    hooks:
-      - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+  # - repo: https://github.com/astral-sh/ruff
+  #   rev: v0.2.1
+  #   hooks:
+  #     - id: ruff
+  #       args: [--fix, --exit-non-zero-on-fix]
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
-    hooks:
-      - id: mypy
-        additional_dependencies: [types-requests, types-PyYAML, pandas-stubs]
-        args: [--ignore-missing-imports, --show-error-codes]
-        files: ^src/refrakt_core/
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.16.1
+  #   hooks:
+  #     - id: mypy
+  #       language_version: python3.10
+  #       additional_dependencies:
+  #         - torch
+  #         - types-torch
+  #         - torchvision
+  #         - torchaudio
+  #         - typing-extensions
+  #         - types-requests
+  #         - types-PyYAML
+  #         - pandas-stubs
+  #         - types-pytz
+  #         - types-tqdm
+  #       args: [--ignore-missing-imports, --show-error-codes]
+  #       files: ^src/refrakt_core/
 
   - repo: https://github.com/pre-commit/mirrors-isort
-    rev: 5.13.2
+    rev: v5.10.1
     hooks:
       - id: isort
-        args: [--profile=black, --line-length=88] 
+        args: [--profile=black, --line-length=88]

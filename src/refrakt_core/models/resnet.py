@@ -91,10 +91,6 @@ class ResNet(BaseClassifier):
             return x  # type: ignore[no-any-return]
         return self.fc(x)  # type: ignore[no-any-return]
 
-    @property
-    def device(self):
-        return self._device
-
 
 @register_model("resnet18")
 class ResNet18(ResNet):
