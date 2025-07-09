@@ -18,12 +18,14 @@ import gc
 import torch
 from omegaconf import OmegaConf
 
-from refrakt_core.api.helpers.cli_helpers import (_apply_config_overrides,
-                                                  _execute_pipeline_mode,
-                                                  _extract_overrides,
-                                                  _extract_runtime_config,
-                                                  _setup_argument_parser,
-                                                  _setup_logging_config)
+from refrakt_core.api.helpers.cli_helpers import (
+    _apply_config_overrides,
+    _execute_pipeline_mode,
+    _extract_overrides,
+    _extract_runtime_config,
+    _setup_argument_parser,
+    _setup_logging_config,
+)
 from refrakt_core.api.utils.pipeline_utils import setup_logger_and_config
 
 

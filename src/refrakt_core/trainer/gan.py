@@ -16,7 +16,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from refrakt_core.registry.trainer_registry import register_trainer
-from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.trainer.utils.gan_utils import (
@@ -113,8 +112,8 @@ class GANTrainer(BaseTrainer):
         final_avg_d_loss = 0.0
 
         for epoch in range(num_epochs):
-            loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
-            
+            tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
+
             # Train for one epoch
             total_g_loss, total_d_loss = handle_gan_epoch_training(
                 model=self.model,
@@ -141,13 +140,25 @@ class GANTrainer(BaseTrainer):
                 print(f"New best model saved with PSNR: {best_psnr:.2f} dB")
 
             self.save(suffix="latest")
-            final_avg_g_loss = total_g_loss / len(self.train_loader) if len(self.train_loader) > 0 else 0.0
-            final_avg_d_loss = total_d_loss / len(self.train_loader) if len(self.train_loader) > 0 else 0.0
+            final_avg_g_loss = (
+                total_g_loss / len(self.train_loader)
+                if len(self.train_loader) > 0
+                else 0.0
+            )
+            final_avg_d_loss = (
+                total_d_loss / len(self.train_loader)
+                if len(self.train_loader) > 0
+                else 0.0
+            )
             print(
                 f"Epoch [{epoch+1}/{num_epochs}], G Loss: {final_avg_g_loss:.4f}, D Loss: {final_avg_d_loss:.4f}"
             )
-            
-        return {"final_g_loss": final_avg_g_loss, "final_d_loss": final_avg_d_loss, "best_psnr": best_psnr}
+
+        return {
+            "final_g_loss": final_avg_g_loss,
+            "final_d_loss": final_avg_d_loss,
+            "best_psnr": best_psnr,
+        }
 
     def evaluate(self) -> float:
         """

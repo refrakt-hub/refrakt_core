@@ -10,11 +10,11 @@ Modules:
 """
 
 import math
+from typing import cast
 
 import torch
 from einops import rearrange
 from torch import Tensor, nn
-from typing import cast
 
 
 class LayerNormalization(nn.Module):

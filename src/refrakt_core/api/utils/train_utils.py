@@ -118,9 +118,11 @@ def analyze_and_resize_dataset_images(
     Returns:
         Tuple of (needs_resize, modified_dataset)
     """
-    from .image_analysis_utils import (analyze_image_sizes,
-                                       calculate_size_statistics,
-                                       create_resized_dataset)
+    from .image_analysis_utils import (
+        analyze_image_sizes,
+        calculate_size_statistics,
+        create_resized_dataset,
+    )
 
     logger.info("🔍 Analyzing dataset image sizes...")
 

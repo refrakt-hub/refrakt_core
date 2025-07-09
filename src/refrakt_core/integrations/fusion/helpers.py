@@ -2,25 +2,26 @@
 Helper functions for fusion trainer and block decomposition.
 """
 
+from typing import Any, Dict, List, Tuple, Union
+
 import numpy as np
 import torch
-from typing import Any, Dict, Union, Tuple
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from refrakt_core.schema.model_output import ModelOutput
 
 
-def unpack_batch(batch: Union[Tuple, list, Dict[str, torch.Tensor]]) -> Tuple:
+def unpack_batch(
+    batch: Union[Tuple[Any, ...], List[Any], Dict[str, torch.Tensor]],
+) -> Tuple[Any, Any]:
     """
     Unpack batch data in various formats.
-    
+
     Args:
         batch: Batch data in tuple, list, or dict format
-        
+
     Returns:
         Tuple of (input_data, target_data)
-        
+
     Raises:
         TypeError: If batch format is unsupported
     """
@@ -34,17 +35,19 @@ def unpack_batch(batch: Union[Tuple, list, Dict[str, torch.Tensor]]) -> Tuple:
     raise TypeError("Unsupported batch format")
 
 
-def extract_features_from_model(model, x, device, teacher=False, **kwargs):
+def extract_features_from_model(
+    model: Any, x: Any, device: Any, teacher: bool = False, **kwargs: Any
+) -> Tuple[Any, Any]:
     """
     Extract features from model with proper handling of different input types.
-    
+
     Args:
         model: The model to extract features from
         x: Input tensor or dict
         device: Device to run on
         teacher: Whether to use teacher mode
         **kwargs: Additional arguments
-        
+
     Returns:
         Tuple of (features, output)
     """
@@ -65,6 +68,7 @@ def extract_features_from_model(model, x, device, teacher=False, **kwargs):
         # Standard tensor input
         if hasattr(model, "forward"):
             import inspect
+
             sig = inspect.signature(model.forward)
             if "teacher" in sig.parameters:
                 base_output = model(x, teacher=teacher, **kwargs)
@@ -81,18 +85,18 @@ def extract_features_from_model(model, x, device, teacher=False, **kwargs):
             feats_np = feats.detach().cpu().numpy()
         else:
             feats_np = None
-    
+
     return feats_np, base_output
 
 
-def validate_model_output(output, require_embeddings=True):
+def validate_model_output(output: Any, require_embeddings: bool = True) -> None:
     """
     Validate that model output has required components.
-    
+
     Args:
         output: Model output to validate
         require_embeddings: Whether embeddings are required
-        
+
     Raises:
         ValueError: If output doesn't meet requirements
     """
@@ -103,17 +107,17 @@ def validate_model_output(output, require_embeddings=True):
             )
 
 
-def process_labels(y):
+def process_labels(y: torch.Tensor) -> np.ndarray[Any, np.dtype[Any]]:
     """
     Process labels to ensure correct format.
-    
+
     Args:
         y: Input labels
-        
+
     Returns:
         Processed labels as numpy array
     """
     y_cpu = y.detach().cpu()
     if y_cpu.ndim > 1:
         y_cpu = y_cpu.view(-1)
-    return y_cpu.numpy() 
+    return y_cpu.numpy()

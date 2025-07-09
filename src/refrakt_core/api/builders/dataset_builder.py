@@ -1,8 +1,9 @@
 """
 Dataset builder for Refrakt.
 
-This module provides utilities to construct datasets and dataset wrappers from configuration dictionaries.
-It supports both standard and wrapped datasets, and integrates with the transform builder for preprocessing pipelines.
+This module provides utilities to construct datasets and dataset wrappers from
+configuration dictionaries. It supports both standard and wrapped datasets, and
+integrates with the transform builder for preprocessing pipelines.
 
 The module handles:
 - Dataset configuration validation and parsing
@@ -13,7 +14,8 @@ The module handles:
 - Registry-based dataset discovery and instantiation
 - Support for contrastive and other wrapped datasets
 
-Typical usage involves passing a configuration (OmegaConf DictConfig) describing the dataset, wrapper, and transforms.
+Typical usage involves passing a configuration (OmegaConf DictConfig) describing
+the dataset, wrapper, and transforms.
 """
 
 from typing import Any
@@ -21,17 +23,16 @@ from typing import Any
 from omegaconf import DictConfig, OmegaConf
 
 from refrakt_core.api.builders.transform_builder import build_transform
-from refrakt_core.registry.dataset_registry import (DATASET_REGISTRY,
-                                                    get_dataset)
+from refrakt_core.registry.dataset_registry import DATASET_REGISTRY, get_dataset
 
 
 def build_dataset(cfg: DictConfig) -> Any:
     """
     Build a dataset or wrapped dataset from configuration.
 
-    This function supports both standard datasets and wrapped datasets (e.g., for contrastive
-    learning). It integrates with the transform builder to apply preprocessing pipelines
-    and handles parameter validation and type checking.
+    This function supports both standard datasets and wrapped datasets (e.g., for
+    contrastive learning). It integrates with the transform builder to apply
+    preprocessing pipelines and handles parameter validation and type checking.
 
     The function follows a multi-step process:
     1. Validate and parse configuration parameters
@@ -42,8 +43,8 @@ def build_dataset(cfg: DictConfig) -> Any:
 
     Args:
         cfg: Configuration object (DictConfig) specifying dataset parameters.
-             Expected keys include 'name', 'params', 'wrapper', and 'transform'.
-             If 'wrapper' is specified, the base dataset is wrapped accordingly.
+            Expected keys include 'name', 'params', 'wrapper', and 'transform'.
+            If 'wrapper' is specified, the base dataset is wrapped accordingly.
 
     Returns:
         The instantiated dataset or wrapped dataset object. The exact type depends

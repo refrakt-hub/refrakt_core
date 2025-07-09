@@ -2,10 +2,8 @@
 Perceptual loss implementation using a pre-trained VGG19 network.
 """
 
-from typing import Dict
 from typing import Any
 
-import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 from torchvision.models import vgg19  # type: ignore
@@ -54,7 +52,7 @@ class PerceptualLoss(BaseLoss):
         # Move inputs to the same device as the VGG model
         sr = sr.to(self.device)
         hr = hr.to(self.device)
-        
+
         sr_features: Tensor = self.vgg(sr)
         hr_features: Tensor = self.vgg(hr)
 

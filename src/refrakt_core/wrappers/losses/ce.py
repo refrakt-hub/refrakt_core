@@ -2,9 +2,8 @@
 Wrapper for CrossEntropyLoss using register_loss with mode='logits'.
 """
 
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
-import torch
 from torch import Tensor, nn
 
 from refrakt_core.losses.templates.base import BaseLoss

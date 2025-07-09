@@ -17,7 +17,9 @@ class ModelOutput:
     )  # for contrastive/self-sup
     extra: Dict[str, Any] = field(default_factory=dict)
 
-    def _add_tensor_stats(self, summary: Dict[str, float], tensor: Optional[Any], prefix: str):
+    def _add_tensor_stats(
+        self, summary: Dict[str, float], tensor: Optional[Any], prefix: str
+    ) -> None:
         """
         Helper method to add tensor statistics to summary.
         """
@@ -26,7 +28,7 @@ class ModelOutput:
             if prefix != "reconstruction":  # Skip std for reconstruction
                 summary[f"{prefix}/std"] = tensor.std().item()
 
-    def _add_embeddings_stats(self, summary: Dict[str, float]):
+    def _add_embeddings_stats(self, summary: Dict[str, float]) -> None:
         """
         Helper method to add embeddings statistics to summary.
         """
@@ -34,7 +36,7 @@ class ModelOutput:
             summary["embeddings/norm_mean"] = self.embeddings.norm(dim=1).mean().item()
             summary["embeddings/std"] = self.embeddings.std().item()
 
-    def _add_loss_components(self, summary: Dict[str, float]):
+    def _add_loss_components(self, summary: Dict[str, float]) -> None:
         """
         Helper method to add loss components to summary.
         """
@@ -42,7 +44,7 @@ class ModelOutput:
             if isinstance(v, torch.Tensor):
                 summary[f"loss_component/{k}"] = v.item()
 
-    def _add_extra_components(self, summary: Dict[str, float]):
+    def _add_extra_components(self, summary: Dict[str, float]) -> None:
         """
         Helper method to add extra components to summary.
         """
@@ -51,7 +53,7 @@ class ModelOutput:
                 summary[f"extra/{k}"] = v.item()
 
     def summary(self) -> Dict[str, float]:
-        summary = {}
+        summary: Dict[str, float] = {}
 
         self._add_tensor_stats(summary, self.logits, "logits")
         self._add_embeddings_stats(summary)
@@ -62,8 +64,8 @@ class ModelOutput:
 
         return summary
 
-    def to(self, device: str) -> "ModelOutput":
-        def move(x):
+    def to(self, device: Any) -> "ModelOutput":
+        def move(x: Any) -> Any:
             if isinstance(x, torch.Tensor):
                 return x.to(device)
             elif isinstance(x, dict):

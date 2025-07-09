@@ -4,7 +4,6 @@ Loss implementation for the masked autoencoder.
 
 from typing import Dict, Optional
 
-import torch
 from torch import Tensor
 
 from refrakt_core.losses.templates.base import BaseLoss
@@ -48,7 +47,9 @@ class MAELoss(BaseLoss):
             .reshape(B, h * w, p * p * C)
         )
 
-    def forward(self, predictions: Dict[str, Tensor], targets: Optional[Tensor] = None) -> Tensor:
+    def forward(
+        self, predictions: Dict[str, Tensor], targets: Optional[Tensor] = None
+    ) -> Tensor:
         """
         Compute reconstruction loss over masked patches.
 

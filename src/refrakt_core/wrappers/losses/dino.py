@@ -1,14 +1,11 @@
 # wrappers/dino.py
-from typing import Dict, Optional
 
 import torch
-from torch import nn
 
 from refrakt_core.losses.dino import DINOLoss
 from refrakt_core.losses.templates.base import BaseLoss
 from refrakt_core.registry.loss_registry import register_loss
 from refrakt_core.schema.loss_output import LossOutput
-from refrakt_core.schema.model_output import ModelOutput
 
 __all__ = ["DINOLoss", "DINOLossWrapper"]
 

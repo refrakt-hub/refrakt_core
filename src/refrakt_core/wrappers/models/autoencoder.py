@@ -1,10 +1,10 @@
 # wrappers/autoencoder.py
 
+from typing import Any
+
 import torch
 from torch import nn
-from typing import Any, Dict
 
-from refrakt_core.registry.model_registry import MODEL_REGISTRY
 from refrakt_core.registry.wrapper_registry import register_wrapper
 from refrakt_core.schema.model_output import ModelOutput
 
@@ -46,4 +46,8 @@ class AutoencoderWrapper(nn.Module):
         reconstruction = self.forward(x).reconstruction
         if reconstruction is None:
             raise ValueError("Reconstruction is None")
-        return torch.as_tensor(reconstruction) if not isinstance(reconstruction, torch.Tensor) else reconstruction
+        return (
+            torch.as_tensor(reconstruction)
+            if not isinstance(reconstruction, torch.Tensor)
+            else reconstruction
+        )

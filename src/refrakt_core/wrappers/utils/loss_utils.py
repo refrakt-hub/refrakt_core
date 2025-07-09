@@ -2,8 +2,8 @@
 Utility functions for loss wrappers.
 """
 
+
 import torch
-from typing import Optional, Dict, Tuple, Any
 
 from refrakt_core.schema.loss_output import LossOutput
 
@@ -19,7 +19,9 @@ def _convert_dict_to_loss_output(result: dict[str, torch.Tensor | float]) -> Los
     return LossOutput(total=total, components=result)
 
 
-def _convert_tuple_to_loss_output(result: tuple[float | torch.Tensor, dict[str, torch.Tensor | float]]) -> LossOutput:
+def _convert_tuple_to_loss_output(
+    result: tuple[float | torch.Tensor, dict[str, torch.Tensor | float]],
+) -> LossOutput:
     """Convert tuple result to LossOutput."""
     total, components = result
     if not isinstance(total, torch.Tensor):
@@ -30,7 +32,7 @@ def _convert_tuple_to_loss_output(result: tuple[float | torch.Tensor, dict[str, 
 def _convert_scalar_to_loss_output(result: float | torch.Tensor | None) -> LossOutput:
     """Convert scalar result to LossOutput."""
     if result is None:
-        return LossOutput(total=torch.tensor(float('nan')))
+        return LossOutput(total=torch.tensor(float("nan")))
     if not isinstance(result, torch.Tensor):
         result = torch.tensor(result)
     return LossOutput(total=result)
@@ -47,4 +49,5 @@ def convert_result_to_loss_output(result: object) -> LossOutput:
     else:
         # Use a type cast to satisfy mypy
         from typing import cast
-        return _convert_scalar_to_loss_output(cast(float | torch.Tensor | None, result)) 
+
+        return _convert_scalar_to_loss_output(cast(float | torch.Tensor | None, result))

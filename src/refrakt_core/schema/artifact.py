@@ -1,16 +1,13 @@
-import os
 from typing import Any, Dict, List, Optional, Union
 
 import torch
-import torch.nn.functional as F
 
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.schema.utils.artifact_utils import (
-    extract_output_fields,
-    process_loss_output,
     create_batch_record,
-    should_log_batch
+    extract_output_fields,
+    should_log_batch,
 )
 
 
@@ -18,6 +15,9 @@ class ArtifactDumper:
     """
     Dumps model outputs and artifacts to disk and/or logging systems.
     """
+
+    buffer: Dict[str, Dict[str, Any]]
+    _logged_steps: set[int]
 
     def __init__(
         self,
@@ -28,7 +28,7 @@ class ArtifactDumper:
         metadata: Optional[Dict[str, Any]] = None,
         logger: Optional[Any] = None,  # <--- new
         log_every: int = 1,
-    ):
+    ) -> None:
         self.enabled = enabled
         self.model_name = model_name
         self.base_path = base_path
@@ -44,7 +44,7 @@ class ArtifactDumper:
         batch_id: Union[int, str],
         targets: Optional[torch.Tensor] = None,
         filenames: Optional[List[str]] = None,
-    ):
+    ) -> None:
         if not self.enabled:
             return
 
@@ -65,13 +65,19 @@ class ArtifactDumper:
         if self.auto_flush:
             self.save(filename=f"batch_{batch_id}_{self.model_name}.pt")
 
-    def _log_metrics_to_logger(self, output: ModelOutput, loss: Optional[LossOutput], step: Optional[int], prefix: str):
+    def _log_metrics_to_logger(
+        self,
+        output: ModelOutput,
+        loss: Optional[LossOutput],
+        step: Optional[int],
+        prefix: str,
+    ) -> None:
         """
         Helper method to log scalar metrics to the logger.
         """
         if not self.logger or step is None:
             return
-        
+
         scalar_dict: Dict[str, float] = {}
         if hasattr(output, "summary") and callable(output.summary):
             summary = output.summary()
@@ -84,7 +90,7 @@ class ArtifactDumper:
         if scalar_dict:
             self.logger.log_metrics(scalar_dict, step=step, prefix=prefix)
 
-    def _save_if_auto_flush(self, batch_key):
+    def _save_if_auto_flush(self, batch_key: Union[int, str]) -> None:
         """
         Helper method to save to disk if auto_flush is enabled.
         """
@@ -100,7 +106,7 @@ class ArtifactDumper:
         prefix: str = "train",
         filenames: Optional[List[str]] = None,
         skip_metrics_logging: bool = False,
-    ):
+    ) -> None:
         if not self.enabled:
             return
 
@@ -133,7 +139,7 @@ class ArtifactDumper:
         loss: Union[LossOutput, Dict[str, torch.Tensor]],
         step: Union[int, str],
         prefix: Optional[str] = None,
-    ):
+    ) -> None:
         if not self.enabled:
             return
 
@@ -151,13 +157,16 @@ class ArtifactDumper:
                 for k, v in loss.components.items()
             }
         elif isinstance(loss, dict):
-            record["loss_dict"] = {k: float(v.item()) if torch.is_tensor(v) else float(v) for k, v in loss.items()}
+            record["loss_dict"] = {
+                k: float(v.item()) if torch.is_tensor(v) else float(v)
+                for k, v in loss.items()
+            }
 
         self.buffer[key] = record
 
     def log_scalar_dict(
         self, scalar_dict: Dict[str, float], step: int, prefix: str = ""
-    ):
+    ) -> None:
         if not self.enabled:
             return
 
@@ -167,7 +176,7 @@ class ArtifactDumper:
                 scalar_dict, step=step, prefix=prefix if prefix else None
             )
 
-    def save(self, filename: Optional[str] = None):
+    def save(self, filename: Optional[str] = None) -> None:
         if not self.enabled:
             return
 
@@ -194,7 +203,7 @@ class ArtifactDumper:
         }
         torch.save(save_data, str(full_path))
 
-    def reset(self):
+    def reset(self) -> None:
         self.buffer = {}
 
     def get_batch(self, batch_id: Union[int, str]) -> Optional[Dict[str, Any]]:

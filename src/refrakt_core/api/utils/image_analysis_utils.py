@@ -25,9 +25,10 @@ import torch
 import torchvision  # type: ignore[import-untyped]
 
 from refrakt_core.api.helpers.image_analysis_helpers import (
-    _analyze_sample_sizes, _sample_dataset_indices)
-from refrakt_core.resizers.image_resizer import (ImageSizeConfig,
-                                                   SmartImageResizer)
+    _analyze_sample_sizes,
+    _sample_dataset_indices,
+)
+from refrakt_core.resizers.image_resizer import ImageSizeConfig, SmartImageResizer
 
 
 def analyze_image_sizes(
@@ -48,7 +49,7 @@ def analyze_image_sizes(
     Returns:
         Tuple of (sizes, needs_resize, oversized_count, undersized_count)
     """
-    if hasattr(dataset, '__len__') and len(dataset) == 0:
+    if hasattr(dataset, "__len__") and len(dataset) == 0:
         return ([], False, 0, 0)
     # Sample images to analyze sizes
     sample_indices = _sample_dataset_indices(len(dataset), sample_count)

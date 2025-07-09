@@ -9,7 +9,7 @@ class LossOutput:
     total: torch.Tensor
     components: Dict[str, Union[torch.Tensor, float]] = field(default_factory=dict)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Ensure all components are torch.Tensor
         self.components = {
             k: (v if isinstance(v, torch.Tensor) else torch.tensor(v))
@@ -29,5 +29,8 @@ class LossOutput:
         return summary
 
     def __repr__(self) -> str:
-        keys = ", ".join(f"{k}={v.item():.4f}" for k, v in self.components.items())
+        keys = ", ".join(
+            f"{k}={v.item():.4f}" if isinstance(v, torch.Tensor) else f"{k}={v:.4f}"
+            for k, v in self.components.items()
+        )
         return f"LossOutput(total={self.total.item():.4f}, components=[{keys}])"

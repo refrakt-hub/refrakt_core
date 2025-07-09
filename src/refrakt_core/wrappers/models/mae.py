@@ -1,5 +1,6 @@
-from torch import Tensor, nn
 from typing import Any, Dict
+
+from torch import Tensor, nn
 
 from refrakt_core.registry.wrapper_registry import register_wrapper
 from refrakt_core.schema.model_output import ModelOutput

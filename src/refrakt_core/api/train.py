@@ -24,12 +24,20 @@ from omegaconf import DictConfig
 
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.helpers.train_helpers import (
-    _build_datasets_and_model, _check_pure_ml_training, _execute_training,
-    _get_modules_and_device, _load_and_validate_config, _setup_logging,
-    _setup_optimizer_and_scheduler, _setup_trainer)
-from refrakt_core.api.utils.train_utils import (_handle_pure_ml_training,
-                                                _resolve_model_name_train,
-                                                setup_artifact_dumper)
+    _build_datasets_and_model,
+    _check_pure_ml_training,
+    _execute_training,
+    _get_modules_and_device,
+    _load_and_validate_config,
+    _setup_logging,
+    _setup_optimizer_and_scheduler,
+    _setup_trainer,
+)
+from refrakt_core.api.utils.train_utils import (
+    _handle_pure_ml_training,
+    _resolve_model_name_train,
+    setup_artifact_dumper,
+)
 
 
 def train(
@@ -47,9 +55,10 @@ def train(
 
     Args:
         cfg: Path to configuration file (str) or DictConfig object containing all
-             training parameters including model, dataset, optimizer, and training settings
+            training parameters including model, dataset, optimizer, and training
+            settings
         logger: Optional RefraktLogger instance for logging. If None, a new logger
-                will be created based on configuration
+            will be created based on configuration
 
     Returns:
         Dictionary containing training results, metrics, and status information.
@@ -58,8 +67,8 @@ def train(
 
     Raises:
         SystemExit: If training fails due to configuration errors, model issues,
-                   or other critical failures. The function will log detailed error
-                   information before exiting.
+            or other critical failures. The function will log detailed error
+            information before exiting.
     """
     try:
         torch.cuda.empty_cache()

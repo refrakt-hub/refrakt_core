@@ -27,12 +27,13 @@ def register_trainer(name: str) -> Callable[[Type[Any]], Type[Any]]:
     return decorator
 
 
-def _import_trainers():
+def _import_trainers() -> None:
     """Import all trainer modules to trigger registration."""
     global _IMPORTED  # pylint: disable=global-statement
     if not _IMPORTED:
         try:
             import refrakt_core.trainer
+
             _IMPORTED = True
         except ImportError as e:
             logger = get_global_logger()

@@ -4,9 +4,7 @@ ConvNeXt-based image classification model with hierarchical ConvNeXt blocks.
 Implements a simplified ConvNeXt architecture with layer norm and GELU.
 """
 
-from typing import Any
 
-import torch
 from torch import Tensor, nn
 
 from refrakt_core.models.templates.models import BaseClassifier

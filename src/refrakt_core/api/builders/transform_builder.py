@@ -21,8 +21,10 @@ from typing import Any, Callable, Dict, List, Union
 from omegaconf import ListConfig
 
 from refrakt_core.api.builders.utils.transform_utils import (
-    _build_transform_list, _create_final_transform,
-    _resolve_transform_sequence)
+    _build_transform_list,
+    _create_final_transform,
+    _resolve_transform_sequence,
+)
 
 
 def build_transform(

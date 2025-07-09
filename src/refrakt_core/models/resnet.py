@@ -5,7 +5,7 @@ Includes ResNet18, ResNet50, ResNet101, and ResNet152 with support for custom
 block definitions (Basic and Bottleneck), custom input channels, and projection layers.
 """
 
-from typing import List, Optional, Type, Union, Any
+from typing import Any, List, Optional, Type
 
 import torch
 from torch import Tensor, nn

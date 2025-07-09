@@ -1,5 +1,6 @@
-import torch.nn as nn
 from typing import Any, Optional
+
+import torch.nn as nn
 
 
 class BaseLoss(nn.Module):
@@ -15,7 +16,7 @@ class BaseLoss(nn.Module):
         for param in self.parameters():
             param.requires_grad = False
 
-    def requires_grad(self, mode: bool = True) -> 'BaseLoss':
+    def requires_grad(self, mode: bool = True) -> "BaseLoss":
         """Set requires_grad for all parameters."""
         for param in self.parameters():
             param.requires_grad = mode

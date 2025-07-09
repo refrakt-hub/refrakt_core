@@ -28,9 +28,13 @@ from omegaconf import OmegaConf
 
 from refrakt_core.registry.trainer_registry import register_trainer
 
-from .utils.trainer_utils import (setup_fallback_trainer, setup_fusion_trainer,
-                                  setup_gan_trainer, setup_standard_trainer,
-                                  validate_trainer_config)
+from .utils.trainer_utils import (
+    setup_fallback_trainer,
+    setup_fusion_trainer,
+    setup_gan_trainer,
+    setup_standard_trainer,
+    validate_trainer_config,
+)
 
 
 @register_trainer("ml")

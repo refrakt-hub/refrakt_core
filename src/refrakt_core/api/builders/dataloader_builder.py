@@ -1,8 +1,9 @@
 """
 Dataloader builder for Refrakt.
 
-This module provides a utility to construct PyTorch DataLoader objects from configuration dictionaries.
-It ensures robust type checking and flexible parameter extraction for various dataset and dataloader settings.
+This module provides a utility to construct PyTorch DataLoader objects from
+configuration dictionaries. It ensures robust type checking and flexible parameter
+extraction for various dataset and dataloader settings.
 
 The module handles:
 - DataLoader configuration validation and parsing
@@ -12,8 +13,9 @@ The module handles:
 - Default value handling for optional parameters
 - PyTorch DataLoader instantiation and configuration
 
-Typical usage involves passing a dataset and a configuration (OmegaConf DictConfig) to build a DataLoader
-with the appropriate batch size, shuffling, worker count, and other options.
+Typical usage involves passing a dataset and a configuration (OmegaConf DictConfig)
+to build a DataLoader with the appropriate batch size, shuffling, worker count,
+and other options.
 """
 
 from typing import Any
@@ -32,17 +34,19 @@ def build_dataloader(dataset: Any, cfg: DictConfig) -> DataLoader[Any]:
 
     Args:
         dataset: The dataset object to wrap in a DataLoader. Can be any PyTorch
-                compatible dataset or dataset wrapper
+            compatible dataset or dataset wrapper
         cfg: Configuration object (DictConfig) specifying DataLoader parameters.
-             Expected keys include 'batch_size', 'shuffle', 'num_workers', and 'drop_last'.
-             If 'params' is present, its contents are used as DataLoader arguments.
+            Expected keys include 'batch_size', 'shuffle', 'num_workers', and
+            'drop_last'. If 'params' is present, its contents are used as
+            DataLoader arguments.
 
     Returns:
         A configured PyTorch DataLoader instance with the specified parameters
         and the provided dataset.
 
     Raises:
-        TypeError: If the configuration cannot be converted to a dict or params is not a dict
+        TypeError: If the configuration cannot be converted to a dict or params
+            is not a dict
         KeyError: If 'batch_size' is missing from the configuration
     """
     # Convert to native Python types

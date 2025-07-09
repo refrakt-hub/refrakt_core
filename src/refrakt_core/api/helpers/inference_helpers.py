@@ -153,7 +153,8 @@ def _setup_data_loader(config: DictConfig, data: Any, logger: RefraktLogger) -> 
     Returns:
         Configured data loader ready for inference
     """
-    from refrakt_core.api.utils.train_utils import \
-        setup_data_loader_for_inference_with_resize
+    from refrakt_core.api.utils.train_utils import (
+        setup_data_loader_for_inference_with_resize,
+    )
 
     return setup_data_loader_for_inference_with_resize(config, data, logger)

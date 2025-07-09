@@ -2,7 +2,7 @@
 Utility functions for default loss wrappers.
 """
 
-from typing import Any, Dict, Optional, Union, Callable
+from typing import Any, Callable, Dict, Optional, Union
 
 import torch
 
@@ -10,15 +10,21 @@ from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 
 
-def handle_mae_loss(loss_fn: Callable[[Union[torch.Tensor, ModelOutput, Dict[str, Any]]], LossOutput], output: Union[torch.Tensor, ModelOutput, Dict[str, Any]]) -> LossOutput:
+def handle_mae_loss(
+    loss_fn: Callable[[Union[torch.Tensor, ModelOutput, Dict[str, Any]]], LossOutput],
+    output: Union[torch.Tensor, ModelOutput, Dict[str, Any]],
+) -> LossOutput:
     """Handle MAE loss computation."""
     return loss_fn(output)
 
 
 def handle_vae_loss(
-    loss_fn: Callable[[Union[torch.Tensor, ModelOutput, Dict[str, Any]], Optional[torch.Tensor]], LossOutput],
+    loss_fn: Callable[
+        [Union[torch.Tensor, ModelOutput, Dict[str, Any]], Optional[torch.Tensor]],
+        LossOutput,
+    ],
     output: Union[torch.Tensor, ModelOutput, Dict[str, Any]],
-    target: Optional[torch.Tensor]
+    target: Optional[torch.Tensor],
 ) -> LossOutput:
     """Handle VAE loss computation."""
     if isinstance(output, ModelOutput) and hasattr(output, "reconstruction"):
@@ -49,4 +55,4 @@ def create_loss_output(result: Union[torch.Tensor, LossOutput]) -> LossOutput:
     else:
         raise TypeError(
             f"[DefaultLossWrapper] Unexpected loss_fn return type: {type(result)}"
-        ) 
+        )

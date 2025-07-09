@@ -1,8 +1,9 @@
 """
 Utility functions for dataset directory finding and validation in loaders.
 """
+
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 
 def _matches_keywords(name: str, keywords: List[str]) -> bool:
@@ -11,6 +12,7 @@ def _matches_keywords(name: str, keywords: List[str]) -> bool:
     """
     name_lower = name.lower()
     return any(keyword in name_lower for keyword in keywords)
+
 
 def _search_one_level_deep(base_path: Path, keywords: List[str]) -> Optional[Path]:
     """
@@ -22,6 +24,7 @@ def _search_one_level_deep(base_path: Path, keywords: List[str]) -> Optional[Pat
                 if subitem.is_dir() and _matches_keywords(subitem.name, keywords):
                     return subitem
     return None
+
 
 def find_directory_by_keywords(
     base_path: Path, keywords: List[str], recursive: bool = True
@@ -42,4 +45,4 @@ def find_directory_by_keywords(
     # Optionally, look deeper in the directory structure
     if recursive:
         return _search_one_level_deep(base_path, keywords)
-    return None 
+    return None

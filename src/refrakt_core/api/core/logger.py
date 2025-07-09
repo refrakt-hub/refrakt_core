@@ -146,9 +146,12 @@ class RefraktLogger:
             step (int): Training step or epoch.
             prefix (Optional[str], optional): Prefix for metric names. Defaults to None.
         """
-        from .utils.logger_helpers import (_create_metrics_to_log,
-                                           _initialize_logged_metrics,
-                                           _log_to_tensorboard, _log_to_wandb)
+        from .utils.logger_helpers import (
+            _create_metrics_to_log,
+            _initialize_logged_metrics,
+            _log_to_tensorboard,
+            _log_to_wandb,
+        )
 
         logged_metrics = _initialize_logged_metrics(self)
         metrics_to_log = _create_metrics_to_log(metrics, step, prefix, logged_metrics)
@@ -207,9 +210,11 @@ class RefraktLogger:
             input_tensor (Union[torch.Tensor, Dict[str, torch.Tensor]]): Input for tracing.
             model_output (Optional[Any], optional): Model output for graph extraction. Defaults to None.
         """
-        from .utils.logger_helpers import (_log_to_tensorboard_graph,
-                                           _log_to_wandb_watch,
-                                           _prepare_input_tensor_for_graph)
+        from .utils.logger_helpers import (
+            _log_to_tensorboard_graph,
+            _log_to_wandb_watch,
+            _prepare_input_tensor_for_graph,
+        )
 
         try:
             input_tensor = _prepare_input_tensor_for_graph(model, input_tensor)
@@ -239,9 +244,11 @@ class RefraktLogger:
             step (int): Training step or epoch.
             dataformats (str, optional): Data format. Defaults to "NCHW".
         """
-        from .utils.logger_helpers import (_log_images_to_tensorboard,
-                                           _log_images_to_wandb,
-                                           _prepare_images_for_logging)
+        from .utils.logger_helpers import (
+            _log_images_to_tensorboard,
+            _log_images_to_wandb,
+            _prepare_images_for_logging,
+        )
 
         images_seq = _prepare_images_for_logging(images)
         _log_images_to_tensorboard(self.tb_writer, tag, images_seq, step, dataformats)

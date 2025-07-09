@@ -1,6 +1,7 @@
+from typing import Any
+
 import torch
 from torch import nn
-from typing import Any
 
 from refrakt_core.registry.wrapper_registry import register_wrapper
 from refrakt_core.schema.model_output import ModelOutput
@@ -43,4 +44,6 @@ class ViTWrapper(nn.Module):
             torch.Tensor: Logits only.
         """
         logits = self.forward(x).logits
-        return torch.as_tensor(logits) if not isinstance(logits, torch.Tensor) else logits
+        return (
+            torch.as_tensor(logits) if not isinstance(logits, torch.Tensor) else logits
+        )

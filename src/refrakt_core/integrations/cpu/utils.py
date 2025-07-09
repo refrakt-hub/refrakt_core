@@ -3,23 +3,24 @@ Utility functions for CPU integration wrapper decomposition.
 """
 
 import importlib
-from typing import Any, Dict, Type, cast
+from typing import Any, Dict, Type
 
 from refrakt_core.integrations.cpu.registry import load_sklearn_registry
-from refrakt_core.integrations.common_types import NDArrayF
 
 
-def extract_wrapper_params(params: Dict[str, Any]) -> tuple[Dict[str, Any], Dict[str, Any]]:
+def extract_wrapper_params(
+    params: Dict[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Extract wrapper-specific parameters from the input parameters.
-    
+
     Args:
         params: Input parameters dictionary
-        
+
     Returns:
         Tuple of (wrapper_params, model_params)
     """
-    wrapper_params = {}
+    wrapper_params: Dict[str, Any] = {}
     model_params = dict(params)  # Make a copy to modify
 
     # Handle special parameters
@@ -36,14 +37,14 @@ def extract_wrapper_params(params: Dict[str, Any]) -> tuple[Dict[str, Any], Dict
 def instantiate_sklearn_model(model: str, model_params: Dict[str, Any]) -> Any:
     """
     Instantiate a sklearn model from registry or full class path.
-    
+
     Args:
         model: Model key or full class path
         model_params: Parameters for model instantiation
-        
+
     Returns:
         Instantiated sklearn model
-        
+
     Raises:
         ValueError: If the model path is invalid
     """
@@ -64,14 +65,14 @@ def instantiate_sklearn_model(model: str, model_params: Dict[str, Any]) -> Any:
 def validate_predict_proba_support(model: Any) -> None:
     """
     Validate that the model supports predict_proba method.
-    
+
     Args:
         model: The model to validate
-        
+
     Raises:
         AttributeError: If model doesn't support predict_proba
     """
     if not hasattr(model, "predict_proba"):
         raise AttributeError(
             f"{model.__class__.__name__} does not support predict_proba"
-        ) 
+        )

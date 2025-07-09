@@ -24,17 +24,21 @@ import torch
 from omegaconf import DictConfig
 
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.api.helpers.test_helpers import (_build_test_components,
-                                                   _check_pure_ml_testing,
-                                                   _evaluate_model,
-                                                   _get_modules_and_device,
-                                                   _load_and_validate_config,
-                                                   _setup_logging,
-                                                   _setup_trainer_for_testing)
-from refrakt_core.api.utils.test_utils import (_handle_pure_ml_pipeline,
-                                               _load_model_checkpoint,
-                                               _resolve_model_name,
-                                               _setup_fusion_evaluation)
+from refrakt_core.api.helpers.test_helpers import (
+    _build_test_components,
+    _check_pure_ml_testing,
+    _evaluate_model,
+    _get_modules_and_device,
+    _load_and_validate_config,
+    _setup_logging,
+    _setup_trainer_for_testing,
+)
+from refrakt_core.api.utils.test_utils import (
+    _handle_pure_ml_pipeline,
+    _load_model_checkpoint,
+    _resolve_model_name,
+    _setup_fusion_evaluation,
+)
 
 
 def test(
@@ -55,19 +59,19 @@ def test(
 
     Args:
         cfg: Path to configuration file (str) or DictConfig object containing all
-             testing parameters including model, dataset, and evaluation settings
+            testing parameters including model, dataset, and evaluation settings
         model_path: Optional path to the model checkpoint file. If None, the path
-                   will be inferred from configuration
+            will be inferred from configuration
         logger: Optional RefraktLogger instance for logging. If None, a new logger
-                will be created based on configuration
+            will be created based on configuration
 
     Returns:
         None. Evaluation results are printed to console and logged to files.
 
     Raises:
-        SystemExit: If testing fails due to configuration errors, model loading issues,
-                   or other critical failures. The function will log detailed error
-                   information before exiting.
+        SystemExit: If testing fails due to configuration errors, model loading
+            issues, or other critical failures. The function will log detailed error
+            information before exiting.
     """
     try:
         # Load and validate configuration

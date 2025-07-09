@@ -3,7 +3,7 @@ Templates for foundational model types in Refrakt: classifiers, autoencoders, co
 """
 
 from abc import abstractmethod
-from typing import Any, Dict, Tuple, Optional, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 
@@ -67,7 +67,9 @@ class BaseAutoEncoder(BaseModel):
         self.model_name = model_name
 
     @abstractmethod
-    def encode(self, x: torch.Tensor) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    def encode(
+        self, x: torch.Tensor
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
         Encode input to latent representation.
 
@@ -92,7 +94,9 @@ class BaseAutoEncoder(BaseModel):
         """
         raise NotImplementedError("Subclasses must implement `decode`.")
 
-    def get_latent(self, x: torch.Tensor) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    def get_latent(
+        self, x: torch.Tensor
+    ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
         Get latent representation for input.
 
@@ -186,7 +190,7 @@ class BaseContrastiveModel(BaseModel):
         with torch.no_grad():
             x = x.to(self.device)
             h = self.encode(x)
-            return h if kwargs.get('return_embedding', False) else self.forward(x)
+            return h if kwargs.get("return_embedding", False) else self.forward(x)
 
     def summary(self) -> Dict[str, Any]:
         """
@@ -208,6 +212,7 @@ class BaseGAN(BaseModel):
         generator (Optional[torch.nn.Module]): Generator network.
         discriminator (Optional[torch.nn.Module]): Discriminator network.
     """
+
     generator: Optional[torch.nn.Module]
     discriminator: Optional[torch.nn.Module]
 
@@ -293,7 +298,9 @@ class BaseGAN(BaseModel):
                 self.generator.load_state_dict(checkpoint["generator_state_dict"])
         if self.discriminator:
             if "discriminator_state_dict" in checkpoint:
-                self.discriminator.load_state_dict(checkpoint["discriminator_state_dict"])
+                self.discriminator.load_state_dict(
+                    checkpoint["discriminator_state_dict"]
+                )
 
         self.model_name = checkpoint.get("model_name", self.model_name)
         self.model_type = checkpoint.get("model_type", self.model_type)

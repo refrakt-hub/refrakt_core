@@ -9,10 +9,10 @@ Modules:
 """
 
 import math
+from typing import List, cast
 
 import torch
 from torch import Tensor, nn
-from typing import cast, List
 
 from refrakt_core.utils.classes.resnet import ResidualBlock
 
@@ -46,10 +46,14 @@ class SRResidualBlock(ResidualBlock):
 
     def __init__(self, channels: int) -> None:
         nn.Module.__init__(self)
-        self.conv1 = nn.Sequential(nn.Conv2d(channels, channels, kernel_size=3, padding=1))
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        )
         self.bn1 = nn.BatchNorm2d(channels)
         self.prelu = nn.PReLU()
-        self.conv2 = nn.Sequential(nn.Conv2d(channels, channels, kernel_size=3, padding=1))
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        )
         self.bn2 = nn.BatchNorm2d(channels)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -78,7 +82,9 @@ class Generator(nn.Module):
         self.final = nn.Sequential(
             nn.Conv2d(64, 64, kernel_size=3, padding=1), nn.BatchNorm2d(64)
         )
-        upsample_blocks: List[nn.Module] = [UpsampleBlock(64, 64) for _ in range(upsample_num)]
+        upsample_blocks: List[nn.Module] = [
+            UpsampleBlock(64, 64) for _ in range(upsample_num)
+        ]
         upsample_blocks.append(nn.Conv2d(64, 3, kernel_size=9, padding=4))
         self.upsample_blocks = nn.Sequential(*upsample_blocks)
 

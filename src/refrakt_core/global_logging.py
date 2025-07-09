@@ -6,15 +6,14 @@ while using the new safe logging system underneath.
 """
 
 import logging
-from typing import Optional
 
 from refrakt_core.logging_config import (
-    get_logging_manager,
-    configure_logger,
     get_logger,
-    set_global_logger as _set_global_logger,  # <-- alias to avoid recursion
-    reset_global_logger
 )
+from refrakt_core.logging_config import reset_global_logger as _reset_global_logger
+from refrakt_core.logging_config import (
+    set_global_logger as _set_global_logger,
+)  # <-- alias to avoid recursion
 
 
 def get_global_logger() -> logging.Logger:
@@ -38,7 +37,7 @@ def reset_global_logger() -> None:
     """
     Reset the global logger. Useful for cleanup.
     """
-    reset_global_logger()
+    _reset_global_logger()
 
 
 # Backward compatibility - maintain the same interface

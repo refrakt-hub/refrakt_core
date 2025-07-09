@@ -1,7 +1,8 @@
 """Encoder block and full encoder module for transformer architectures."""
 
-from torch import Tensor, nn
 from typing import cast
+
+from torch import Tensor, nn
 
 from refrakt_core.utils.classes.attention import MHA
 from refrakt_core.utils.classes.resnet import SkipConnections
@@ -34,7 +35,7 @@ class EncoderBlock(nn.Module):
         """
         x = self.skip_conn[0](x, lambda y: self.self_att(y, y, y, src_mask))
         x = self.skip_conn[1](x, self.feed_forw)
-        return x # type: ignore[no-any-return]
+        return x  # type: ignore[no-any-return]
 
 
 class Encoder(nn.Module):

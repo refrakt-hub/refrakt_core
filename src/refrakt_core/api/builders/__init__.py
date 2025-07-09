@@ -1,10 +1,10 @@
 """
 Refrakt API Builders Module
 
-This module provides a collection of builder functions for constructing various components
-of the Refrakt framework including models, datasets, optimizers, schedulers, trainers,
-and transforms. These builders serve as factory functions that create and configure
-components based on configuration parameters.
+This module provides a collection of builder functions for constructing various
+components of the Refrakt framework including models, datasets, optimizers,
+schedulers, trainers, and transforms. These builders serve as factory functions
+that create and configure components based on configuration parameters.
 
 The module includes builders for:
 - Model construction and configuration

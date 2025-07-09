@@ -1,17 +1,18 @@
 from typing import Any, Dict, Iterator, Optional, Union
 
 import numpy as np
-from numpy.typing import NDArray
 import torch
 import torch.nn as nn
+from numpy.typing import NDArray
+
 from refrakt_core.integrations.fusion.builder import build_fusion_head
-from refrakt_core.integrations.fusion.protocols import FusionHead
-from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.integrations.fusion.helpers import (
     extract_features_from_model,
+    process_labels,
     validate_model_output,
-    process_labels
 )
+from refrakt_core.integrations.fusion.protocols import FusionHead
+from refrakt_core.schema.model_output import ModelOutput
 
 
 class FusionBlock(nn.Module):
@@ -46,7 +47,9 @@ class FusionBlock(nn.Module):
         """
         return self.backbone.parameters(recurse=recurse)
 
-    def _extract_features(self, x: torch.Tensor) -> tuple[NDArray[np.float64], ModelOutput]:
+    def _extract_features(
+        self, x: torch.Tensor
+    ) -> tuple[NDArray[np.float64], ModelOutput]:
         """
         Extract features from the backbone and return as numpy array and ModelOutput.
         """
@@ -82,7 +85,11 @@ class FusionBlock(nn.Module):
                 pass
 
             return ModelOutput(
-                embeddings=base_output.embeddings if isinstance(base_output, ModelOutput) else None,
+                embeddings=(
+                    base_output.embeddings
+                    if isinstance(base_output, ModelOutput)
+                    else None
+                ),
                 logits=torch.tensor(
                     preds,
                     device=x["anchor"].device if isinstance(x, dict) else x.device,
@@ -104,8 +111,12 @@ class FusionBlock(nn.Module):
             )
         else:
             return ModelOutput(
-                embeddings=base_output.embeddings if hasattr(base_output, 'embeddings') else None, 
-                logits=getattr(base_output, "logits", None)
+                embeddings=(
+                    base_output.embeddings
+                    if hasattr(base_output, "embeddings")
+                    else None
+                ),
+                logits=getattr(base_output, "logits", None),
             )
 
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:
@@ -113,13 +124,17 @@ class FusionBlock(nn.Module):
         Traceable forward method for TensorBoard graph visualization.
         Returns the logits tensor directly without numpy conversions.
         """
-
         output: ModelOutput = self.backbone(x)
-
         if output.logits is not None:
-            return output.logits
+            if isinstance(output.logits, torch.Tensor):
+                return output.logits
+            else:
+                raise TypeError("output.logits must be a torch.Tensor")
         elif output.embeddings is not None:
-            return output.embeddings
+            if isinstance(output.embeddings, torch.Tensor):
+                return output.embeddings
+            else:
+                raise TypeError("output.embeddings must be a torch.Tensor")
         else:
             return torch.zeros(x.shape[0], 10, device=x.device)  # Assuming 10 classes
 
@@ -130,10 +145,23 @@ class FusionBlock(nn.Module):
         feats, _ = self._extract_features(x)
         return self.fusion_head.predict_proba(feats) if self._trained else None
 
-    def update_teacher(self, *args: Any, **kwargs: Any) -> Any:
+    def update_teacher(self, *args: Any, **kwargs: Any) -> None:
         """
         Delegate teacher update to the backbone if available.
         """
         if hasattr(self.backbone, "update_teacher"):
-            return self.backbone.update_teacher(*args, **kwargs)
+            self.backbone.update_teacher(*args, **kwargs)
+            return
         raise AttributeError("Backbone does not support update_teacher()")
+
+    def get_logits(self, output: Any) -> torch.Tensor:
+        logits = getattr(output, "logits", None)
+        if not isinstance(logits, torch.Tensor):
+            raise TypeError("logits must be a torch.Tensor")
+        return logits
+
+    def get_embeddings(self, output: Any) -> torch.Tensor:
+        embeddings = getattr(output, "embeddings", None)
+        if not isinstance(embeddings, torch.Tensor):
+            raise TypeError("embeddings must be a torch.Tensor")
+        return embeddings

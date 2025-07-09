@@ -6,7 +6,7 @@ of MSN models for self-supervised learning. It supports logging, artifact dumpin
 and checkpointing.
 """
 
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import torch
 from torch.nn import Module
@@ -16,11 +16,9 @@ from tqdm import tqdm
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
-from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.trainer.utils.msn_utils import (
     handle_msn_training_step,
-    handle_msn_evaluation_step,
     prepare_msn_inputs,
 )
 
@@ -135,7 +133,7 @@ class MSNTrainer(BaseTrainer):
 
         if self.artifact_dumper:
             self.artifact_dumper.save(filename=f"msn_final_epoch{num_epochs}.pt")
-            
+
         return {"final_loss": val_loss, "best_loss": best_loss}
 
     def evaluate(self) -> float:

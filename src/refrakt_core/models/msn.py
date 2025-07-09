@@ -6,12 +6,12 @@ projector + prototypes for clustering and contrastive learning.
 """
 
 import copy
-from typing import Optional, Tuple, Any
+from typing import Any
 
 import torch
 import torch.nn.functional as F
 from timm import create_model
-from torch import Tensor, nn
+from torch import nn
 
 from refrakt_core.models.templates.base import BaseModel
 from refrakt_core.registry.model_registry import register_model

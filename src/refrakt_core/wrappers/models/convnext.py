@@ -5,7 +5,6 @@ The ConvNeXt wrapper that dynamically loads the ConvNeXt model from the registry
 import torch
 from torch import nn
 
-from refrakt_core.registry.model_registry import MODEL_REGISTRY
 from refrakt_core.registry.wrapper_registry import register_wrapper
 from refrakt_core.schema.model_output import ModelOutput
 

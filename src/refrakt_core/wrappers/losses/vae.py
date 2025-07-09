@@ -1,8 +1,7 @@
 # wrappers/vae.py
 
-from typing import Dict, Optional, Union, Any
+from typing import Any, Dict, Optional, Union
 
-import torch
 from torch import Tensor, nn
 
 from refrakt_core.losses.vae import VAELoss
@@ -10,9 +9,9 @@ from refrakt_core.registry.loss_registry import register_loss
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.wrappers.utils.vae_loss_utils import (
-    extract_vae_components,
     compute_reconstruction_loss,
     create_vae_loss_output,
+    extract_vae_components,
 )
 
 
@@ -36,7 +35,7 @@ class VAELossWrapper(nn.Module):
 
         recon_flat = recon.view(recon.size(0), -1)
         target_flat = target.view(target.size(0), -1)
-        
+
         # Compute full loss from base VAELoss
         total_loss = self.loss_fn(
             (
@@ -48,6 +47,8 @@ class VAELossWrapper(nn.Module):
         )
 
         # Compute reconstruction loss for logging
-        recon_loss = compute_reconstruction_loss(recon_flat, target_flat, self.recon_loss_type)
+        recon_loss = compute_reconstruction_loss(
+            recon_flat, target_flat, self.recon_loss_type
+        )
 
         return create_vae_loss_output(total_loss, recon_loss, mu, logvar)

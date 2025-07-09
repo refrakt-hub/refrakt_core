@@ -1,15 +1,13 @@
 # refrakt_core/integrations/fusion/builder.py
 
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
-from refrakt_core.integrations.gpu.wrapper import CuMLWrapper
 from refrakt_core.integrations.fusion.protocols import FusionHead
-from refrakt_core.integrations.cpu.wrapper import SklearnWrapper
 from refrakt_core.integrations.fusion.utils import (
-    create_sklearn_wrapper,
     create_cuml_wrapper,
+    create_sklearn_wrapper,
     try_load_wrapper_from_path,
-    validate_head_type
+    validate_head_type,
 )
 
 
@@ -36,14 +34,20 @@ def build_fusion_head(cfg: Dict[str, Any]) -> FusionHead:
     validate_head_type(head_type)
 
     if head_type == "sklearn":
-        wrapper = create_sklearn_wrapper(model, params)
+        sklearn_wrapper = create_sklearn_wrapper(model, params)
         fusion_head_config = params.get("fusion_head", {})
-        return try_load_wrapper_from_path(wrapper, model, fusion_head_config)
+        return cast(
+            FusionHead,
+            try_load_wrapper_from_path(sklearn_wrapper, model, fusion_head_config),
+        )
 
     if head_type == "cuml":
-        wrapper = create_cuml_wrapper(model, params)
+        cuml_wrapper = create_cuml_wrapper(model, params)
         fusion_head_config = params.get("fusion_head", {})
-        return try_load_wrapper_from_path(wrapper, model, fusion_head_config)
+        return cast(
+            FusionHead,
+            try_load_wrapper_from_path(cuml_wrapper, model, fusion_head_config),
+        )
 
     # This should never be reached due to validate_head_type, but kept for safety
     raise ValueError(f"[FusionBuilder] Unsupported fusion head type: {head_type}")

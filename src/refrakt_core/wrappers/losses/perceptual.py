@@ -1,7 +1,6 @@
 # wrappers/perceptual.py
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
-import torch
 from torch import nn
 
 from refrakt_core.losses.perceptual import PerceptualLoss

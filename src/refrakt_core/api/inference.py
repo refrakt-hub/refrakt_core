@@ -19,6 +19,7 @@ The module handles:
 import gc
 import sys
 import traceback
+import warnings
 from typing import Any, Dict, Optional, Union
 
 import torch
@@ -26,18 +27,24 @@ from omegaconf import DictConfig
 
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.helpers.inference_helpers import (
-    _check_pure_ml_inference, _load_and_validate_config, _load_model_and_setup,
-    _setup_data_loader, _setup_device, _setup_logging)
+    _check_pure_ml_inference,
+    _load_and_validate_config,
+    _load_model_and_setup,
+    _setup_data_loader,
+    _setup_device,
+    _setup_logging,
+)
 from refrakt_core.api.utils.inference_utils import (
-    handle_pure_ml_inference, load_fusion_head_if_provided,
-    resolve_model_name_for_inference, run_inference_loop)
+    handle_pure_ml_inference,
+    load_fusion_head_if_provided,
+    resolve_model_name_for_inference,
+    run_inference_loop,
+)
+
+warnings.filterwarnings("ignore")
 
 gc.collect()
 torch.cuda.empty_cache()
-
-import warnings
-
-warnings.filterwarnings("ignore")
 
 
 def inference(
@@ -61,14 +68,15 @@ def inference(
 
     Args:
         cfg: Path to configuration file (str) or DictConfig object containing all
-             inference parameters including model, data preprocessing, and inference settings
+            inference parameters including model, data preprocessing, and inference
+            settings
         model_path: Path to the trained model checkpoint file
         fusion_head_path: Optional path to fusion head checkpoint for ensemble models.
-                         If provided, the fusion head will be loaded and used for predictions
+            If provided, the fusion head will be loaded and used for predictions
         data: Optional custom data for inference. Can be a dataset, dataloader, or
-              raw data. If None, data will be loaded from configuration
+            raw data. If None, data will be loaded from configuration
         logger: Optional RefraktLogger instance for logging. If None, a new logger
-                will be created based on configuration
+            will be created based on configuration
 
     Returns:
         Dictionary containing inference results with the following keys:
@@ -77,9 +85,9 @@ def inference(
         - 'config': The configuration used for inference
 
     Raises:
-        SystemExit: If inference fails due to configuration errors, model loading issues,
-                   or other critical failures. The function will log detailed error
-                   information before exiting.
+        SystemExit: If inference fails due to configuration errors, model loading
+            issues, or other critical failures. The function will log detailed error
+            information before exiting.
     """
     try:
         # Load and validate configuration

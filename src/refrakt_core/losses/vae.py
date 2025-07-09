@@ -2,14 +2,13 @@
 VAE Loss Module which includes reconstruction (MSE or L1) and KL Divergence Loss.
 """
 
-from typing import Dict, Union, Optional
+from typing import Dict, Optional, Union
 
 import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
 from refrakt_core.registry.loss_registry import register_loss
-from refrakt_core.schema.loss_output import LossOutput
 
 
 @register_loss("vae")

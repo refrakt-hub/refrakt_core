@@ -89,12 +89,15 @@ class SRGANWrapper(torch.nn.Module):
             raise ValueError(
                 "❌ 'phase' must be either 'generator' or 'discriminator' in SRGANWrapper.training_step()"
             )
+
     @property
     def generator(self) -> Any:
         return self.model.generator
+
     @property
     def discriminator(self) -> Any:
         return self.model.discriminator
+
     def forward_for_graph(
         self, x: Optional[Union[torch.Tensor, Dict[str, torch.Tensor]]] = None
     ) -> torch.Tensor:

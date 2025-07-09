@@ -1,6 +1,6 @@
+
 import torch
 from torch import nn
-from typing import Any, Union
 
 from refrakt_core.registry.wrapper_registry import register_wrapper
 from refrakt_core.schema.model_output import ModelOutput
@@ -22,4 +22,6 @@ class ResNetWrapper(nn.Module):
         out = self.backbone(x)
         if isinstance(out, torch.Tensor):
             return out
-        raise TypeError("Expected torch.Tensor from backbone forward, got {}".format(type(out)))
+        raise TypeError(
+            "Expected torch.Tensor from backbone forward, got {}".format(type(out))
+        )

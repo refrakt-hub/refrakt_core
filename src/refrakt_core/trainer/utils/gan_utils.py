@@ -1,13 +1,10 @@
 """
 Utility functions for GAN trainers.
 """
-from typing import Any, Dict, Optional, Tuple, Union
+
+from typing import Any, Optional, Tuple
 
 import torch
-from tqdm import tqdm
-
-from refrakt_core.schema.loss_output import LossOutput
-from refrakt_core.schema.model_output import ModelOutput
 
 
 def handle_gan_epoch_training(
@@ -25,7 +22,7 @@ def handle_gan_epoch_training(
 ) -> Tuple[float, float]:
     """
     Handle training for a single GAN epoch.
-    
+
     Args:
         model: The GAN model
         train_loader: Training data loader
@@ -38,14 +35,14 @@ def handle_gan_epoch_training(
         grad_log_interval: Interval for gradient logging
         param_log_interval: Interval for parameter logging
         logger: Logger for metrics
-        
+
     Returns:
         Tuple of (total_g_loss, total_d_loss)
     """
     model.train()
     total_g_loss = 0.0
     total_d_loss = 0.0
-    
+
     for batch_id, batch in enumerate(train_loader):
         try:
             device_batch = _move_batch_to_device(batch, device)
@@ -108,7 +105,7 @@ def handle_gan_epoch_training(
 
         except (RuntimeError, ValueError, TypeError) as e:
             print(f"[ERROR] Batch skipped due to error: {e}")
-            
+
     return total_g_loss, total_d_loss
 
 
@@ -117,7 +114,7 @@ def handle_gan_scheduler_step(
 ) -> None:
     """
     Handle scheduler step for GAN training.
-    
+
     Args:
         scheduler: Scheduler or scheduler dictionary
     """
@@ -137,11 +134,11 @@ def _move_batch_to_device(
 ) -> Any:
     """
     Move batch tensors to the specified device.
-    
+
     Args:
         batch: Batch to move to device
         device: Target device
-        
+
     Returns:
         Batch moved to device
     """
@@ -155,10 +152,10 @@ def extract_gan_batch_data(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Extract low-resolution and high-resolution data from GAN batch.
-    
+
     Args:
         device_batch: Batch data on device
-        
+
     Returns:
         Tuple of (lr, hr) tensors
     """
@@ -186,7 +183,7 @@ def handle_gan_discriminator_step(
 ) -> Tuple[Optional[Any], float]:
     """
     Handle a single discriminator training step.
-    
+
     Args:
         model: The GAN model
         lr: Low-resolution input
@@ -195,7 +192,7 @@ def handle_gan_discriminator_step(
         loss_fns: Loss functions dictionary
         device: Target device
         scaler: Gradient scaler dictionary
-        
+
     Returns:
         Tuple of (loss_output, loss_value)
     """
@@ -215,7 +212,7 @@ def handle_gan_generator_step(
 ) -> Tuple[Optional[Any], float]:
     """
     Handle a single generator training step.
-    
+
     Args:
         model: The GAN model
         lr: Low-resolution input
@@ -224,7 +221,7 @@ def handle_gan_generator_step(
         loss_fns: Loss functions dictionary
         device: Target device
         scaler: Gradient scaler dictionary
-        
+
     Returns:
         Tuple of (loss_output, loss_value)
     """
@@ -248,7 +245,7 @@ def handle_gan_logging(
 ) -> None:
     """
     Handle logging for GAN training.
-    
+
     Args:
         g_loss_out: Generator loss output
         d_loss_out: Discriminator loss output
@@ -264,4 +261,4 @@ def handle_gan_logging(
     """
     # Logging implementation
     # This would contain the actual logging logic
-    pass 
+    pass

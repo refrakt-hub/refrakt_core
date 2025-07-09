@@ -6,7 +6,7 @@ of models using contrastive objectives (e.g., SimCLR, MoCo, etc.).
 It supports logging, artifact dumping, and checkpointing.
 """
 
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import torch
 from torch.amp.grad_scaler import GradScaler
@@ -17,13 +17,12 @@ from tqdm import tqdm
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
-from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
-from refrakt_core.utils.methods import unpack_views_from_batch
 from refrakt_core.trainer.utils.contrastive_utils import (
-    handle_contrastive_training_step,
     handle_contrastive_evaluation_step,
+    handle_contrastive_training_step,
 )
+from refrakt_core.utils.methods import unpack_views_from_batch
 
 
 @register_trainer("contrastive")
@@ -110,10 +109,7 @@ class ContrastiveTrainer(BaseTrainer):
             if len(views) != 2:
                 raise ValueError("Expected exactly two views for contrastive learning.")
             return (views[0], views[1])
-        elif isinstance(views, tuple) and len(views) == 2:
-            return views
-        else:
-            raise ValueError("Expected exactly two views for contrastive learning.")
+        raise ValueError("Expected exactly two views for contrastive learning.")
 
     def _get_logger(self) -> Optional[Any]:
         """
@@ -143,7 +139,7 @@ class ContrastiveTrainer(BaseTrainer):
                 try:
                     view1, view2 = self._unpack_views(batch)
                     batch_data = (view1, view2)
-                    
+
                     loss_value, success = handle_contrastive_training_step(
                         model=self.model,
                         batch=batch_data,
@@ -158,17 +154,17 @@ class ContrastiveTrainer(BaseTrainer):
                         param_log_interval=self.param_log_interval,
                         logger=self._get_logger(),
                     )
-                    
+
                     if success:
                         total_loss += loss_value
                         loop.set_postfix(loss=loss_value)
                         self.global_step += 1
                     else:
                         loop.write("[WARNING] Skipping batch due to None outputs")
-                        
+
                 except (RuntimeError, ValueError, TypeError) as e:
                     loop.write(f"[ERROR] Batch skipped due to error: {e}")
-                    
+
             if self.scheduler and not isinstance(self.scheduler, dict):
                 self.scheduler.step()
             current_loss = self.evaluate()
@@ -193,7 +189,7 @@ class ContrastiveTrainer(BaseTrainer):
             Optional[float]: Average validation loss, or None if no validation loader.
         """
         if self.val_loader is None:
-            return None
+            pass
 
         self.model.eval()
         total_loss = 0.0
@@ -204,7 +200,7 @@ class ContrastiveTrainer(BaseTrainer):
                 try:
                     view1, view2 = self._unpack_views(batch)
                     batch_data = (view1, view2)
-                    
+
                     loss_value, success = handle_contrastive_evaluation_step(
                         model=self.model,
                         batch=batch_data,
@@ -214,7 +210,7 @@ class ContrastiveTrainer(BaseTrainer):
                         artifact_dumper=self.artifact_dumper,
                         batch_id=batch_id,
                     )
-                    
+
                     if success:
                         total_loss += loss_value
                         loop.set_postfix(val_loss=loss_value)

@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 
 
-def rename_lr_images(lr_dir="../data/DIV2K/LR"):
+def rename_lr_images(lr_dir: str = "../data/DIV2K/LR") -> None:
     lr_path = Path(lr_dir)
     for file in lr_path.glob("*x2.png"):
         # Example: 0001x2.png → 0001.png
@@ -14,7 +14,9 @@ def rename_lr_images(lr_dir="../data/DIV2K/LR"):
         print(f"Renamed {file.name} → {new_name}")
 
 
-def split_dataset(hr_dir, lr_dir, output_dir, split_ratio=0.8, seed=42):
+def split_dataset(
+    hr_dir: str, lr_dir: str, output_dir: str, split_ratio: float = 0.8, seed: int = 42
+) -> None:
     random.seed(seed)
 
     all_files = sorted(os.listdir(hr_dir))

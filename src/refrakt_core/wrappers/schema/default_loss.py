@@ -8,10 +8,10 @@ from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.wrappers.losses.mae import MAELossWrapper
 from refrakt_core.wrappers.losses.vae import VAELossWrapper
 from refrakt_core.wrappers.utils.default_loss_utils import (
+    create_loss_output,
+    extract_tensor_from_model_output,
     handle_mae_loss,
     handle_vae_loss,
-    extract_tensor_from_model_output,
-    create_loss_output,
 )
 
 
@@ -40,7 +40,7 @@ class DefaultLossWrapper(nn.Module):
             output_tensor = output
         elif isinstance(output, dict):
             # If output is a dict, try to extract 'logits' or use as is
-            output_tensor = output.get('logits', output)
+            output_tensor = output.get("logits", output)
         else:
             raise TypeError(f"Unsupported output type: {type(output)}")
 

@@ -1,12 +1,12 @@
-from typing import Any, Dict, Optional, Iterator
+from typing import Any, Iterator
 
 import torch
 from omegaconf import DictConfig
 from torch import nn
 
+from refrakt_core.models.dino import DINOModelWrapper
 from refrakt_core.registry.wrapper_registry import register_wrapper
 from refrakt_core.schema.model_output import ModelOutput
-from refrakt_core.models.dino import DINOModelWrapper
 
 
 @register_wrapper("dino")
@@ -29,14 +29,18 @@ class DINOWrapper(nn.Module):
         }
         self.wrapper_config = {"wrapper_type": "dino", **filtered_kwargs}
 
-    def forward(self, x: torch.Tensor, teacher: bool = False, **kwargs: Any) -> ModelOutput:
+    def forward(
+        self, x: torch.Tensor, teacher: bool = False, **kwargs: Any
+    ) -> ModelOutput:
         # Filter out any unexpected kwargs that might be passed from the training loop
         # Only pass the arguments that the DINO model's forward method expects
         valid_forward_args = {"teacher": teacher}
 
         embeddings = self.dino_model(x, **valid_forward_args)  # type: ignore
         if not isinstance(embeddings, torch.Tensor):
-            raise TypeError(f"Expected torch.Tensor from dino_model forward, got {type(embeddings)}")
+            raise TypeError(
+                f"Expected torch.Tensor from dino_model forward, got {type(embeddings)}"
+            )
         output = ModelOutput(embeddings=embeddings, loss_components={})
 
         # Add attention maps if available
@@ -58,7 +62,9 @@ class DINOWrapper(nn.Module):
     def parameters(self, recurse: bool = True) -> Any:
         return self.dino_model.student_head.parameters()
 
-    def named_parameters(self, prefix: str = "", recurse: bool = True, remove_duplicate: bool = True) -> Iterator[Any]:
+    def named_parameters(
+        self, prefix: str = "", recurse: bool = True, remove_duplicate: bool = True
+    ) -> Iterator[Any]:
         return self.dino_model.student_head.named_parameters(
             prefix=prefix, recurse=recurse, remove_duplicate=remove_duplicate
         )

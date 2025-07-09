@@ -5,14 +5,12 @@ Combines embedding, positional encoding, encoder, and decoder blocks,
 mirroring the original Transformer architecture.
 """
 
-from typing import Any
 
 from torch import Tensor, nn
 
 from refrakt_core.utils.classes.decoder import Decoder
 from refrakt_core.utils.classes.encoder import Encoder
-from refrakt_core.utils.classes.transformers import (InputEmbeddings,
-                                                     PositionalEncoding)
+from refrakt_core.utils.classes.transformers import InputEmbeddings, PositionalEncoding
 from refrakt_core.utils.classes.utils import Projection
 
 

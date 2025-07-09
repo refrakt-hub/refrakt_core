@@ -17,22 +17,24 @@ Example usage:
     True
 """
 
-import importlib
 from pathlib import Path
-from typing import Any, Dict, NoReturn, Optional, Protocol, Type, Union, cast
+from typing import Any, Dict, Protocol, Union, cast
 
-import joblib
-import numpy as np
+import joblib  # type: ignore
 from numpy.typing import NDArray
-from refrakt_core.integrations.gpu.registry import load_cuml_registry
-from refrakt_core.integrations.common_types import ClassifierOutput, NDArrayF
-from refrakt_core.integrations.gpu.utils import extract_wrapper_params, instantiate_cuml_model, validate_predict_proba_support
+
+from refrakt_core.integrations.common_types import NDArrayF
+from refrakt_core.integrations.gpu.utils import (
+    extract_wrapper_params,
+    instantiate_cuml_model,
+    validate_predict_proba_support,
+)
 
 
 class CuMLEstimator(Protocol):
-    def fit(self, X: NDArray, y: NDArray) -> "CuMLEstimator": ...
-    def predict(self, X: NDArray) -> NDArray: ...
-    def predict_proba(self, X: NDArray) -> NDArray: ...
+    def fit(self, X: NDArray[Any], y: NDArray[Any]) -> "CuMLEstimator": ...
+    def predict(self, X: NDArray[Any]) -> NDArray[Any]: ...
+    def predict_proba(self, X: NDArray[Any]) -> NDArray[Any]: ...
 
 
 class CuMLWrapper:
@@ -59,7 +61,7 @@ class CuMLWrapper:
         """
         # Extract wrapper-specific parameters
         wrapper_params, model_params = extract_wrapper_params(params)
-        
+
         # Instantiate the model
         model_instance = instantiate_cuml_model(model, model_params)
         self.model: CuMLEstimator = cast(CuMLEstimator, model_instance)
@@ -70,10 +72,10 @@ class CuMLWrapper:
     def fit(self, X: NDArrayF, y: NDArrayF) -> None:
         self.model.fit(X, y)
 
-    def predict(self, X: NDArrayF) -> NDArray:
+    def predict(self, X: NDArrayF) -> NDArray[Any]:
         return self.model.predict(X)
 
-    def predict_proba(self, X: NDArrayF) -> NDArray:
+    def predict_proba(self, X: NDArrayF) -> NDArray[Any]:
         validate_predict_proba_support(self.model)
         return self.model.predict_proba(X)
 

@@ -13,13 +13,11 @@ The module includes:
 """
 
 import gc
-import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 import torch
-from omegaconf import OmegaConf
 
 from refrakt_core.api.inference import inference
 from refrakt_core.api.test import test
@@ -41,7 +39,8 @@ def main(config_path: str, mode: str = "train") -> Optional[Dict[str, Any]]:
     mode validation, and dispatches to the appropriate pipeline function.
 
     Args:
-        config_path: Path to the configuration YAML file containing all pipeline parameters
+        config_path: Path to the configuration YAML file containing all pipeline
+            parameters
         mode: Pipeline mode to execute. Must be one of 'train', 'test', or 'inference'
 
     Returns:
@@ -50,7 +49,7 @@ def main(config_path: str, mode: str = "train") -> Optional[Dict[str, Any]]:
 
     Raises:
         ValueError: If an invalid mode is provided or if inference mode is used
-                   without proper model_path parameter
+            without proper model_path parameter
     """
     if mode == "train":
         return train(config_path)

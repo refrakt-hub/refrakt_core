@@ -14,7 +14,12 @@ from refrakt_core.registry.loss_registry import register_loss
 
 @register_loss("msn")
 class MSNLoss(BaseLoss):
-    def __init__(self, temp_anchor: float = 0.1, temp_target: float = 0.04, lambda_me_max: float = 1.0) -> None:
+    def __init__(
+        self,
+        temp_anchor: float = 0.1,
+        temp_target: float = 0.04,
+        lambda_me_max: float = 1.0,
+    ) -> None:
         super().__init__()
         self.temp_anchor = temp_anchor
         self.temp_target = temp_target

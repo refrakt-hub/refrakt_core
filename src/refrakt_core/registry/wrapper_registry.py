@@ -7,8 +7,6 @@ that return a <ModelOutput> type for standardized outputs.
 from inspect import signature
 from typing import Any, Callable, Dict, Optional, Type
 
-from torch import nn
-
 WRAPPER_REGISTRY: Dict[str, Type[Any]] = {}
 
 
@@ -30,9 +28,7 @@ def get_wrapper(name: str) -> Type[Any]:
     return WRAPPER_REGISTRY[name]
 
 
-def load_wrapper(
-    wrapper_name: str, model: Optional[nn.Module] = None, **kwargs
-) -> nn.Module:
+def load_wrapper(wrapper_name: str, model: Optional[Any] = None, **kwargs: Any) -> Any:
     wrapper_cls = get_wrapper(wrapper_name)
     init_params = signature(wrapper_cls.__init__).parameters
 

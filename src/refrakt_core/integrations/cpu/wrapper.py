@@ -16,20 +16,24 @@ Example usage:
     True
 """
 
-import importlib
 from pathlib import Path
-from typing import Any, Dict, NoReturn, Optional, Protocol, Type, Union, cast
+from typing import Any, Dict, Protocol, Union, cast
 
-import joblib
+import joblib  # type: ignore
 import numpy as np
 from numpy.typing import NDArray
-from refrakt_core.integrations.cpu.registry import load_sklearn_registry
-from refrakt_core.integrations.common_types import ClassifierOutput, NDArrayF
-from refrakt_core.integrations.cpu.utils import extract_wrapper_params, instantiate_sklearn_model, validate_predict_proba_support
+
+from refrakt_core.integrations.cpu.utils import (
+    extract_wrapper_params,
+    instantiate_sklearn_model,
+    validate_predict_proba_support,
+)
 
 
 class SklearnEstimator(Protocol):
-    def fit(self, X: NDArray[np.float64], y: NDArray[np.float64]) -> "SklearnEstimator": ...
+    def fit(
+        self, X: NDArray[np.float64], y: NDArray[np.float64]
+    ) -> "SklearnEstimator": ...
     def predict(self, X: NDArray[np.float64]) -> NDArray[np.float64]: ...
     def predict_proba(self, X: NDArray[np.float64]) -> NDArray[np.float64]: ...
 
@@ -58,7 +62,7 @@ class SklearnWrapper:
         """
         # Extract wrapper-specific parameters
         wrapper_params, model_params = extract_wrapper_params(params)
-        
+
         # Instantiate the model
         model_instance = instantiate_sklearn_model(model, model_params)
         self.model: SklearnEstimator = cast(SklearnEstimator, model_instance)

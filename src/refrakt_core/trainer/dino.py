@@ -5,10 +5,9 @@ This module defines the DINOTrainer class, which handles training and evaluation
 of models using the DINO objective. It supports logging, artifact dumping, and checkpointing.
 """
 
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
 import torch
-from torch import autocast
 from torch.amp.grad_scaler import GradScaler
 from torch.nn import Module
 from torch.optim import Optimizer
@@ -17,13 +16,12 @@ from tqdm import tqdm
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
-from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
-from refrakt_core.utils.methods import unpack_views_from_batch
 from refrakt_core.trainer.utils.dino_utils import (
-    handle_dino_training_step,
     handle_dino_evaluation_step,
+    handle_dino_training_step,
 )
+from refrakt_core.utils.methods import unpack_views_from_batch
 
 
 @register_trainer("dino")
@@ -134,7 +132,7 @@ class DINOTrainer(BaseTrainer):
             for batch_id, batch in enumerate(loop):
                 try:
                     views = self._unpack_views(batch)
-                    
+
                     loss_value, success = handle_dino_training_step(
                         model=self.model,
                         batch=views,
@@ -149,17 +147,17 @@ class DINOTrainer(BaseTrainer):
                         param_log_interval=self.param_log_interval,
                         logger=self._get_logger(),
                     )
-                    
+
                     if success:
                         total_loss += loss_value
                         loop.set_postfix(loss=loss_value)
                         self.global_step += 1
                     else:
                         loop.write("[WARNING] Skipping batch due to None outputs")
-                        
+
                 except (RuntimeError, ValueError, TypeError) as e:
                     loop.write(f"[ERROR] Batch skipped due to error: {e}")
-                    
+
             if self.scheduler and not isinstance(self.scheduler, dict):
                 self.scheduler.step()
             current_loss = self.evaluate()
@@ -184,7 +182,7 @@ class DINOTrainer(BaseTrainer):
             Optional[float]: Average validation loss, or None if no validation loader.
         """
         if self.val_loader is None:
-            return None
+            pass
 
         self.model.eval()
         total_loss = 0.0
@@ -194,7 +192,7 @@ class DINOTrainer(BaseTrainer):
             for batch_id, batch in enumerate(loop):
                 try:
                     views = self._unpack_views(batch)
-                    
+
                     loss_value, success = handle_dino_evaluation_step(
                         model=self.model,
                         batch=views,
@@ -204,7 +202,7 @@ class DINOTrainer(BaseTrainer):
                         artifact_dumper=self.artifact_dumper,
                         batch_id=batch_id,
                     )
-                    
+
                     if success:
                         total_loss += loss_value
                         loop.set_postfix(val_loss=loss_value)

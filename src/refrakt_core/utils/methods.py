@@ -7,15 +7,13 @@ import os
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union, Optional, cast
+from typing import Any, Dict, List, Tuple, Union, cast
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import requests
 import torch
-from sklearn.decomposition import PCA  # type: ignore
-from sklearn.manifold import TSNE  # type: ignore
 from torch import nn
 from torchvision import transforms  # type: ignore
 
@@ -157,7 +155,9 @@ def delete_dir(target_dir: Path) -> None:
         print(f"Error: {e.strerror}")
 
 
-def get_transform(is_hr: bool = True, scale_factor: int = SCALE_FACTOR) -> transforms.Compose:
+def get_transform(
+    is_hr: bool = True, scale_factor: int = SCALE_FACTOR
+) -> transforms.Compose:
     """Return transform pipeline for HR or LR images."""
     size = (32 * scale_factor, 32 * scale_factor) if is_hr else (32, 32)
     return transforms.Compose(
@@ -193,13 +193,17 @@ def get_2d_sincos_pos_embed(
     return torch.tensor(pos_embed, dtype=torch.float32)
 
 
-def get_2d_sincos_pos_embed_from_grid(embed_dim: int, grid: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
+def get_2d_sincos_pos_embed_from_grid(
+    embed_dim: int, grid: np.ndarray[Any, Any]
+) -> np.ndarray[Any, Any]:
     emb_h = get_1d_sincos_pos_embed(embed_dim // 2, grid[0])
     emb_w = get_1d_sincos_pos_embed(embed_dim // 2, grid[1])
     return np.concatenate([emb_h, emb_w], axis=1)
 
 
-def get_1d_sincos_pos_embed(embed_dim: int, pos: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
+def get_1d_sincos_pos_embed(
+    embed_dim: int, pos: np.ndarray[Any, Any]
+) -> np.ndarray[Any, Any]:
     omega = np.arange(embed_dim // 2, dtype=np.float32)
     omega /= embed_dim / 2.0
     omega = 1.0 / (10000**omega)
@@ -208,7 +212,9 @@ def get_1d_sincos_pos_embed(embed_dim: int, pos: np.ndarray[Any, Any]) -> np.nda
     return np.concatenate([np.sin(out), np.cos(out)], axis=1)
 
 
-def random_masking(x: torch.Tensor, mask_ratio: float) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+def random_masking(
+    x: torch.Tensor, mask_ratio: float
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Apply per-sample random masking.
     Returns masked tensor, mask, ids_restore, and ids_keep."""
     b, n, _ = x.shape
@@ -226,7 +232,9 @@ def random_masking(x: torch.Tensor, mask_ratio: float) -> Tuple[torch.Tensor, to
     return x_masked, mask, ids_restore, ids_keep
 
 
-def random_patch_masking(x: torch.Tensor, mask_ratio: float = 0.6, patch_size: int = 16) -> torch.Tensor:
+def random_patch_masking(
+    x: torch.Tensor, mask_ratio: float = 0.6, patch_size: int = 16
+) -> torch.Tensor:
     """Apply random masking to image patches."""
     b, c, h, w = x.shape
     assert h % patch_size == 0 and w % patch_size == 0
@@ -245,7 +253,9 @@ def random_patch_masking(x: torch.Tensor, mask_ratio: float = 0.6, patch_size: i
     return x_masked
 
 
-def setup_device_and_model(model: nn.Module, device: torch.device, logger: Any) -> Tuple[nn.Module, torch.device]:
+def setup_device_and_model(
+    model: nn.Module, device: torch.device, logger: Any
+) -> Tuple[nn.Module, torch.device]:
     """Setup device and wrap model with DataParallel if multiple GPUs available."""
 
     # Check GPU availability
@@ -285,7 +295,9 @@ def extract_visual_tensor(outputs: Any) -> torch.Tensor:
     return torch.tensor(outputs)  # Final fallback
 
 
-def _handle_tuple_list_batch(batch: Union[Tuple[Any, ...], List[Any]], device: str) -> List[torch.Tensor]:
+def _handle_tuple_list_batch(
+    batch: Union[Tuple[Any, ...], List[Any]], device: str
+) -> List[torch.Tensor]:
     """Handle tuple or list batch formats."""
     if len(batch) == 2 and all(isinstance(b, torch.Tensor) for b in batch):
         return [batch[0].to(device).float(), batch[1].to(device).float()]
@@ -307,7 +319,9 @@ def _handle_dict_batch(batch: Dict[str, Any], device: str) -> List[torch.Tensor]
     return [batch["view1"].to(device).float(), batch["view2"].to(device).float()]
 
 
-def _handle_nested_batch(batch: Union[List[Any], Tuple[Any, ...]], device: str) -> List[torch.Tensor]:
+def _handle_nested_batch(
+    batch: Union[List[Any], Tuple[Any, ...]], device: str
+) -> List[torch.Tensor]:
     """Handle nested batch format with multiple items."""
     view1_batch, view2_batch = [], []
     for item in batch:
@@ -324,7 +338,8 @@ def _handle_nested_batch(batch: Union[List[Any], Tuple[Any, ...]], device: str) 
 
 
 def unpack_views_from_batch(
-    batch: Union[torch.Tensor, Dict[str, torch.Tensor], List[Any], Tuple[Any, ...]], device: str
+    batch: Union[torch.Tensor, Dict[str, torch.Tensor], List[Any], Tuple[Any, ...]],
+    device: str,
 ) -> List[torch.Tensor]:
     """
     Unpack two augmented views from a batch for contrastive/self-supervised learning.
@@ -336,7 +351,7 @@ def unpack_views_from_batch(
         if result:
             return result
         return _handle_nested_batch(batch, device)
-    
+
     # Handle tensor format
     if isinstance(batch, torch.Tensor):
         result = _handle_tensor_batch(batch, device)
@@ -344,9 +359,9 @@ def unpack_views_from_batch(
             return result
         else:
             raise TypeError(f"Unsupported tensor batch shape: {batch.shape}")
-    
+
     # Handle dictionary format
     if isinstance(batch, dict):
         return _handle_dict_batch(batch, device)
-    
+
     raise TypeError(f"Unsupported batch type: {type(batch)}")

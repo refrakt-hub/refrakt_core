@@ -9,8 +9,8 @@ LOSS_MODES: Dict[str, str] = {}
 _IMPORTED: bool = False
 
 
-def register_loss(name: str, mode: Optional[str] = None) -> Callable:
-    def decorator(cls_or_fn):
+def register_loss(name: str, mode: Optional[str] = None) -> Callable[[Any], Any]:
+    def decorator(cls_or_fn: Any) -> Any:
         logger = get_global_logger()
         if name in LOSS_REGISTRY:
             logger.debug("Warning: Loss '%s' already registered. Skipping.", name)
@@ -27,16 +27,16 @@ def register_loss(name: str, mode: Optional[str] = None) -> Callable:
     return decorator
 
 
-def _import_losses():
+def _import_losses() -> None:
     """Import all loss modules to trigger registration."""
     global _IMPORTED  # pylint: disable=global-statement
     if not _IMPORTED:
         try:
             # Import custom losses
-            import refrakt_core.losses
-            
             # Add standard PyTorch losses to registry
             from torch import nn  # pylint: disable=import-outside-toplevel
+
+            import refrakt_core.losses
 
             standard_losses = {
                 "mse": nn.MSELoss,
@@ -47,7 +47,7 @@ def _import_losses():
             for loss_name, loss_class in standard_losses.items():
                 if loss_name not in LOSS_REGISTRY:
                     register_loss(loss_name)(loss_class)
-            
+
             _IMPORTED = True
         except ImportError as e:
             logger = get_global_logger()

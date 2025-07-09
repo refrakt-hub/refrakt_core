@@ -7,7 +7,6 @@ from refrakt_core.global_logging import get_global_logger
 MODEL_REGISTRY: Dict[str, Type[Any]] = {}
 _IMPORTED: bool = False
 
-import logging
 
 
 def register_model(name: str) -> Callable[[Type[Any]], Type[Any]]:
@@ -32,12 +31,13 @@ def register_model(name: str) -> Callable[[Type[Any]], Type[Any]]:
     return decorator
 
 
-def _import_models():
+def _import_models() -> None:
     """Import all model modules to trigger registration."""
     global _IMPORTED  # pylint: disable=global-statement
     if not _IMPORTED:
         try:
             import refrakt_core.models
+
             _IMPORTED = True
         except ImportError as e:
             logger = get_global_logger()

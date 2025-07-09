@@ -1,6 +1,5 @@
-from typing import Dict, Optional, Any
+from typing import Any
 
-import torch
 from torch import nn
 
 from refrakt_core.losses.mae import MAELoss

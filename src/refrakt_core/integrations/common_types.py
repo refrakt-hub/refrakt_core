@@ -5,7 +5,6 @@ Common type aliases used across integration wrappers and registries.
 from typing import Any, TypeAlias
 
 import numpy as np
-from numpy.typing import NDArray
 
 NDArrayF: TypeAlias = np.ndarray[Any, np.dtype[np.float64]]
 NDArrayI: TypeAlias = np.ndarray[Any, np.dtype[np.int64]]

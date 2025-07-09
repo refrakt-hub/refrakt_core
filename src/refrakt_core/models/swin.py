@@ -5,7 +5,6 @@ Implements a hierarchical vision transformer using shifted windows, with
 custom embedding, patch merging, and stacked Swin stages.
 """
 
-from typing import Any
 
 from torch import Tensor, nn
 

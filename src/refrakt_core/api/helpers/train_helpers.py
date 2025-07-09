@@ -27,11 +27,13 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.api.utils.train_utils import (_handle_fusion_training,
-                                                _save_config_and_log_metrics,
-                                                _setup_optimizer_config,
-                                                _setup_trainer_params,
-                                                load_config)
+from refrakt_core.api.utils.train_utils import (
+    _handle_fusion_training,
+    _save_config_and_log_metrics,
+    _setup_optimizer_config,
+    _setup_trainer_params,
+    load_config,
+)
 
 
 def _load_and_validate_config(cfg: Union[str, DictConfig]) -> DictConfig:
@@ -167,8 +169,9 @@ def _build_datasets_and_model(
     """
     from refrakt_core.api.builders.loss_builder import build_loss
     from refrakt_core.api.builders.model_builder import build_model
-    from refrakt_core.api.utils.train_utils import \
-        build_datasets_and_loaders_with_resize
+    from refrakt_core.api.utils.train_utils import (
+        build_datasets_and_loaders_with_resize,
+    )
 
     train_dataset, val_dataset, train_loader, val_loader = (
         build_datasets_and_loaders_with_resize(config, logger)

@@ -7,7 +7,7 @@ PatchifyTransform
 """
 
 import random
-from typing import Tuple
+from typing import Any, Tuple
 
 import torch
 import torchvision.transforms as T
@@ -25,7 +25,7 @@ class PairedTransform:
     def __init__(self, crop_size: int = 96) -> None:
         self.crop_size = crop_size
 
-    def __call__(self, lr, hr) -> Tuple[Tensor, Tensor]:
+    def __call__(self, lr: Any, hr: Any) -> Tuple[Tensor, Tensor]:
         i, j, h, w = T.RandomCrop.get_params(
             hr, output_size=(self.crop_size * 4, self.crop_size * 4)
         )
@@ -48,7 +48,7 @@ class FlattenTransform:
     A wrapper class that wraps around torch.flatten for a given tensor.
     """
 
-    def __call__(self, x: Tensor) -> Tensor:
+    def __call__(self, x: Any) -> Any:
         return torch.flatten(x)
 
 
@@ -67,20 +67,21 @@ class PatchifyTransform:
         assert h % p == 0 and w % p == 0, "Image dims must be divisible by patch size"
         return img
 
+
 # ONLY FOR TESTING PURPOSES
 @register_transform("dummy")
 class DummyTransform:
     """
     Dummy transform for testing purposes.
-    
+
     Args:
         **kwargs: Any additional arguments (ignored)
     """
-    
-    def __init__(self, **kwargs):
+
+    def __init__(self, **kwargs: Any) -> None:
         pass
-    
-    def __call__(self, x):
+
+    def __call__(self, x: Any) -> Any:
         return x
 
 
@@ -89,9 +90,9 @@ class PairedTransformWrapper:
     """
     Wrapper for PairedTransform to match the expected name in tests.
     """
-    
-    def __init__(self, **kwargs):
+
+    def __init__(self, **kwargs: Any) -> None:
         self.transform = PairedTransform(**kwargs)
-    
-    def __call__(self, lr, hr):
+
+    def __call__(self, lr: Any, hr: Any) -> Any:
         return self.transform(lr, hr)

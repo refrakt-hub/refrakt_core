@@ -21,8 +21,11 @@ from typing import Any, Dict, Union
 from omegaconf import DictConfig, OmegaConf
 
 from refrakt_core.api.builders.utils.optimizer_utils import (
-    build_gan_style_optimizer, build_multi_component_optimizer,
-    build_standard_optimizer, get_optimizer_map)
+    build_gan_style_optimizer,
+    build_multi_component_optimizer,
+    build_standard_optimizer,
+    get_optimizer_map,
+)
 
 
 def build_optimizer(cfg: DictConfig, model: Any) -> Union[Any, Dict[str, Any]]:

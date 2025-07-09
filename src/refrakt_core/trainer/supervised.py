@@ -6,8 +6,7 @@ of models using supervised objectives (e.g., classification, regression).
 It supports logging, artifact dumping, and integration with explainability/visualization tools.
 """
 
-from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
 from torch.nn import Module
@@ -16,25 +15,25 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from refrakt_core.registry.trainer_registry import register_trainer
-from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
 from refrakt_core.trainer.utils.supervised_utils import (
+    handle_epoch_end,
     handle_training_step,
-    log_training_metrics,
     log_artifacts,
-    handle_epoch_end
+    log_training_metrics,
 )
 
 try:
-    from refrakt_xai.utils import \
-        generate_explainability  # type: ignore[import-not-found]
+    from refrakt_xai.utils import generate_explainability  # type: ignore
 except ImportError:
-    generate_explainability = None  # type: ignore[unused-variable]
+    generate_explainability = None
 
 try:
     from refrakt_viz.utils import (  # type: ignore[import-not-found]
-        visualize_attention, visualize_embeddings)
+        visualize_attention,
+        visualize_embeddings,
+    )
 except ImportError:
     visualize_embeddings = visualize_attention = None  # type: ignore[unused-variable]
 
@@ -85,16 +84,12 @@ class SupervisedTrainer(BaseTrainer):
         self._current_batch = None
         self._current_loss_output = None
 
-        # Ensure optimizer is constructed if not set by BaseTrainer
         if self.optimizer is None:
-            from omegaconf import DictConfig, OmegaConf
+            from omegaconf import DictConfig
+
             args = optimizer_args
             if isinstance(args, DictConfig):
-                _tmp_args = OmegaConf.to_container(args, resolve=True)
-                if isinstance(_tmp_args, dict):
-                    args = cast(Dict[str, Any], _tmp_args)
-                else:
-                    args = None
+                pass
             final_args = args or {"lr": 1e-3}
             self.optimizer = optimizer_cls(self.model.parameters(), **final_args)
 
@@ -106,7 +101,9 @@ class SupervisedTrainer(BaseTrainer):
         """Log training metrics."""
         return log_training_metrics(self, loss_output, output, step)
 
-    def _log_artifacts(self, output: Any, loss_output: Any, step: int, epoch: int) -> None:
+    def _log_artifacts(
+        self, output: Any, loss_output: Any, step: int, epoch: int
+    ) -> None:
         """Log artifacts for the current step."""
         return log_artifacts(self, output, loss_output, step, epoch)
 
@@ -135,7 +132,7 @@ class SupervisedTrainer(BaseTrainer):
                 self._current_batch = batch  # Store for artifact logging
                 self._handle_training_step(batch, step, epoch)
                 if self._current_loss_output is not None:
-                    loop.set_postfix({"loss": self._current_loss_output.total.item()})
+                    pass
 
             best_accuracy = self._handle_epoch_end(epoch, best_accuracy)
 
@@ -168,7 +165,9 @@ class SupervisedTrainer(BaseTrainer):
                 elif isinstance(output, torch.Tensor):
                     logits = output
                 else:
-                    raise ValueError("Output does not have logits for argmax in evaluate().")
+                    raise ValueError(
+                        "Output does not have logits for argmax in evaluate()."
+                    )
 
                 if logits is not None:
                     preds = torch.argmax(logits, dim=1)

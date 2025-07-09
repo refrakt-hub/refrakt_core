@@ -5,15 +5,15 @@ This module defines a Generator-Discriminator architecture trained using
 adversarial and perceptual losses to upscale low-resolution images.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 import torch
 from torch import Tensor
 
 from refrakt_core.models.templates.models import BaseGAN
 from refrakt_core.registry.model_registry import register_model
-from refrakt_core.utils.classes.srgan import Discriminator, Generator
 from refrakt_core.schema.model_output import ModelOutput
+from refrakt_core.utils.classes.srgan import Discriminator, Generator
 
 
 @register_model("srgan")

@@ -2,7 +2,7 @@
 The GAN Loss implementation for adversarial training.
 """
 
-from typing import Dict, Union
+from typing import Union
 
 import torch
 from torch import Tensor, nn

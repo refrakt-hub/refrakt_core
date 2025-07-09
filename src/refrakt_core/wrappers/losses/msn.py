@@ -2,13 +2,12 @@
 MSNLossWrapper: A wrapper class for the Masked Siamese Network (MSN) loss.
 """
 
-from typing import Dict, Optional, Any
+from typing import Any
 
-from torch import nn
 import torch
+from torch import nn
 
 from refrakt_core.losses.msn import MSNLoss
-from refrakt_core.losses.templates.base import BaseLoss
 from refrakt_core.registry.loss_registry import register_loss
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
@@ -16,7 +15,13 @@ from refrakt_core.schema.model_output import ModelOutput
 
 @register_loss("msn_wrapped", mode="embedding")
 class MSNLossWrapper(nn.Module):
-    def __init__(self, temp_anchor: float = 0.1, temp_target: float = 0.04, lambda_me_max: float = 1.0, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        temp_anchor: float = 0.1,
+        temp_target: float = 0.04,
+        lambda_me_max: float = 1.0,
+        **kwargs: Any,
+    ) -> None:
         super().__init__()
 
         self.loss_fn = MSNLoss(
@@ -38,6 +43,7 @@ class MSNLossWrapper(nn.Module):
             raise ValueError("Missing required fields in ModelOutput")
         # Cast to torch.Tensor for mypy
         from typing import cast
+
         z_anchor = cast(torch.Tensor, z_anchor)
         z_target = cast(torch.Tensor, z_target)
         prototypes = cast(torch.Tensor, prototypes)

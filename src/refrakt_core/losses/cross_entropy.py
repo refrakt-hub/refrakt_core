@@ -4,7 +4,6 @@ Cross-Entropy loss with optional label smoothing, commonly used for classificati
 
 from typing import Dict, Optional
 
-import torch
 from torch import Tensor, nn
 
 from refrakt_core.losses.templates.base import BaseLoss

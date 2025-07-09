@@ -65,8 +65,7 @@ def _extract_overrides(args: argparse.Namespace, remaining: List[str]) -> List[s
         This function handles both explicit --override flags and positional
         overrides, ensuring all override methods are properly combined.
     """
-    from refrakt_core.hooks.hyperparameter_override import \
-        extract_overrides_from_args
+    from refrakt_core.hooks.hyperparameter_override import extract_overrides_from_args
 
     positional_overrides, _ = extract_overrides_from_args(remaining)
 
@@ -104,8 +103,7 @@ def _apply_config_overrides(cfg: Any, all_overrides: List[str]) -> Any:
             print(
                 f"DEBUG: Before overrides - batch_size: {cfg_dict.get('dataloader', {}).get('params', {}).get('batch_size', 'NOT_FOUND')}"
             )
-            from refrakt_core.hooks.hyperparameter_override import \
-                apply_overrides
+            from refrakt_core.hooks.hyperparameter_override import apply_overrides
 
             cfg_dict = apply_overrides(OmegaConf.create(cfg_dict), all_overrides)
             cfg = OmegaConf.create(cfg_dict)
@@ -206,8 +204,11 @@ def _execute_pipeline_mode(
         ValueError: If model_path is required but not provided for inference mode
     """
     from refrakt_core.api.utils.pipeline_utils import (
-        execute_full_pipeline, execute_inference_pipeline,
-        execute_testing_pipeline, execute_training_pipeline)
+        execute_full_pipeline,
+        execute_inference_pipeline,
+        execute_testing_pipeline,
+        execute_training_pipeline,
+    )
 
     if mode == "train":
         execute_training_pipeline(cfg, model_path, logger)

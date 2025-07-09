@@ -2,7 +2,7 @@ import zipfile
 from pathlib import Path
 
 
-def unzip_div2k():
+def unzip_div2k() -> None:
     zip_dir = Path("../zips")
     extract_dir = Path("../data/DIV2K")
     extract_dir.mkdir(parents=True, exist_ok=True)

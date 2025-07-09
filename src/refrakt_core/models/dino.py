@@ -7,7 +7,7 @@ momentum update and normalized projection heads.
 Also contains a wrapper for ResNet backbones to integrate with DINO training.
 """
 
-from typing import Optional, Any
+from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -129,7 +129,7 @@ class DINOModel(BaseModel):
             momentum (float): Momentum factor for EMA update.
         """
         for student_param, teacher_param in zip(
-            self.student_head.parameters(), self.teacher_head.parameters()
+            self.student_head.parameters(), self.teacher_head.parameters(), strict=False
         ):
             teacher_param.data = (
                 momentum * teacher_param.data + (1.0 - momentum) * student_param.data
@@ -167,7 +167,9 @@ class DINOModelWrapper(DINOModel):
     Instantiates and integrates with the DINO training setup.
     """
 
-    def __init__(self, backbone: Any = "resnet18", out_dim: int = 2048, **kwargs: Any) -> None:
+    def __init__(
+        self, backbone: Any = "resnet18", out_dim: int = 2048, **kwargs: Any
+    ) -> None:
         backbone_map = {
             "resnet18": ResNet18,
             "resnet50": ResNet50,
@@ -190,5 +192,7 @@ class DINOModelWrapper(DINOModel):
         super().__init__(backbone=wrapped, model_name="dino", out_dim=out_dim)
         self._model_config = kwargs  # Store additional config
 
-    def forward(self, x: torch.Tensor, teacher: bool = False, **kwargs: Any) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, teacher: bool = False, **kwargs: Any
+    ) -> torch.Tensor:
         return super().forward(x, teacher=teacher, **kwargs)

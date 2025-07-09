@@ -26,8 +26,10 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.api.utils.test_utils import (_build_test_loader_with_resize,
-                                               _run_manual_evaluation)
+from refrakt_core.api.utils.test_utils import (
+    _build_test_loader_with_resize,
+    _run_manual_evaluation,
+)
 from refrakt_core.api.utils.train_utils import load_config, setup_logger
 
 

@@ -10,7 +10,6 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 from torchvision import models  # type: ignore
-from typing import cast
 
 from refrakt_core.models.templates.models import BaseContrastiveModel
 from refrakt_core.registry.model_registry import register_model

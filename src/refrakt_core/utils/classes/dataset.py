@@ -1,12 +1,11 @@
 """Custom image classification dataset loader for structured folders."""
 
 from pathlib import Path
-from typing import Callable, Optional, Tuple, List, Dict, Any
+from typing import Any, Callable, Optional, Tuple
 
 from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset
-from typing import cast
 
 from refrakt_core.utils.methods import find_classes
 
@@ -21,7 +20,9 @@ class CreateDataset(Dataset[Any]):
         transform (Optional[Callable]): Transformations to apply to each image.
     """
 
-    def __init__(self, target_dir: str, transform: Optional[Callable[[Any], Tensor]] = None) -> None:
+    def __init__(
+        self, target_dir: str, transform: Optional[Callable[[Any], Tensor]] = None
+    ) -> None:
         self.paths = list(Path(target_dir).glob("*/*.jpg"))
         self.transform = transform
         self.classes, self.class_to_idx = find_classes(target_dir)

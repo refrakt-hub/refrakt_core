@@ -1,6 +1,4 @@
-from typing import Dict, Optional, Any
-
-from torch import nn
+from typing import Any, Dict, Optional
 
 from refrakt_core.losses.gan import GANLoss
 from refrakt_core.losses.templates.base import BaseLoss

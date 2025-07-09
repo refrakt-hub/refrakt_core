@@ -6,9 +6,9 @@ Modules:
 - AlternateBlock
 """
 
-import torch
-from torch import Tensor, nn
 from typing import cast
+
+from torch import Tensor, nn
 
 from refrakt_core.utils.classes.attention import ShiftedWindowMSA
 

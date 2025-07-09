@@ -17,11 +17,10 @@ from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.trainer.base import BaseTrainer
-from refrakt_core.wrappers.losses.mae import MAELossWrapper
 from refrakt_core.trainer.utils.autoencoder_utils import (
-    handle_autoencoder_training_step,
-    handle_autoencoder_evaluation_step,
     extract_autoencoder_inputs,
+    handle_autoencoder_evaluation_step,
+    handle_autoencoder_training_step,
 )
 
 T = TypeVar("T", bound=torch.Tensor)
@@ -102,7 +101,7 @@ class AETrainer(BaseTrainer):
             self.model.train()
             loop = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
 
-            for step, batch in enumerate(loop):
+            for _step, batch in enumerate(loop):
                 inputs = extract_autoencoder_inputs(batch)
                 inputs = inputs.to(self.device)
 
@@ -159,7 +158,7 @@ class AETrainer(BaseTrainer):
                     global_step=val_global_step,
                     artifact_dumper=self.artifact_dumper,
                 )
-                
+
                 total_loss += loss_value
 
         avg_loss = total_loss / len(self.val_loader)

@@ -1,20 +1,18 @@
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from refrakt_core.registry.trainer_registry import register_trainer
-from refrakt_core.schema.model_output import ModelOutput
-from refrakt_core.trainer.base import BaseTrainer
 from torch.nn import Module
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from refrakt_core.integrations.fusion.helpers import (
+    process_labels,
     unpack_batch,
-    extract_features_from_model,
     validate_model_output,
-    process_labels
 )
+from refrakt_core.registry.trainer_registry import register_trainer
+from refrakt_core.trainer.base import BaseTrainer
 
 
 @register_trainer("fusion")
@@ -23,8 +21,8 @@ class FusionTrainer(BaseTrainer):
         self,
         model: Module,  # Torch backbone (returns ModelOutput)
         fusion_head: Any,  # e.g. SklearnWrapper
-        train_loader: DataLoader,
-        val_loader: DataLoader,
+        train_loader: DataLoader[Any],
+        val_loader: DataLoader[Any],
         device: str = "cuda",
         artifact_dumper: Optional[Any] = None,
         **kwargs: Any,
@@ -57,7 +55,7 @@ class FusionTrainer(BaseTrainer):
         X_val, y_val = self._extract_features_and_labels(self.val_loader)
 
         preds = self.fusion_head.predict(X_val)
-        acc = (preds == y_val).mean()
+        acc = float((preds == y_val).mean())
 
         print(f"\n[RESULT] Validation Accuracy: {acc * 100:.2f}%")
 
@@ -69,8 +67,8 @@ class FusionTrainer(BaseTrainer):
         return acc
 
     def _extract_features_and_labels(
-        self, loader: DataLoader
-    ) -> tuple[np.ndarray, np.ndarray]:
+        self, loader: DataLoader[Any]
+    ) -> tuple[np.ndarray[Any, np.dtype[Any]], np.ndarray[Any, np.dtype[Any]]]:
         features, labels = [], []
         first = True
         with torch.no_grad():
@@ -92,6 +90,6 @@ class FusionTrainer(BaseTrainer):
         return np.concatenate(features), np.concatenate(labels)
 
     def _unpack_batch(
-        self, batch: Union[tuple, list, Dict[str, torch.Tensor]]
-    ) -> tuple:
+        self, batch: Union[Tuple[Any, ...], List[Any], Dict[str, Any]]
+    ) -> Tuple[Any, ...]:
         return unpack_batch(batch)

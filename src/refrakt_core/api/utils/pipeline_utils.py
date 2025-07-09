@@ -26,10 +26,10 @@ from typing import Any, cast
 from omegaconf import DictConfig
 
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.global_logging import set_global_logger
-from refrakt_core.api.train import train
-from refrakt_core.api.test import test
 from refrakt_core.api.inference import inference
+from refrakt_core.api.test import test
+from refrakt_core.api.train import train
+from refrakt_core.global_logging import set_global_logger
 
 
 def setup_logger_and_config(

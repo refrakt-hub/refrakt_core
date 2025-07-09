@@ -33,8 +33,7 @@ from omegaconf import DictConfig, OmegaConf
 from refrakt_core.api.builders.dataloader_builder import build_dataloader
 from refrakt_core.api.builders.dataset_builder import build_dataset
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.api.utils.train_utils import \
-    analyze_and_resize_dataset_images
+from refrakt_core.api.utils.train_utils import analyze_and_resize_dataset_images
 
 """
 Test utilities for Refrakt API.

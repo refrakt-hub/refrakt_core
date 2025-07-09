@@ -8,19 +8,28 @@ Available dataset classes:
 
 import os
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple, Union, Sequence, List, cast, Sized
-
-from PIL import Image
-import torch
-from torch import Tensor, nn
-from torch.utils.data import Dataset
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sized,
+    Tuple,
+    Union,
+    cast,
+)
 
 import numpy as np
 import pandas as pd
 import requests
+import torch
+from PIL import Image
+from torch import Tensor, nn
+from torch.utils.data import Dataset
 
-from refrakt_core.registry.dataset_registry import register_dataset
 from refrakt_core.loaders.dataset_loader import load_custom_dataset
+from refrakt_core.registry.dataset_registry import register_dataset
 
 
 @register_dataset("contrastive")
@@ -48,7 +57,7 @@ class ContrastiveDataset(Dataset[Any]):
             transforms_attr = getattr(self.transform, "transforms", None)
             if transforms_attr and hasattr(transforms_attr, "__iter__"):
                 filtered = [t for t in transforms_attr if not isinstance(t, nn.Flatten)]
-                setattr(self.transform, "transforms", filtered)
+                self.transform.transforms = filtered
 
     def __len__(self) -> int:
         return len(self.base_dataset)  # type: ignore
@@ -114,14 +123,17 @@ class SuperResolutionDataset(Dataset[Dict[str, Tensor]]):
 @register_dataset("msn_contrastive")
 class MSNCompatibleContrastiveDataset(Dataset[Any]):
     def __init__(
-        self, base_dataset: Any, transform: Optional[Callable[[Any], Any]] = None, **kwargs: Any
+        self,
+        base_dataset: Any,
+        transform: Optional[Callable[[Any], Any]] = None,
+        **kwargs: Any,
     ) -> None:
         self.dataset: Any = ContrastiveDataset(
             base_dataset=base_dataset, transform=transform
         )
 
     def __len__(self) -> int:
-        return len(self.dataset)  # type: ignore[arg-type]
+        return len(cast(Sized, self.dataset))
 
     def __getitem__(self, idx: int) -> Any:
         item = self.dataset[idx]
@@ -136,9 +148,9 @@ class MSNCompatibleContrastiveDataset(Dataset[Any]):
 class CustomDataset(Dataset[Any]):
     """
     Custom dataset that loads data from zip files with automatic format detection.
-    
+
     This dataset integrates the custom zip file loading functionality with the registry system.
-    
+
     Args:
         zip_path (str): Path to the zip file containing the dataset
         task_type (Optional[str]): Type of task (gan, supervised, contrastive). If None, auto-detects.
@@ -146,21 +158,21 @@ class CustomDataset(Dataset[Any]):
         train (bool): Whether this is for training (True) or validation (False)
         **kwargs: Additional arguments passed to the underlying dataset loader
     """
-    
+
     def __init__(
         self,
         zip_path: str,
         task_type: Optional[str] = None,
         transform: Optional[Callable[[Any], Any]] = None,
         train: bool = True,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         self.zip_path = zip_path
         self.task_type = task_type
         self.transform = transform
         self.train = train
         self.kwargs = kwargs
-        
+
         # Load the custom dataset using the existing loader
         # Note: load_custom_dataset expects torchvision.Compose for transform
         # but we'll pass it as-is and let the loader handle it
@@ -168,18 +180,18 @@ class CustomDataset(Dataset[Any]):
             zip_path=zip_path,
             task_type=task_type,
             transform=transform,  # type: ignore
-            **kwargs
+            **kwargs,
         )
-        
+
         # Select the appropriate dataset based on train flag
         if train:
             self.dataset = train_dataset
         else:
             self.dataset = val_dataset if val_dataset is not None else train_dataset
-    
+
     def __len__(self) -> int:
-        return len(self.dataset)
-    
+        return len(cast(Sized, self.dataset))
+
     def __getitem__(self, idx: int) -> Any:
         return self.dataset[idx]
 
@@ -194,25 +206,38 @@ class TabularMLDataset:
         drop_cols (Optional[list[str]]): Columns to drop (besides target).
         download_url (Optional[str]): URL to download the CSV if not present.
     """
-    def __init__(self, csv_path: str, target_col: str, drop_cols: Optional[List[str]] = None, download_url: Optional[str] = None, **kwargs: Any) -> None:
+
+    def __init__(
+        self,
+        csv_path: str,
+        target_col: str,
+        drop_cols: Optional[List[str]] = None,
+        download_url: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
         if not os.path.exists(csv_path) and download_url:
-            print(f"[TabularMLDataset] Downloading dataset from {download_url} to {csv_path}...")
+            print(
+                f"[TabularMLDataset] Downloading dataset from {download_url} to {csv_path}..."
+            )
             os.makedirs(os.path.dirname(csv_path), exist_ok=True)
             r = requests.get(download_url)
             r.raise_for_status()
-            with open(csv_path, 'wb') as f:
+            with open(csv_path, "wb") as f:
                 f.write(r.content)
-            print(f"[TabularMLDataset] Download complete.")
+            print("[TabularMLDataset] Download complete.")
         df = pd.read_csv(csv_path)
         if drop_cols:
             df = df.drop(columns=drop_cols)
         self.y: Any = df[target_col].values  # type: ignore
         self.X: Any = df.drop(columns=[target_col]).values  # type: ignore
+
     def __len__(self) -> int:
         return len(self.y)
+
     def __getitem__(self, idx: int) -> Tuple[Any, Any]:
         return self.X[idx], self.y[idx]
-    def get_numpy(self) -> Tuple[np.ndarray, np.ndarray]:
+
+    def get_numpy(self) -> Tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]:
         return self.X, self.y
 
 
@@ -220,33 +245,33 @@ class TabularMLDataset:
 class DummyDataset(Dataset[Tuple[Tensor, int]]):
     """
     Dummy dataset for testing purposes.
-    
+
     Args:
         size (int): Number of samples in the dataset
         transform (Optional[Callable]): Transform to apply
         train (Optional[bool]): Whether this is for training (unused, for compatibility)
     """
-    
+
     def __init__(
         self,
         size: int = 100,
         transform: Optional[Callable[[Tensor], Tensor]] = None,
         train: Optional[bool] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         self.size: int = size
         self.transform: Optional[Callable[[Tensor], Tensor]] = transform
         self.data: Tensor = torch.randn(size, 3, 32, 32)  # Random images
         self.targets: Tensor = torch.randint(0, 10, (size,))  # Random labels
-    
+
     def __len__(self) -> int:
         return self.size
-    
+
     def __getitem__(self, idx: int) -> Tuple[Tensor, int]:
         data: Tensor = self.data[idx]
         target: int = int(self.targets[idx].item())
-        
+
         if self.transform:
             data = self.transform(data)
-        
+
         return data, target

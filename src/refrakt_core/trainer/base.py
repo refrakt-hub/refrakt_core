@@ -11,14 +11,13 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Union
 
 import torch
-from omegaconf.listconfig import ListConfig
 from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
 from refrakt_core.trainer.utils.base_utils import (
     determine_checkpoint_path,
-    load_checkpoint_from_path,
+    load_checkpoint,
     load_optimizer_state,
     load_scheduler_state,
 )
@@ -171,8 +170,8 @@ class BaseTrainer(ABC):
                 save_dir=self.save_dir,
                 model_name=self.model_name,
             )
-            
-            checkpoint = load_checkpoint_from_path(checkpoint_path, self.device)
+
+            checkpoint = load_checkpoint(checkpoint_path, self.device.type)
 
             self.model.load_state_dict(checkpoint["model_state_dict"])
 
