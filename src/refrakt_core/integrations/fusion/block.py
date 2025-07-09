@@ -40,6 +40,22 @@ class FusionBlock(nn.Module):
         # Register backbone as a submodule to ensure its parameters are tracked
         self.add_module("backbone", backbone)
 
+    @property
+    def device(self):
+        # Delegate to backbone if possible, else default to cpu
+        if hasattr(self.backbone, "device"):
+            return self.backbone.device
+        return torch.device("cpu")
+
+    @device.setter
+    def device(self, value):
+        # Set device on backbone if possible
+        if hasattr(self.backbone, "to_device"):
+            self.backbone.to_device(value)
+        elif hasattr(self.backbone, "to"):
+            self.backbone.to(value)
+        # else: do nothing
+
     def parameters(self, recurse: bool = True) -> Iterator[nn.Parameter]:
         """
         Return an iterator over module parameters.
@@ -145,13 +161,12 @@ class FusionBlock(nn.Module):
         feats, _ = self._extract_features(x)
         return self.fusion_head.predict_proba(feats) if self._trained else None
 
-    def update_teacher(self, *args: Any, **kwargs: Any) -> None:
+    def update_teacher(self, *args: Any, **kwargs: Any) -> Any:
         """
         Delegate teacher update to the backbone if available.
         """
         if hasattr(self.backbone, "update_teacher"):
-            self.backbone.update_teacher(*args, **kwargs)
-            return
+            return self.backbone.update_teacher(*args, **kwargs)
         raise AttributeError("Backbone does not support update_teacher()")
 
     def get_logits(self, output: Any) -> torch.Tensor:

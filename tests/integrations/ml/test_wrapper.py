@@ -52,7 +52,7 @@ def test_build_ml_model_missing_name_unit():
     """Unit test: Error on missing model name."""
     cfg = {"backend": "sklearn", "params": {}}
     with pytest.raises(
-        AttributeError, match="'NoneType' object has no attribute 'rsplit'"
+        ValueError, match="Model name must be specified in config"
     ):
         build_ml_model(cfg)
 
@@ -61,7 +61,7 @@ def test_build_ml_model_explicit_none_name_unit():
     """Unit test: Error when model name is explicitly None."""
     cfg = {"backend": "sklearn", "name": None, "params": {}}
     with pytest.raises(
-        AttributeError, match="'NoneType' object has no attribute 'rsplit'"
+        ValueError, match="Model name must be specified in config"
     ):
         build_ml_model(cfg)
 

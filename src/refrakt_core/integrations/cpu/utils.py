@@ -28,8 +28,12 @@ def extract_wrapper_params(
         fusion_head_val = model_params.pop("fusion_head")
         if fusion_head_val is None:
             wrapper_params["fusion_head"] = {}
-        else:
+        elif isinstance(fusion_head_val, dict):
             wrapper_params["fusion_head"] = fusion_head_val
+        else:
+            wrapper_params["fusion_head"] = {"value": fusion_head_val}
+    else:
+        wrapper_params["fusion_head"] = {}
 
     return wrapper_params, model_params
 

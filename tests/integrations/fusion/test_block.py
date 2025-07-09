@@ -251,7 +251,7 @@ def test_no_embeddings_error_unit():
     X, y = create_dummy_data()
 
     with pytest.raises(
-        ValueError, match="Backbone did not return embeddings in ModelOutput"
+        ValueError, match="Backbone must return `ModelOutput` with `embeddings` for fusion mode."
     ):
         fusion_block._extract_features(X)
 

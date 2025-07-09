@@ -64,6 +64,7 @@ def test_hyperparameter_override_integration_sanity():
         "training": {"epochs": 10},
     }
     overrides = ["model.name=ResNet", "model.params.lr=0.0005", "training.epochs=20"]
+    base_config = OmegaConf.create(base_config)
     result = apply_overrides(base_config, overrides)
     assert result["model"]["name"] == "ResNet"
     assert result["model"]["params"]["lr"] == 0.0005
@@ -135,6 +136,7 @@ def test_complete_pipeline_integration_unit():
         "training.epochs=20",
         "training.lr=0.0005",
     ]
+    config = OmegaConf.create(config)
     config_with_overrides = apply_overrides(config, overrides)
     assert config_with_overrides["model"]["params"]["input_size"] == 1024
     assert config_with_overrides["training"]["epochs"] == 20

@@ -61,7 +61,6 @@ class TestTrainerUtils:
         train_loader = [1, 2, 3]
         val_loader = [4, 5, 6]
         loss_fn = lambda x, y: 0
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
         scheduler = None
         device = "cpu"
         artifact_dumper = None
@@ -73,7 +72,6 @@ class TestTrainerUtils:
             train_loader,
             val_loader,
             loss_fn,
-            optimizer,
             scheduler,
             device,
             artifact_dumper,
@@ -89,7 +87,6 @@ class TestTrainerUtils:
         train_loader = [1, 2, 3]
         val_loader = [4, 5, 6]
         loss_fn = lambda x, y: 0
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
         scheduler = None
         device = "cpu"
         artifact_dumper = None
@@ -102,7 +99,6 @@ class TestTrainerUtils:
                 train_loader,
                 val_loader,
                 loss_fn,
-                optimizer,
                 scheduler,
                 device,
                 artifact_dumper,

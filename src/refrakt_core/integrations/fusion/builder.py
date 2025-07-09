@@ -9,6 +9,7 @@ from refrakt_core.integrations.fusion.utils import (
     try_load_wrapper_from_path,
     validate_head_type,
 )
+from refrakt_core.integrations.gpu.wrapper import CuMLWrapper
 
 
 def build_fusion_head(cfg: Dict[str, Any]) -> FusionHead:

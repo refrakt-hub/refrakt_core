@@ -56,7 +56,8 @@ def test_convert_value_smoke():
 
 def test_apply_overrides_basic_smoke():
     """Smoke test: Apply basic overrides."""
-    config = {"model": {"name": "default"}, "epochs": 10}
+    from omegaconf import OmegaConf
+    config = OmegaConf.create({"model": {"name": "default"}, "epochs": 10})
     overrides = ["model.name=ResNet", "epochs=20"]
 
     result = apply_overrides(config, overrides)
@@ -115,7 +116,8 @@ def test_parse_override_sanity():
 
 def test_apply_overrides_sanity():
     """Sanity test: Apply nested overrides."""
-    config = {"model": {"params": {"lr": 0.001, "batch_size": 32}}}
+    from omegaconf import OmegaConf
+    config = OmegaConf.create({"model": {"params": {"lr": 0.001, "batch_size": 32}}})
     overrides = ["model.params.lr=0.0005", "model.params.batch_size=64"]
 
     result = apply_overrides(config, overrides)
@@ -183,7 +185,8 @@ def test_parse_override_with_spaces():
 
 def test_apply_overrides_create_new_paths():
     """Unit test: Create new paths when they don't exist."""
-    config = {"existing": "value"}
+    from omegaconf import OmegaConf
+    config = OmegaConf.create({"existing": "value"})
     overrides = ["new.path=value", "another.nested.path=42"]
 
     result = apply_overrides(config, overrides)
@@ -195,7 +198,8 @@ def test_apply_overrides_create_new_paths():
 
 def test_apply_overrides_invalid_override():
     """Unit test: Test invalid override handling."""
-    config = {"model": {"name": "default"}}
+    from omegaconf import OmegaConf
+    config = OmegaConf.create({"model": {"name": "default"}})
     overrides = ["invalid.override"]
 
     with pytest.raises(ValueError, match="Failed to apply override"):

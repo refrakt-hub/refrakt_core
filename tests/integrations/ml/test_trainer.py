@@ -99,10 +99,10 @@ def test_ml_trainer_predict_before_train_unit():
 
 
 def test_ml_trainer_evaluate_without_validation_unit():
-    """Unit test: Evaluate without validation data raises AttributeError."""
+    """Unit test: Evaluate without validation data raises ValueError."""
     X, y = generate_dummy_data()
     feature_pipeline = StandardScaler()
     model = LogisticRegression(max_iter=100)
     trainer = MLTrainer(feature_pipeline, model, X, y)
-    with pytest.raises(AttributeError):
+    with pytest.raises(ValueError, match="X_val and y_val must be provided for evaluation"):
         trainer.evaluate()

@@ -4,17 +4,6 @@ Wrapper for dynamically loading and using cuML models via a string-based registr
 This module allows you to specify cuML models using simple string keys
 or full class paths, dynamically instantiate them with parameters, and
 use standard `fit`, `predict`, and `predict_proba` methods.
-
-Example usage:
-    >>> from refrakt_core.integrations.cuml.wrapper import CuMLWrapper
-    >>> clf = CuMLWrapper("random_forest", n_estimators=10, max_depth=5)
-    >>> import cupy as cp
-    >>> X = cp.random.rand(50, 5)
-    >>> y = cp.random.randint(0, 2, 50)
-    >>> _ = clf.fit(X, y)
-    >>> preds = clf.predict(X)
-    >>> isinstance(preds, (list, tuple, cp.ndarray))
-    True
 """
 
 from pathlib import Path
@@ -61,7 +50,8 @@ class CuMLWrapper:
         """
         # Extract wrapper-specific parameters
         wrapper_params, model_params = extract_wrapper_params(params)
-
+        if "fusion_head" not in wrapper_params or wrapper_params["fusion_head"] is None:
+            wrapper_params["fusion_head"] = {}
         # Instantiate the model
         model_instance = instantiate_cuml_model(model, model_params)
         self.model: CuMLEstimator = cast(CuMLEstimator, model_instance)

@@ -33,19 +33,16 @@ class DatasetMock:
         return torch.randn(3, 224, 224), torch.tensor(0)
 
 
-@pytest.fixture(autouse=True)
-def patch_dataset_registry():
-    with patch(
-        "refrakt_core.registry.dataset_registry.DATASET_REGISTRY",
-        {"cifar10": DatasetMock, "mnist": DatasetMock, "FakeData": DatasetMock},
-    ):
-        yield
-
+# Remove the patch_dataset_registry fixture and use the real registry for registration tests
 
 @patch("refrakt_core.registry.dataset_registry.get_global_logger")
 def test_register_dataset(mock_get_logger):
     mock_logger = MagicMock()
     mock_get_logger.return_value = mock_logger
+
+    # Clear the registry before test
+    from refrakt_core.registry.dataset_registry import DATASET_REGISTRY
+    DATASET_REGISTRY.clear()
 
     @register_dataset("test_ds")
     class TestDataset:
@@ -60,6 +57,10 @@ def test_register_dataset(mock_get_logger):
 def test_duplicate_registration(mock_get_logger):
     mock_logger = MagicMock()
     mock_get_logger.return_value = mock_logger
+
+    # Clear the registry before test
+    from refrakt_core.registry.dataset_registry import DATASET_REGISTRY
+    DATASET_REGISTRY.clear()
 
     @register_dataset("duplicate_ds")
     class DS1:

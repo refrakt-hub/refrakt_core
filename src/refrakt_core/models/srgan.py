@@ -38,7 +38,9 @@ class SRGAN(BaseGAN):
         self.generator: Any = Generator(scale_factor=scale_factor)
         self.discriminator: Any = Discriminator()
 
-    # Removed device property to avoid override error
+    @property
+    def device(self):
+        return self._device
 
     def training_step(
         self,

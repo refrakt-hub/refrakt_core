@@ -6,14 +6,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "refrakt_core"
-version = "0.2.1"
-description = "A modular library for training, benchmarking, and experimenting with deep vision models."
+version = "0.3.0"
+description = "Run production-ready ML, DL, and fusion pipelines at scale — without writing a single line of code. Refrakt makes research effortless."
 readme = "README.md"
 authors = [
     { name = "Akshath Mangudi", email = "akshathmangudi@gmail.com" }
 ]
 license = { file = "LICENSE" }
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "torch>=2.0",
     "torchvision",
@@ -27,7 +27,6 @@ dependencies = [
     "timm", 
     "pydantic", 
     "scikit-learn", 
-    "cuml", 
     "xgboost"
 ]
 
