@@ -38,26 +38,19 @@ def patch_model_registry(monkeypatch):
 
 
 class TestInferenceHelpers:
+    import refrakt_core.api.helpers.inference_helpers as inf_helpers
     # Smoke Test
     def test_import_inference_helpers(self):
-        importlib.reload(inf_helpers)
+        import refrakt_core.api.helpers.inference_helpers
 
     # Sanity Tests
     def test_load_and_validate_config_calls_load_config(self, monkeypatch):
         from omegaconf import DictConfig
 
-        import refrakt_core.api.helpers.inference_helpers as inf_helpers
-
         called = {}
-        monkeypatch.setattr(
-            "refrakt_core.api.helpers.inference_helpers.load_config",
-            lambda cfg: called.setdefault("load", True),
-        )
-        monkeypatch.setattr(
-            "refrakt_core.api.helpers.OmegaConf.load",
-            staticmethod(lambda x: DictConfig({"dummy": True})),
-        )
-        out = inf_helpers._load_and_validate_config("foo.yaml")
+        monkeypatch.setattr(self.inf_helpers, "load_config", lambda cfg: called.setdefault("load", True))
+        monkeypatch.setattr(self.inf_helpers, "OmegaConf", type("OmegaConf", (), {"load": staticmethod(lambda x: DictConfig({"dummy": True}))}))
+        out = self.inf_helpers._load_and_validate_config("foo.yaml")
         assert called["load"]
         assert out is True
 

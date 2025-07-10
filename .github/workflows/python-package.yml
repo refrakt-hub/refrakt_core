@@ -28,7 +28,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest
         pip install .
-
+    - name: Uninstall installed refrakt_core package (if present)
+      run: pip uninstall -y refrakt-core || true
+    - name: Clean pycache and .pyc files
+      run: |
+        find . -name "__pycache__" -type d -exec rm -rf {} +
+        find . -name "*.pyc" -delete
     - name: Test with pytest
       run: |
+        export PYTHONPATH=$PWD/src
         pytest --import-mode=importlib

@@ -48,23 +48,17 @@ class DummyModel(torch.nn.Module):
 
 
 class TestTrainHelpers:
+    import refrakt_core.api.helpers.train_helpers as train_helpers
     # Smoke Test
     def test_import_train_helpers(self):
-        importlib.reload(train_helpers)
+        import refrakt_core.api.helpers.train_helpers
 
     # Sanity Tests
     def test_load_and_validate_config_str(self, monkeypatch):
         from omegaconf import DictConfig
-
-        monkeypatch.setattr(
-            "refrakt_core.api.helpers.train_helpers.load_config",
-            lambda cfg: DictConfig({"dummy": True}),
-        )
-        monkeypatch.setattr(
-            "refrakt_core.api.helpers.train_helpers.OmegaConf.load",
-            staticmethod(lambda x: DictConfig({"dummy": True})),
-        )
-        out = train_helpers._load_and_validate_config("foo.yaml")
+        monkeypatch.setattr(self.train_helpers, "load_config", lambda cfg: DictConfig({"dummy": True}))
+        monkeypatch.setattr(self.train_helpers, "OmegaConf", type("OmegaConf", (), {"load": staticmethod(lambda x: DictConfig({"dummy": True}) )}))
+        out = self.train_helpers._load_and_validate_config("foo.yaml")
         assert isinstance(out, DictConfig)
         assert out["dummy"] is True
 
@@ -88,12 +82,9 @@ class TestTrainHelpers:
             lambda config, name: DummyLogger(),
         )
         monkeypatch.setattr(
-            "refrakt_core.api.helpers.train_helpers.OmegaConf",
-            type(
-                "OmegaConf",
-                (),
-                {"to_container": staticmethod(lambda cfg, resolve=True: {"foo": 1})},
-            ),
+            self.train_helpers,
+            "OmegaConf",
+            type("OmegaConf", (), {"to_container": staticmethod(lambda cfg, resolve=True: {"foo": 1})}),
         )
         cfg = DictConfig(
             {
@@ -101,7 +92,7 @@ class TestTrainHelpers:
                 "dataset": {"name": "contrastive", "params": {}},
             }
         )
-        out = train_helpers._setup_logging(cfg, "model", None)
+        out = self.train_helpers._setup_logging(cfg, "model", None)
         assert hasattr(out, "info") and hasattr(out, "error")
         assert called.get("log", True)
 
@@ -118,12 +109,9 @@ class TestTrainHelpers:
             lambda config, name: DummyLogger(),
         )
         monkeypatch.setattr(
-            "refrakt_core.api.helpers.train_helpers.OmegaConf",
-            type(
-                "OmegaConf",
-                (),
-                {"to_container": staticmethod(lambda cfg, resolve=True: 42)},
-            ),
+            self.train_helpers,
+            "OmegaConf",
+            type("OmegaConf", (), {"to_container": staticmethod(lambda cfg, resolve=True: 42)}),
         )
         cfg = DictConfig(
             {
@@ -132,7 +120,7 @@ class TestTrainHelpers:
             }
         )
         with pytest.raises(TypeError):
-            train_helpers._setup_logging(cfg, "model", None)
+            self.train_helpers._setup_logging(cfg, "model", None)
 
     def test_check_pure_ml_training_true(self):
         cfg = DictConfig({"model": {"type": "ml"}, "dataset": {"name": "tabular_ml"}})
@@ -256,18 +244,21 @@ class TestTrainHelpers:
         assert final_device == "cpu"
 
     def test_execute_training(self, monkeypatch):
+        import refrakt_core.api.helpers.train_helpers as train_helpers
         monkeypatch.setattr(
             "refrakt_core.api.utils.train_utils._handle_fusion_training",
             lambda *a, **kw: None,
         )
         monkeypatch.setattr(
-            "refrakt_core.api.utils.train_utils._save_config_and_log_metrics",
+            train_helpers,
+            "_save_config_and_log_metrics",
             lambda *a, **kw: None,
         )
         # Mock OmegaConf.save to avoid file system issues
         monkeypatch.setattr(
-            "refrakt_core.api.helpers.train_helpers.OmegaConf.save",
-            staticmethod(lambda cfg, path: None),
+            self.train_helpers,
+            "OmegaConf",
+            type("OmegaConf", (), {"save": staticmethod(lambda cfg, path: None)}),
         )
         trainer = DummyTrainer()
         result = train_helpers._execute_training(
