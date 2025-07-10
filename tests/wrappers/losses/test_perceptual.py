@@ -1,6 +1,12 @@
 import pytest
 import torch
 
+# Skip all tests in this module if no GPU is available
+pytestmark = pytest.mark.skipif(
+    not torch.cuda.is_available(),
+    reason="CUDA GPU is not available, skipping perceptual loss tests."
+)
+
 from refrakt_core.schema.model_output import ModelOutput
 from refrakt_core.wrappers.losses.perceptual import PerceptualLossWrapper
 
