@@ -25,10 +25,8 @@ from typing import Any, cast
 
 from omegaconf import DictConfig
 
+import refrakt_core.api as refrakt_api
 from refrakt_core.api.core.logger import RefraktLogger
-from refrakt_core.api.inference import inference
-from refrakt_core.api.test import test
-from refrakt_core.api.train import train
 from refrakt_core.global_logging import set_global_logger
 
 
@@ -89,7 +87,7 @@ def execute_training_pipeline(cfg: Any, model_path: str, logger: RefraktLogger) 
         logger: Logger instance
     """
     logger.info(f"Starting training with config: {cfg}")
-    train(cast("str | DictConfig", cfg), logger=logger)
+    refrakt_api.train(cast("str | DictConfig", cfg), logger=logger)
 
 
 def execute_testing_pipeline(cfg: Any, model_path: str, logger: RefraktLogger) -> None:
@@ -102,7 +100,9 @@ def execute_testing_pipeline(cfg: Any, model_path: str, logger: RefraktLogger) -
         logger: Logger instance
     """
     logger.info(f"Starting testing with config: {cfg}")
-    test(cast("str | DictConfig", cfg), model_path=model_path, logger=logger)
+    refrakt_api.test(
+        cast("str | DictConfig", cfg), model_path=model_path, logger=logger
+    )
 
 
 def execute_inference_pipeline(
@@ -117,7 +117,9 @@ def execute_inference_pipeline(
         logger: Logger instance
     """
     logger.info(f"Starting inference with config: {cfg}")
-    inference(cast("str | DictConfig", cfg), model_path=model_path, logger=logger)
+    refrakt_api.inference(
+        cast("str | DictConfig", cfg), model_path=model_path, logger=logger
+    )
 
 
 def execute_full_pipeline(cfg: Any, logger: RefraktLogger) -> None:
@@ -151,13 +153,17 @@ def execute_full_pipeline(cfg: Any, logger: RefraktLogger) -> None:
     model_path = os.path.join(save_dir, f"{resolved_model_name}.pth")
 
     logger.info("🚀 Training phase started")
-    train(cast("str | DictConfig", cfg), logger=logger)
+    refrakt_api.train(cast("str | DictConfig", cfg), logger=logger)
 
     logger.info("🧪 Testing phase started")
-    test(cast("str | DictConfig", cfg), model_path=model_path, logger=logger)
+    refrakt_api.test(
+        cast("str | DictConfig", cfg), model_path=model_path, logger=logger
+    )
 
     logger.info("🔮 Inference phase started")
-    inference(cast("str | DictConfig", cfg), model_path=model_path, logger=logger)
+    refrakt_api.inference(
+        cast("str | DictConfig", cfg), model_path=model_path, logger=logger
+    )
 
 
 def resolve_model_name(cfg: Any) -> str:

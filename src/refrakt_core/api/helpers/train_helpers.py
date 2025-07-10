@@ -21,9 +21,12 @@ Typical usage involves calling these helper functions from the main train
 API to set up and execute training operations.
 """
 
+import sys
 from typing import Any, Dict, Optional, Tuple, Union, cast
 
 import torch
+
+# Export for test compatibility
 from omegaconf import DictConfig, OmegaConf
 
 from refrakt_core.api.core.logger import RefraktLogger
@@ -34,6 +37,22 @@ from refrakt_core.api.utils.train_utils import (
     _setup_trainer_params,
     load_config,
 )
+
+__all__ = [
+    "_load_and_validate_config",
+    "_setup_logging",
+    "_check_pure_ml_training",
+    "_get_modules_and_device",
+    "_build_datasets_and_model",
+    "_setup_optimizer_and_scheduler",
+    "_setup_trainer",
+    "_execute_training",
+    "load_config",
+    "OmegaConf",
+]
+
+# For tests expecting train_helpers.train_helpers
+train_helpers = sys.modules[__name__]
 
 
 def _load_and_validate_config(cfg: Union[str, DictConfig]) -> DictConfig:

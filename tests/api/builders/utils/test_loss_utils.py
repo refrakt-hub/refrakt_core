@@ -4,7 +4,7 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-import src.refrakt_core.api.builders.utils.loss_utils as loss_utils
+import refrakt_core.api.builders.utils.loss_utils as loss_utils
 
 
 class DummyLoss(torch.nn.Module):

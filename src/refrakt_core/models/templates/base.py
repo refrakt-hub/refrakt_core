@@ -162,3 +162,11 @@ class BaseModel(nn.Module, ABC):
             ):
                 return True
         return False
+
+    @property
+    def device(self) -> torch.device:
+        return self._device
+
+    @device.setter
+    def device(self, value: torch.device) -> None:
+        self._device = value

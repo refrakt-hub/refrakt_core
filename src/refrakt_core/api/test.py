@@ -41,6 +41,8 @@ from refrakt_core.api.utils.test_utils import (
     _setup_fusion_evaluation,
 )
 
+__all__ = ["test", "_load_and_validate_config"]
+
 
 def test(
     cfg: Union[str, DictConfig],
@@ -139,3 +141,7 @@ def test(
     finally:
         gc.collect()
         torch.cuda.empty_cache()
+
+
+test = test
+test._load_and_validate_config = _load_and_validate_config

@@ -1,2 +1,2 @@
-recursive-include refrakt_core/integrations/registry *.yaml
-recursive-include refrakt_core/config *.yaml
+recursive-include src/refrakt_core/integrations/registry *.yaml
+recursive-include src/refrakt_core/config *.yaml

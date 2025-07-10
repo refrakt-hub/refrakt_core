@@ -138,3 +138,8 @@ def inference(
     finally:
         gc.collect()
         torch.cuda.empty_cache()
+
+
+inference._load_and_validate_config = _load_and_validate_config
+
+__all__ = ["inference", "_load_and_validate_config"]

@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 setup(
     name="refrakt",
     version="0.3",
-    packages=find_packages(),
+    packages=find_packages(where="src"),
     include_package_data=True,
     package_dir={
         "refrakt": ""

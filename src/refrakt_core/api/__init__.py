@@ -19,9 +19,9 @@ from typing import Any, Dict, Optional
 
 import torch
 
-from refrakt_core.api.inference import inference
-from refrakt_core.api.test import test
-from refrakt_core.api.train import train
+from . import inference, test, train
+
+__all__ = ["main", "train", "test", "inference"]
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.resolve()
@@ -52,9 +52,9 @@ def main(config_path: str, mode: str = "train") -> Optional[Dict[str, Any]]:
             without proper model_path parameter
     """
     if mode == "train":
-        return train(config_path)
+        return train.train(config_path)
     elif mode == "test":
-        test(config_path)
+        test.test(config_path)
         return None
     elif mode == "inference":
         raise ValueError(
@@ -97,6 +97,6 @@ if __name__ == "__main__":
     if args.mode == "train":
         main(args.config, "train")
     elif args.mode == "test":
-        test(args.config, args.model_path)
+        test.test(args.config, args.model_path)
     elif args.mode == "inference":
-        inference(args.config, args.model_path)
+        inference.inference(args.config, args.model_path)

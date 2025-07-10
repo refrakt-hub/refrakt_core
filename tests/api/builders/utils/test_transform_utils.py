@@ -3,7 +3,15 @@ import importlib
 import pytest
 from omegaconf import ListConfig
 
-import src.refrakt_core.api.builders.utils.transform_utils as transform_utils
+import refrakt_core.api.builders.utils.transform_utils as transform_utils
+import refrakt_core.registry.transform_registry as reg
+
+
+@pytest.fixture
+def patch_transform_registry():
+    reg.TRANSFORM_REGISTRY["dummy"] = DummyTransform
+    yield
+    reg.TRANSFORM_REGISTRY.pop("dummy", None)
 
 
 class DummyTransform:
@@ -48,9 +56,9 @@ class TestTransformUtils:
         with pytest.raises(ValueError):
             transform_utils._resolve_transform_sequence({"foo": "bar"})
 
-    def test_build_simple_transform(self, monkeypatch):
+    def test_build_simple_transform(self, monkeypatch, patch_transform_registry):
         monkeypatch.setattr(
-            "src.refrakt_core.registry.transform_registry.get_transform",
+            "refrakt_core.registry.transform_registry.get_transform",
             dummy_get_transform,
         )
         t = transform_utils._build_simple_transform("dummy", {})
@@ -58,7 +66,7 @@ class TestTransformUtils:
 
     def test_build_nested_transform(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.registry.transform_registry.get_transform",
+            "refrakt_core.registry.transform_registry.get_transform",
             dummy_get_transform,
         )
         t = transform_utils._build_nested_transform(
@@ -68,9 +76,9 @@ class TestTransformUtils:
         )
         assert callable(t)
 
-    def test_build_transform_list(self, monkeypatch):
+    def test_build_transform_list(self, monkeypatch, patch_transform_registry):
         monkeypatch.setattr(
-            "src.refrakt_core.registry.transform_registry.get_transform",
+            "refrakt_core.registry.transform_registry.get_transform",
             dummy_get_transform,
         )
         seq = [{"name": "dummy", "params": {}}]

@@ -5,13 +5,13 @@ from typing import Any, cast
 import pytest
 import torch
 
-from src.refrakt_core.api.core import extras
+from refrakt_core.api.core import extras
 
 
 class TestExtras:
     # Smoke Tests
     def test_import_extras(self):
-        import src.refrakt_core.api.core.extras as extras_mod
+        import refrakt_core.api.core.extras as extras_mod
 
         importlib.reload(extras_mod)
 

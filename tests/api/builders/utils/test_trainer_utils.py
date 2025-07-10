@@ -4,7 +4,7 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-import src.refrakt_core.api.builders.utils.trainer_utils as trainer_utils
+import refrakt_core.api.builders.utils.trainer_utils as trainer_utils
 
 
 class DummyTrainer:

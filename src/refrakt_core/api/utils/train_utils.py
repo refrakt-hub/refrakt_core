@@ -516,7 +516,7 @@ def _resolve_model_name_train(cfg: DictConfig) -> str:
 
 def _handle_pure_ml_training(
     cfg: DictConfig, resolved_model_name: str, logger: RefraktLogger
-) -> None:
+) -> dict:
     """Handle pure ML pipeline training."""
     from refrakt_core.api.utils.train_utils import build_ml_numpy_splits
     from refrakt_core.integrations.ml.ml_builder import build_ml_pipeline
@@ -564,6 +564,7 @@ def _handle_pure_ml_training(
         f"[ML] Saved ML pipeline to "
         f"{os.path.join(save_dir, f'{resolved_model_name}_ml.joblib')}"
     )
+    return {"status": "completed", "type": "ml"}
 
 
 def _setup_optimizer_config(cfg: DictConfig) -> Tuple[Any, Dict[str, Any]]:

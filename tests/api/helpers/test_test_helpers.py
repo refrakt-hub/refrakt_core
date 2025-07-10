@@ -5,8 +5,9 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-import src.refrakt_core.api.helpers.test_helpers as test_helpers
-from src.refrakt_core.api.core.logger import RefraktLogger
+import refrakt_core.api.helpers.test_helpers as test_helpers
+from refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.registry.dataset_registry import DATASET_REGISTRY
 
 
 class DummyLogger(RefraktLogger):
@@ -52,11 +53,11 @@ class TestTestHelpers:
         from omegaconf import DictConfig
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.test_helpers.load_config",
+            "refrakt_core.api.helpers.test_helpers.load_config",
             lambda cfg: DictConfig({"dummy": True}),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.test_helpers.OmegaConf.load",
+            "refrakt_core.api.helpers.test_helpers.OmegaConf.load",
             staticmethod(lambda x: DictConfig({"dummy": True})),
         )
         out = test_helpers._load_and_validate_config("foo.yaml")
@@ -79,11 +80,11 @@ class TestTestHelpers:
                 called["log"] = True
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils.setup_logger",
+            "refrakt_core.api.utils.train_utils.setup_logger",
             lambda config, name: DummyLogger(),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.test_helpers.OmegaConf",
+            "refrakt_core.api.helpers.test_helpers.OmegaConf",
             type(
                 "OmegaConf",
                 (),
@@ -106,11 +107,11 @@ class TestTestHelpers:
                 pass
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils.setup_logger",
+            "refrakt_core.api.utils.train_utils.setup_logger",
             lambda config, name: DummyLogger(),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.test_helpers.OmegaConf",
+            "refrakt_core.api.helpers.test_helpers.OmegaConf",
             type(
                 "OmegaConf",
                 (),
@@ -154,9 +155,12 @@ class TestTestHelpers:
         }
         assert isinstance(device, torch.device)
 
+    @pytest.mark.skipif(
+        "dummy" not in DATASET_REGISTRY, reason="'dummy' dataset not registered."
+    )
     def test_build_test_components(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.test_utils._build_test_loader_with_resize",
+            "refrakt_core.api.utils.test_utils._build_test_loader_with_resize",
             lambda config, logger: "dataloader",
         )
         monkeypatch.setattr(
@@ -235,7 +239,7 @@ class TestTestHelpers:
         device = torch.device("cpu")
         logger = DummyLogger()
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.test_utils._run_manual_evaluation",
+            "refrakt_core.api.utils.test_utils._run_manual_evaluation",
             lambda *a, **kw: {"manual": True},
         )
         result = test_helpers._evaluate_model(

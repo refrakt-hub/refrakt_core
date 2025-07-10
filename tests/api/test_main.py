@@ -4,7 +4,7 @@ import sys
 import pytest
 from omegaconf import DictConfig
 
-from src.refrakt_core.api import __main__
+from refrakt_core.api import __main__
 
 
 class DummyLogger:

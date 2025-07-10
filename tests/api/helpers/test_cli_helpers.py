@@ -10,11 +10,11 @@ import torch
 from omegaconf import DictConfig
 from torch.utils.data import Dataset
 
-import src.refrakt_core.api.helpers.cli_helpers as cli_helpers
-import src.refrakt_core.api.inference as inference_module
-import src.refrakt_core.api.test as test_module
-import src.refrakt_core.api.train as train_module
-from src.refrakt_core.datasets import ContrastiveDataset
+import refrakt_core.api.helpers.cli_helpers as cli_helpers
+import refrakt_core.api.inference as inference_module
+import refrakt_core.api.test as test_module
+import refrakt_core.api.train as train_module
+from refrakt_core.datasets import ContrastiveDataset
 
 
 @pytest.fixture(autouse=True)
@@ -22,19 +22,19 @@ def patch_pipeline_utils(monkeypatch):
     called = {}
     # Patch pipeline utility functions only
     monkeypatch.setattr(
-        "src.refrakt_core.api.utils.pipeline_utils.execute_training_pipeline",
+        "refrakt_core.api.utils.pipeline_utils.execute_training_pipeline",
         lambda *a, **kw: called.setdefault("train_util", True),
     )
     monkeypatch.setattr(
-        "src.refrakt_core.api.utils.pipeline_utils.execute_testing_pipeline",
+        "refrakt_core.api.utils.pipeline_utils.execute_testing_pipeline",
         lambda *a, **kw: called.setdefault("test_util", True),
     )
     monkeypatch.setattr(
-        "src.refrakt_core.api.utils.pipeline_utils.execute_inference_pipeline",
+        "refrakt_core.api.utils.pipeline_utils.execute_inference_pipeline",
         lambda *a, **kw: called.setdefault("inference_util", True),
     )
     monkeypatch.setattr(
-        "src.refrakt_core.api.utils.pipeline_utils.execute_full_pipeline",
+        "refrakt_core.api.utils.pipeline_utils.execute_full_pipeline",
         lambda *a, **kw: called.setdefault("pipeline_util", True),
     )
     yield called
@@ -45,7 +45,7 @@ def patch_pipeline_utils(monkeypatch):
 
 # Add a simple base dataset for testing
 class DummyBaseDataset(Dataset):
-    def __init__(self, size=10):
+    def __init__(self, size=10, train=False):
         self.data = torch.randn(size, 3, 32, 32)
         self.labels = torch.randint(0, 10, (size,))
 
@@ -80,17 +80,17 @@ def patch_dataset_registry(monkeypatch):
         return {"model_state_dict": {}}  # Mock empty state dict
 
     monkeypatch.setattr(
-        "src.refrakt_core.registry.dataset_registry.get_dataset", mock_get_dataset
+        "refrakt_core.registry.dataset_registry.get_dataset", mock_get_dataset
     )
     monkeypatch.setattr(
-        "src.refrakt_core.registry.dataset_registry.DATASET_REGISTRY",
+        "refrakt_core.registry.dataset_registry.DATASET_REGISTRY",
         {"dummy": DummyBaseDataset, "contrastive": ContrastiveDataset},
     )
     monkeypatch.setattr(
-        "src.refrakt_core.registry.transform_registry.get_transform", mock_get_transform
+        "refrakt_core.registry.transform_registry.get_transform", mock_get_transform
     )
     monkeypatch.setattr(
-        "src.refrakt_core.registry.transform_registry.TRANSFORM_REGISTRY",
+        "refrakt_core.registry.transform_registry.TRANSFORM_REGISTRY",
         {"contrastive": lambda x: x},
     )
     monkeypatch.setattr("os.path.exists", mock_os_path_exists)

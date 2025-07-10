@@ -1,7 +1,7 @@
 import pytest
 from omegaconf import OmegaConf
 
-from src.refrakt_core.api.builders.trainer_builder import initialize_trainer
+from refrakt_core.api.builders.trainer_builder import initialize_trainer
 
 
 class DummyTrainer:

@@ -25,7 +25,20 @@ from omegaconf import DictConfig, OmegaConf
 
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.utils.inference_utils import setup_model_and_device
+
+# Export for test compatibility
 from refrakt_core.api.utils.train_utils import load_config, setup_logger
+
+__all__ = [
+    "_load_and_validate_config",
+    "_setup_logging",
+    "_check_pure_ml_inference",
+    "_setup_device",
+    "_load_model_and_setup",
+    "_setup_data_loader",
+    "load_config",
+    "OmegaConf",
+]
 
 
 def _load_and_validate_config(cfg: Union[str, DictConfig]) -> DictConfig:

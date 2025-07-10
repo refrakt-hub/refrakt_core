@@ -40,6 +40,8 @@ from refrakt_core.api.utils.train_utils import (
     setup_artifact_dumper,
 )
 
+__all__ = ["train", "_load_and_validate_config"]
+
 
 def train(
     cfg: Union[str, DictConfig], logger: Optional[RefraktLogger] = None
@@ -83,8 +85,7 @@ def train(
 
         # Check for pure ML training
         if _check_pure_ml_training(config):
-            _handle_pure_ml_training(config, resolved_model_name, logger)
-            return {"status": "completed", "type": "ml"}
+            return _handle_pure_ml_training(config, resolved_model_name, logger)
 
         # Get modules and device
         modules, device = _get_modules_and_device()

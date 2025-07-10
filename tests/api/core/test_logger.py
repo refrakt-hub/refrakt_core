@@ -4,7 +4,7 @@ import logging
 import pytest
 import torch
 
-from src.refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.api.core.logger import RefraktLogger
 
 
 class DummyModel(torch.nn.Module):
@@ -29,12 +29,12 @@ def make_logger(tmp_path, log_types=None, console=False, debug=False):
 class TestRefraktLogger:
     # Smoke Tests
     def test_import_logger(self):
-        import src.refrakt_core.api.core.logger as logger_mod
+        import refrakt_core.api.core.logger as logger_mod
 
         importlib.reload(logger_mod)
 
     def test_logger_has_any_class(self):
-        import src.refrakt_core.api.core.logger as logger_mod
+        import refrakt_core.api.core.logger as logger_mod
 
         classes = [
             c

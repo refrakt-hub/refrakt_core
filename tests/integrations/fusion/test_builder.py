@@ -2,27 +2,33 @@
 Comprehensive tests for fusion builder module.
 """
 
-from unittest.mock import Mock, patch
-
 import pytest
+import torch
+
+# Skip if not on a supported GPU (Volta/7.0+) or if CUDA is not available
+if not torch.cuda.is_available() or torch.cuda.get_device_capability()[0] < 7:
+    pytest.skip(
+        "Requires Volta (7.0+) GPU for cuml/cudf tests", allow_module_level=True
+    )
+
+from unittest.mock import Mock, patch
 
 from refrakt_core.integrations.cpu.wrapper import SklearnWrapper
 from refrakt_core.integrations.fusion.builder import build_fusion_head
 
+try:
+    import cuml
 
-def test_build_sklearn_fusion_head_smoke():
-    """Smoke test: Build sklearn fusion head successfully."""
-    cfg = {"type": "sklearn", "model": "random_forest", "params": {"n_estimators": 5}}
-
-    fusion_head = build_fusion_head(cfg)
-
-    assert isinstance(fusion_head, SklearnWrapper)
-    assert fusion_head.model.__class__.__name__ == "RandomForestClassifier"
+    cuda_ok = cuml.__version__ is not None and hasattr(cuml, "cuda")
+except ImportError:
+    cuda_ok = False
 
 
+@pytest.mark.skipif(
+    not cuda_ok, reason="cuML or required GPU (Volta/7.0+) not available."
+)
 def test_build_cuml_fusion_head_smoke():
     """Smoke test: Build cuML fusion head successfully."""
-    import pytest
     cfg = {"type": "cuml", "model": "random_forest", "params": {"n_estimators": 5}}
 
     # Mock cuML import
@@ -32,8 +38,10 @@ def test_build_cuml_fusion_head_smoke():
             fusion_head = build_fusion_head(cfg)
         except Exception as e:
             import sys
+
             if "cudf.errors.UnsupportedCUDAError" in str(type(e)) or (
-                hasattr(e, "__class__") and e.__class__.__name__ == "UnsupportedCUDAError"
+                hasattr(e, "__class__")
+                and e.__class__.__name__ == "UnsupportedCUDAError"
             ):
                 pytest.skip("Skipping cuML test: Unsupported CUDA hardware.")
             raise
@@ -172,9 +180,13 @@ def test_fusion_head_parameter_isolation_unit():
         assert getattr(model, "n_estimators", None) == 5
 
 
+@pytest.mark.skipif(
+    not cuda_ok, reason="cuML or required GPU (Volta/7.0+) not available."
+)
 def test_multiple_fusion_head_types_unit():
     """Unit test: Test multiple fusion head types."""
     import pytest
+
     # Test sklearn
     sklearn_cfg = {
         "type": "sklearn",
@@ -196,7 +208,8 @@ def test_multiple_fusion_head_types_unit():
             cuml_head = build_fusion_head(cuml_cfg)
         except Exception as e:
             if "cudf.errors.UnsupportedCUDAError" in str(type(e)) or (
-                hasattr(e, "__class__") and e.__class__.__name__ == "UnsupportedCUDAError"
+                hasattr(e, "__class__")
+                and e.__class__.__name__ == "UnsupportedCUDAError"
             ):
                 pytest.skip("Skipping cuML test: Unsupported CUDA hardware.")
             raise

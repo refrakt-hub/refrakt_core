@@ -1,7 +1,7 @@
 import pytest
 from omegaconf import OmegaConf
 
-from src.refrakt_core.api.builders.dataset_builder import build_dataset
+from refrakt_core.api.builders.dataset_builder import build_dataset
 
 
 class DummyDataset:
@@ -40,12 +40,12 @@ class DummyTransform:
 
 @pytest.fixture(autouse=True)
 def patch_dataset_registry(monkeypatch):
-    import src.refrakt_core.registry.dataset_registry as reg
+    import refrakt_core.registry.dataset_registry as reg
 
     reg.DATASET_REGISTRY["dummy"] = DummyDataset
     reg.DATASET_REGISTRY["wrapper"] = DummyWrapper
     monkeypatch.setattr(
-        "src.refrakt_core.registry.dataset_registry.get_dataset",
+        "refrakt_core.registry.dataset_registry.get_dataset",
         lambda name, **params: DummyDataset(**params),
     )
     yield
@@ -53,18 +53,18 @@ def patch_dataset_registry(monkeypatch):
     reg.DATASET_REGISTRY.pop("wrapper", None)
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def patch_transform_registry(monkeypatch):
-    import src.refrakt_core.registry.transform_registry as treg
+    import refrakt_core.registry.transform_registry as treg
 
     treg.TRANSFORM_REGISTRY["dummy_transform"] = DummyTransform
     treg.TRANSFORM_REGISTRY["dummy"] = DummyTransform
     monkeypatch.setattr(
-        "src.refrakt_core.registry.transform_registry.get_transform",
+        "refrakt_core.registry.transform_registry.get_transform",
         lambda name, *args, **kwargs: DummyTransform(**kwargs),
     )
     monkeypatch.setattr(
-        "src.refrakt_core.api.builders.transform_builder.build_transform",
+        "refrakt_core.api.builders.transform_builder.build_transform",
         lambda cfg: lambda x: x,
     )
     yield
@@ -88,14 +88,14 @@ class TestDatasetBuilder:
         # Patch at the builder's import location
         monkeypatch.setitem(
             __import__(
-                "src.refrakt_core.api.builders.dataset_builder",
+                "refrakt_core.api.builders.dataset_builder",
                 fromlist=["DATASET_REGISTRY"],
             ).__dict__["DATASET_REGISTRY"],
             "wrapper",
             DummyWrapper,
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.builders.dataset_builder.get_dataset",
+            "refrakt_core.api.builders.dataset_builder.get_dataset",
             lambda name, **params: DummyDataset(**params),
         )
         ds = build_dataset(base_cfg)
@@ -105,7 +105,7 @@ class TestDatasetBuilder:
     def test_build_dataset_sanity_params_dict(self, base_cfg, monkeypatch):
         # Patch get_dataset at the builder's import location
         monkeypatch.setattr(
-            "src.refrakt_core.api.builders.dataset_builder.get_dataset",
+            "refrakt_core.api.builders.dataset_builder.get_dataset",
             lambda name, **params: DummyDataset(**params),
         )
         ds = build_dataset(base_cfg)
@@ -131,7 +131,7 @@ class TestDatasetBuilder:
     def test_build_dataset_unit_params_missing(self, monkeypatch):
         cfg = OmegaConf.create({"name": "dummy"})
         monkeypatch.setattr(
-            "src.refrakt_core.registry.dataset_registry.get_dataset",
+            "refrakt_core.registry.dataset_registry.get_dataset",
             lambda name, **params: DummyDataset(**params),
         )
         ds = build_dataset(cfg)

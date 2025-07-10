@@ -4,7 +4,7 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-import src.refrakt_core.api.builders.utils.model_utils as model_utils
+import refrakt_core.api.builders.utils.model_utils as model_utils
 
 
 class DummyModel(torch.nn.Module):

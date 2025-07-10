@@ -4,7 +4,7 @@ import pytest
 import torch
 from torch.optim.lr_scheduler import StepLR, _LRScheduler
 
-from src.refrakt_core.api.core.components import ModelComponents
+from refrakt_core.api.core.components import ModelComponents
 
 
 class DummyModel(torch.nn.Module):
@@ -24,12 +24,12 @@ class DummyLoss(torch.nn.Module):
 class TestComponents:
     # Smoke Tests
     def test_import_components(self):
-        import src.refrakt_core.api.core.components as components
+        import refrakt_core.api.core.components as components
 
         importlib.reload(components)
 
     def test_components_has_any_symbol(self):
-        import src.refrakt_core.api.core.components as components
+        import refrakt_core.api.core.components as components
 
         symbols = [s for s in dir(components) if not s.startswith("__")]
         assert symbols

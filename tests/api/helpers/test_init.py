@@ -5,10 +5,10 @@ import pytest
 
 class TestHelpersInit:
     def test_import_helpers_init(self):
-        importlib.import_module("src.refrakt_core.api.helpers")
+        importlib.import_module("refrakt_core.api.helpers")
 
     def test_helpers_module_has_any_callable(self):
-        mod = importlib.import_module("src.refrakt_core.api.helpers")
+        mod = importlib.import_module("refrakt_core.api.helpers")
         funcs = [
             f
             for f in dir(mod)
