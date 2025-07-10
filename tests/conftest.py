@@ -1,7 +1,7 @@
 import pytest
 
-import src.refrakt_core.datasets  # Also register under non-src namespace
-import src.refrakt_core.transforms  # Also register under non-src namespace
+import refrakt_core.datasets  # Also register under non-src namespace
+import refrakt_core.transforms  # Also register under non-src namespace
 
 
 def print_registries():
