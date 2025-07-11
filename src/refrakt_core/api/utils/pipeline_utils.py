@@ -87,7 +87,7 @@ def execute_training_pipeline(cfg: Any, model_path: str, logger: RefraktLogger) 
         logger: Logger instance
     """
     logger.info(f"Starting training with config: {cfg}")
-    refrakt_api.train(cast("str | DictConfig", cfg), logger=logger)
+    refrakt_api.train.train(cast("str | DictConfig", cfg), logger=logger)
 
 
 def execute_testing_pipeline(cfg: Any, model_path: str, logger: RefraktLogger) -> None:
@@ -100,7 +100,7 @@ def execute_testing_pipeline(cfg: Any, model_path: str, logger: RefraktLogger) -
         logger: Logger instance
     """
     logger.info(f"Starting testing with config: {cfg}")
-    refrakt_api.test(
+    refrakt_api.test.test(
         cast("str | DictConfig", cfg), model_path=model_path, logger=logger
     )
 
@@ -117,7 +117,7 @@ def execute_inference_pipeline(
         logger: Logger instance
     """
     logger.info(f"Starting inference with config: {cfg}")
-    refrakt_api.inference(
+    refrakt_api.inference.inference(
         cast("str | DictConfig", cfg), model_path=model_path, logger=logger
     )
 
@@ -153,15 +153,15 @@ def execute_full_pipeline(cfg: Any, logger: RefraktLogger) -> None:
     model_path = os.path.join(save_dir, f"{resolved_model_name}.pth")
 
     logger.info("🚀 Training phase started")
-    refrakt_api.train(cast("str | DictConfig", cfg), logger=logger)
+    refrakt_api.train.train(cast("str | DictConfig", cfg), logger=logger)
 
     logger.info("🧪 Testing phase started")
-    refrakt_api.test(
+    refrakt_api.test.test(
         cast("str | DictConfig", cfg), model_path=model_path, logger=logger
     )
 
     logger.info("🔮 Inference phase started")
-    refrakt_api.inference(
+    refrakt_api.inference.inference(
         cast("str | DictConfig", cfg), model_path=model_path, logger=logger
     )
 
