@@ -85,15 +85,16 @@ class ConvNeXt(BaseClassifier):
         self.gap: nn.AdaptiveAvgPool2d = nn.AdaptiveAvgPool2d(1)
         self.fc: nn.Linear = nn.Linear(768, num_classes)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, return_features: bool = False) -> Tensor:
         """
         Forward pass through ConvNeXt model.
 
         Args:
             x (torch.Tensor): Input tensor of shape (B, C, H, W)
+            return_features (bool): If True, return features before fc layer.
 
         Returns:
-            torch.Tensor: Output logits of shape (B, num_classes)
+            torch.Tensor: Output logits of shape (B, num_classes) or features if return_features is True
         """
         x = self.stem(x)
         x = self.block1(x)
@@ -101,5 +102,7 @@ class ConvNeXt(BaseClassifier):
         x = self.block3(x)
         x = self.gap(x)
         x = x.view(x.size(0), -1)
+        if return_features:
+            return x  # features before fc
         x = self.fc(x)
-        return x  # type: ignore[no-any-return]
+        return x  # logits
