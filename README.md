@@ -30,8 +30,13 @@
 - [MSN](https://arxiv.org/abs/2204.07141) – *Masked Siamese Networks*
 
 ## ⚙️ Setup
+```bash
+# For pip install 
+pip install refrakt_core
+```
 
 ```bash
+# Manual setup
 git clone https://github.com/refrakt-hub/refrakt_core.git
 cd refrakt_core
 
@@ -43,18 +48,31 @@ conda activate refrakt
 pip install -r requirements.txt
 ```
 
+### GPU/cuML Support
+
+If you want to use GPU-accelerated ML features (cuML), you must manually install the required dependencies after the main install. Run one of the following scripts from the project root:
+
+```bash
+# For bash users:
+./install_cuml.sh
+
+# For fish shell users:
+./install_cuml.fish
+```
+
+This will install the appropriate cuML and RAPIDS libraries for your environment. If you do not need GPU/cuML support, you can skip this step.
+
 ## 🧪 Running Experiments
 
 ```bash
 # Run with a config file
-ython -m refrakt_core.api --config refrakt_core/config/vit.yaml
+python -m refrakt_core.api --config refrakt_core/config/vit.yaml
 
 # Or using the CLI
 refrakt --config ./refrakt_core/config/resnet.yaml
 
 # Override hyperparameters on-the-fly
 python -m refrakt_core.api.train \
-    config.model.name=ResNet \
     config.optimizer.lr=0.0005 \
     config.trainer.epochs=20
 ```
@@ -72,6 +90,10 @@ python -m refrakt_core.api.train \
 All components are defined in modular YAML files under `refrakt_core/config/`.
 
 ```yaml
+runtime:
+  mode: pipeline
+  log_type: []
+
 dataset:
   name: MNIST
   params:
@@ -87,19 +109,46 @@ dataset:
         mean: [0.1307]
         std: [0.3081]
 
+dataloader:
+  params:
+    batch_size: 32
+    shuffle: true
+    num_workers: 4
+    drop_last: false
+
 model:
   name: vit
+  wrapper: vit
   params:
     in_channels: 1
     num_classes: 10
-    image_size: 28
+    image_size: 28 
     patch_size: 7
+  fusion:
+    type: cuml
+    model: logistic_regression
+    params:
+      C: 1.0
+      penalty: l2
+      solver: qn
+      max_iter: 1000
+
+loss:
+  name: ce_wrapped
+  mode: logits
+  params: {}
+
+optimizer:
+  name: adamw
+  params:
+    lr: 0.0003
+
+scheduler: null
 
 trainer:
   name: supervised
   params:
     save_dir: "./checkpoints"
-    model_name: "vit"
     num_epochs: 1
     device: cuda
 ```
@@ -246,15 +295,15 @@ class YourModel(BaseClassifier):
 | ✅ Stage 1  | Paper re-implementations in notebooks                   |
 | ✅ Stage 2  | Modular training + model pipelines                      |
 | ✅ Stage 3  | Python library (`refrakt train`, etc.)                  |
-| 🔜 Stage 4 | Web app: visual dashboards, interactive inference       |
-| 🔜 Stage 5 | No-code/low-code config engine for multimodal pipelines |
-| 🔜 Stage 6 | Explainability: saliency maps, attention visualizations |
+| 🔜 Stage 4 | TBD |
 
 Planned additions:
-- Mixed-modality support (image + text)
-- More contrastive/self-supervised frameworks
-- System-level benchmarks across GPUs
-- Downstream task evaluation (detection, segmentation)
+- Much better code readability + extensive documentation (`readthedocs`)
+- More sklearn and cuML models made available through the registry. 
+- Integration of Kolmogorov-Arnold Networks and Lagrangian Neural Networks.
+- Checkpoints for pre-trained weights of models saved. 
+- Integrate model tracing for Fusion Blocks. 
+- Allow for generative / latent fusion trainng. 
 
 ## 📄 License
 
@@ -265,3 +314,19 @@ This repository is licensed under the MIT License. See [LICENSE](LICENSE) for fu
 **Akshath Mangudi**
 If you find issues, raise them. If you learn from this, share it.
 Built with love and curiosity :)
+
+## 🤝 Contributing
+
+We welcome contributions! To get started:
+
+- See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines, including development setup, code style, and testing.
+- Set up your dev environment with:
+  ```bash
+  pip install -e .[dev]
+  # or
+  python scripts/dev_setup.py
+  ```
+- This will install all runtime and development dependencies (testing, linting, formatting, type checking, etc.) and set up pre-commit hooks for code quality.
+- Please ensure your code passes all pre-commit checks and tests before opening a pull request.
+
+---
