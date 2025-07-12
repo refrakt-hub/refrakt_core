@@ -88,8 +88,12 @@ def build_model(
     model_name, model_params, wrapper_name = validate_model_config(cfg_dict)
 
     try:
-        # Step 1: Instantiate base model
-        raw_model = instantiate_base_model(model_name, model_params, modules, device)
+        # Step 1: Instantiate base model (skip for special cases like MSN)
+        if model_name == "msn" and wrapper_name == "msn":
+            # MSN wrapper handles model instantiation
+            raw_model = None
+        else:
+            raw_model = instantiate_base_model(model_name, model_params, modules, device)
 
         # Step 2: Wrap model (if wrapper is specified)
         if wrapper_name:

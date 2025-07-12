@@ -3,20 +3,19 @@ runtime:
   log_type: []
 
 dataset:
-  name: CIFAR10
+  name: MNIST
   params:
     root: ./data
     train: true
     download: true
   transform:
     - name: Resize
-      params: { size: [224, 224] }
+      params: { size: [28, 28] }
     - name: ToTensor
     - name: Normalize
       params:
         mean: [0.1307]
         std: [0.3081]
-
 
 dataloader:
   params:
@@ -26,17 +25,21 @@ dataloader:
     drop_last: false
 
 model:
-  name: convnext
-  wrapper: convnext
+  name: vit
+  wrapper: vit
   params:
-    in_channels: 3
+    in_channels: 1
     num_classes: 10
+    image_size: 28 
+    patch_size: 7
   fusion:
-    type: sklearn
-    model: random_forest
+    type: cuml
+    model: logistic_regression
     params:
-      n_estimators: 100
-      max_depth: 10
+      C: 1.0
+      penalty: l2
+      solver: qn
+      max_iter: 1000
 
 loss:
   name: ce_wrapped
@@ -46,13 +49,9 @@ loss:
 optimizer:
   name: adamw
   params:
-    lr: 0.0001
-    weight_decay: 0.01
+    lr: 0.0003
 
-scheduler:
-  name: cosine
-  params:
-    T_max: 100
+scheduler: null
 
 trainer:
   name: supervised

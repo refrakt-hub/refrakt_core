@@ -188,7 +188,12 @@ def wrap_model(
     if wrapper_name == "autoencoder" and "mode" in model_params:
         wrapper_args["variant"] = model_params["mode"]
 
-    model = wrapper_cls(model=raw_model, **wrapper_args).to(device)
+    # Special handling for MSN wrapper: pass model_params instead of raw_model
+    if wrapper_name == "msn":
+        model = wrapper_cls(model=model_params, **wrapper_args).to(device)
+    else:
+        model = wrapper_cls(model=raw_model, **wrapper_args).to(device)
+    
     print(f"[SUCCESS] Wrapped model with '{wrapper_name}'")
     return model
 

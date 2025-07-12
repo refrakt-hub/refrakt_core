@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "refrakt_core"
-version = "0.3.0"
+version = "0.3.0.2"
 description = "Run production-ready ML, DL, and fusion pipelines at scale — without writing a single line of code. Refrakt makes research effortless."
 readme = "README.md"
 authors = [

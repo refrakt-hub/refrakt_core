@@ -76,7 +76,7 @@ class TestPipelineUtils:
 
         called = {}
         monkeypatch.setattr(
-            refrakt_api, "train", lambda *a, **kw: called.setdefault("train", True)
+            refrakt_api.train, "train", lambda *a, **kw: called.setdefault("train", True)
         )
         logger = DummyLogger("resnet18", "./logs", ["file"], True, False)
         cfg = DictConfig(
@@ -93,7 +93,7 @@ class TestPipelineUtils:
 
         called = {}
         monkeypatch.setattr(
-            refrakt_api, "test", lambda *a, **kw: called.setdefault("test", True)
+            refrakt_api.test, "test", lambda *a, **kw: called.setdefault("test", True)
         )
         logger = DummyLogger("resnet18", "./logs", ["file"], True, False)
         cfg = DictConfig(
@@ -110,7 +110,7 @@ class TestPipelineUtils:
 
         called = {}
         monkeypatch.setattr(
-            refrakt_api,
+            refrakt_api.inference,
             "inference",
             lambda *a, **kw: called.setdefault("inference", True),
         )
@@ -129,13 +129,13 @@ class TestPipelineUtils:
 
         called = {"train": False, "test": False, "inference": False}
         monkeypatch.setattr(
-            refrakt_api, "train", lambda *a, **kw: called.update({"train": True})
+            refrakt_api.train, "train", lambda *a, **kw: called.update({"train": True})
         )
         monkeypatch.setattr(
-            refrakt_api, "test", lambda *a, **kw: called.update({"test": True})
+            refrakt_api.test, "test", lambda *a, **kw: called.update({"test": True})
         )
         monkeypatch.setattr(
-            refrakt_api,
+            refrakt_api.inference,
             "inference",
             lambda *a, **kw: called.update({"inference": True}),
         )

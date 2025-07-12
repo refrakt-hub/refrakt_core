@@ -90,6 +90,10 @@ def _build_nested_transform(
     nested_cfgs = params.get("transforms", [])
     nested_transforms = build_transform_fn(nested_cfgs)
 
+    # Ensure nested_transforms is a list
+    if not isinstance(nested_transforms, list):
+        nested_transforms = [nested_transforms]
+
     if isinstance(nested_transforms, transforms.Compose):
         nested_transforms = nested_transforms.transforms
 

@@ -2,6 +2,7 @@ from .ce import CrossEntropyLossWrapper
 from .dino import DINOLossWrapper
 from .gan import GANLossWrapper
 from .mae import MAELossWrapper
+from .mse import MSELossWrapper
 from .msn import MSNLossWrapper
 from .ntxent import NTXentLossWrapper
 from .perceptual import PerceptualLossWrapper
@@ -12,6 +13,7 @@ __all__ = [
     "DINOLossWrapper",
     "GANLossWrapper",
     "MAELossWrapper",
+    "MSELossWrapper",
     "MSNLossWrapper",
     "NTXentLossWrapper",
     "PerceptualLossWrapper",

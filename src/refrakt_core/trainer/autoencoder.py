@@ -62,8 +62,12 @@ class AETrainer(BaseTrainer):
             artifact_dumper (Optional[Any], optional): Artifact logger/dumper.
             **kwargs: Additional keyword arguments.
         """
-        # variant = kwargs.pop("model_variant", "simple")
-        # kwargs["model_name"] = f"autoencoder_{variant}"
+        # Ensure model_name is properly set from kwargs
+        if "model_name" not in kwargs:
+            # Fallback to the old behavior if model_name is not provided
+            variant = kwargs.pop("model_variant", "simple")
+            kwargs["model_name"] = f"autoencoder_{variant}"
+        
         super().__init__(
             model,
             train_loader,

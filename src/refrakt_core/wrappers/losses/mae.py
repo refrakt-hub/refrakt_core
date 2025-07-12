@@ -14,7 +14,7 @@ class MAELossWrapper(nn.Module):
         super().__init__()
         self.loss_fn = MAELoss(**(loss_params or {}))
 
-    def forward(self, output: ModelOutput) -> LossOutput:
+    def forward(self, output: ModelOutput, target: Any = None) -> LossOutput:
         recon = output.reconstruction
         mask = output.extra.get("mask")
         patches = output.extra.get("original_patches")

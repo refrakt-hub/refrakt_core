@@ -1,0 +1,68 @@
+runtime:
+  mode: pipeline
+  log_type: []
+
+dataset:
+  name: "CIFAR10"
+  params:
+    root: "./data"
+    train: true
+    download: true
+  transform:
+    - name: Resize
+      params:
+        size: [224, 224]
+    - name: ToTensor
+    - name: Normalize
+      params:
+        mean: [0.5, 0.5, 0.5]
+        std: [0.5, 0.5, 0.5]
+    - name: patchify
+      params:
+        patch_size: 16
+
+dataloader:
+  params:
+    batch_size: 64
+    shuffle: true
+    num_workers: 4
+    drop_last: false
+
+model:
+  name: "mae"
+  wrapper: mae
+  params:
+    img_size: 224
+    patch_size: 16
+    in_chans: 3
+    embed_dim: 768
+    encoder_depth: 12
+    decoder_dim: 512
+    decoder_depth: 8
+    num_heads: 12
+    decoder_num_heads: 16
+    mask_ratio: 0.75
+
+loss:
+  name: mae_wrapped
+  mode: reconstruction
+  params:
+    normalize_target: false
+
+optimizer:
+  name: "adamw"
+  params:
+    lr: 1.5e-4
+    betas: [0.9, 0.95]
+    weight_decay: 0.05
+
+scheduler:
+  name: null
+  params: null
+
+trainer:
+  name: "autoencoder"
+  params:
+    save_dir: "./checkpoints"
+    num_epochs: 1
+    device: "cuda"

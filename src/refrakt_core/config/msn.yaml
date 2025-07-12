@@ -1,0 +1,68 @@
+runtime: 
+  mode: pipeline
+  log_type: []
+
+dataset:
+  name: CIFAR10
+  params:
+    root: ./data
+    train: true
+    download: true
+  wrapper: msn_contrastive
+  transform:
+    - name: Resize
+      params:
+        size: [224, 224]
+    - name: ToTensor
+
+dataloader:
+  params:
+    batch_size: 4
+    shuffle: true
+    num_workers: 4
+    drop_last: false
+
+model:
+  name: msn
+  wrapper: msn
+  params:
+    encoder_name: vit_base_patch16_224
+    projector_dim: 256
+    num_prototypes: 1024
+    pretrained: false
+  fusion:
+    type: sklearn
+    model: logistic_regression
+    params:
+      solver: saga
+      penalty: l2
+      C: 1.0
+      max_iter: 1000
+
+
+loss:
+  name: msn_wrapped
+  mode: embedding
+  params:
+    temp_anchor: 0.1
+    temp_target: 0.04
+    lambda_me_max: 1.0
+
+optimizer:
+  name: "adamw"
+  params:
+    lr: 0.0003
+    weight_decay: 0.05
+
+scheduler:
+  name: null
+  params: null
+
+trainer:
+  name: "msn"
+  params:
+    save_dir: "./checkpoints"
+    num_epochs: 1
+    device: "cuda"
+    ema_base: 0.996
+    grad_clip: null
