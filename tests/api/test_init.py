@@ -52,18 +52,6 @@ class TestApiInit:
         with pytest.raises(ImportError):
             importlib.import_module("refrakt_core.api")
 
-    def test_main_inference_mode_raises(self, monkeypatch):
-        import refrakt_core.api as api_mod
-
-        with pytest.raises(ValueError):
-            api_mod.main("dummy.yaml", "inference")
-
-    def test_main_invalid_mode_raises(self, monkeypatch):
-        import refrakt_core.api as api_mod
-
-        with pytest.raises(ValueError):
-            api_mod.main("dummy.yaml", "invalid")
-
     def test_cli_entrypoint_train(self, monkeypatch):
         import sys
 

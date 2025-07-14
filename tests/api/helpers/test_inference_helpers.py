@@ -5,8 +5,9 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-import refrakt_core.api.helpers.inference_helpers as inf_helpers
+from refrakt_core.api.helpers import inference_helpers as inf_helpers
 from refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.registry import model_registry as reg
 
 
 class DummyLogger(RefraktLogger):
@@ -24,8 +25,6 @@ class DummyModel:
 
 @pytest.fixture(autouse=True)
 def patch_model_registry(monkeypatch):
-    import refrakt_core.registry.model_registry as reg
-
     reg.MODEL_REGISTRY["dummy"] = DummyModel
     reg.get_model = lambda name, *args, **kwargs: DummyModel(**kwargs)
     # Also patch the module-level get_model function
@@ -48,9 +47,15 @@ class TestInferenceHelpers:
         from omegaconf import DictConfig
 
         called = {}
-        monkeypatch.setattr(self.inf_helpers, "load_config", lambda cfg: called.setdefault("load", True))
-        monkeypatch.setattr(self.inf_helpers, "OmegaConf", type("OmegaConf", (), {"load": staticmethod(lambda x: DictConfig({"dummy": True}))}))
-        out = self.inf_helpers._load_and_validate_config("foo.yaml")
+        monkeypatch.setattr(
+            "refrakt_core.api.helpers.inference_helpers.load_config",
+            lambda cfg: called.setdefault("load", True),
+        )
+        monkeypatch.setattr(
+            "refrakt_core.api.helpers.inference_helpers.OmegaConf.load",
+            staticmethod(lambda x: DictConfig({"dummy": True})),
+        )
+        out = inf_helpers._load_and_validate_config("foo.yaml")
         assert called["load"]
         assert out is True
 
@@ -69,7 +74,7 @@ class TestInferenceHelpers:
             lambda config, name: DummyLogger(),
         )
         monkeypatch.setattr(
-            "refrakt_core.api.helpers.OmegaConf",
+            "refrakt_core.api.helpers.inference_helpers.OmegaConf",
             type(
                 "OmegaConf",
                 (),

@@ -32,6 +32,11 @@ class BaseModel(nn.Module, ABC):
         self.model_name: str = model_name
         self.model_type: str = model_type
 
+    @property
+    def device(self):
+        """Public device property for compatibility with model and test code."""
+        return self._device
+
     @abstractmethod
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

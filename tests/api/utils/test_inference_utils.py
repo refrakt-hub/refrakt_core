@@ -5,7 +5,7 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-import refrakt_core.api.utils.inference_utils as inference_utils
+from refrakt_core.api.utils import inference_utils
 from refrakt_core.api.core.logger import RefraktLogger
 
 

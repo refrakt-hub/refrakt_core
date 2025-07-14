@@ -5,7 +5,7 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-import refrakt_core.api.helpers.test_helpers as test_helpers
+from refrakt_core.api.helpers import test_helpers
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.registry.dataset_registry import DATASET_REGISTRY
 
@@ -174,6 +174,15 @@ class TestTestHelpers:
         monkeypatch.setattr(
             "refrakt_core.api.builders.loss_builder.build_loss",
             lambda *a, **kw: "loss_fn",
+        )
+        class DummyDataset:
+            def __len__(self):
+                return 1
+            def __getitem__(self, idx):
+                return torch.zeros(1, 28, 28)
+        monkeypatch.setattr(
+            "refrakt_core.api.builders.dataset_builder.get_dataset",
+            lambda name, **params: DummyDataset(),
         )
         modules = {
             "get_model": lambda name=None: DummyModel(),

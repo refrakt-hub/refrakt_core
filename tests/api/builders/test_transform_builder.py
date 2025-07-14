@@ -2,6 +2,7 @@ import pytest
 from omegaconf import OmegaConf
 
 from refrakt_core.api.builders.transform_builder import build_transform
+from refrakt_core.registry import transform_registry as reg
 
 
 class DummyTransform:
@@ -12,10 +13,8 @@ class DummyTransform:
         return x + 1
 
 
-@pytest.fixture
-def patch_transform_registry():
-    import refrakt_core.registry.transform_registry as reg
-
+@pytest.fixture(autouse=True)
+def patch_transform_registry(monkeypatch):
     reg.TRANSFORM_REGISTRY["dummy"] = DummyTransform
     reg.TRANSFORM_REGISTRY["dummy_transform"] = DummyTransform
     yield

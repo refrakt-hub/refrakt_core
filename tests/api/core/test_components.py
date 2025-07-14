@@ -5,6 +5,7 @@ import torch
 from torch.optim.lr_scheduler import StepLR, _LRScheduler
 
 from refrakt_core.api.core.components import ModelComponents
+import refrakt_core.api.core.components as components
 
 
 class DummyModel(torch.nn.Module):

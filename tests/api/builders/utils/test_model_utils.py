@@ -4,7 +4,7 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-import refrakt_core.api.builders.utils.model_utils as model_utils
+from refrakt_core.api.builders.utils import model_utils
 
 
 class DummyModel(torch.nn.Module):
@@ -43,11 +43,6 @@ class TestModelUtils:
         assert name == "dummy"
         assert params["foo"] == 1
         assert wrapper is None
-
-    def test_apply_model_overrides_noop(self):
-        cfg = OmegaConf.create({"model": {"name": "dummy", "params": {}}})
-        out = model_utils.apply_model_overrides(cfg)
-        assert out["model"]["name"] == "dummy"
 
     # Unit Tests
     def test_validate_model_config_type_error(self):

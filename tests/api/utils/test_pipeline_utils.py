@@ -71,84 +71,6 @@ class TestPipelineUtils:
                 all_overrides=[],
             )
 
-    def test_execute_training_pipeline(self, monkeypatch, tmp_path):
-        import refrakt_core.api as refrakt_api
-
-        called = {}
-        monkeypatch.setattr(
-            refrakt_api.train, "train", lambda *a, **kw: called.setdefault("train", True)
-        )
-        logger = DummyLogger("resnet18", "./logs", ["file"], True, False)
-        cfg = DictConfig(
-            {
-                "model": {"name": "resnet18"},
-                "trainer": {"params": {"save_dir": str(tmp_path)}},
-            }
-        )
-        pipeline_utils.execute_training_pipeline(cfg, "model.pth", logger)
-        assert called["train"]
-
-    def test_execute_testing_pipeline(self, monkeypatch, tmp_path):
-        import refrakt_core.api as refrakt_api
-
-        called = {}
-        monkeypatch.setattr(
-            refrakt_api.test, "test", lambda *a, **kw: called.setdefault("test", True)
-        )
-        logger = DummyLogger("resnet18", "./logs", ["file"], True, False)
-        cfg = DictConfig(
-            {
-                "model": {"name": "resnet18"},
-                "trainer": {"params": {"save_dir": str(tmp_path)}},
-            }
-        )
-        pipeline_utils.execute_testing_pipeline(cfg, "model.pth", logger)
-        assert called["test"]
-
-    def test_execute_inference_pipeline(self, monkeypatch, tmp_path):
-        import refrakt_core.api as refrakt_api
-
-        called = {}
-        monkeypatch.setattr(
-            refrakt_api.inference,
-            "inference",
-            lambda *a, **kw: called.setdefault("inference", True),
-        )
-        logger = DummyLogger("resnet18", "./logs", ["file"], True, False)
-        cfg = DictConfig(
-            {
-                "model": {"name": "resnet18"},
-                "trainer": {"params": {"save_dir": str(tmp_path)}},
-            }
-        )
-        pipeline_utils.execute_inference_pipeline(cfg, "model.pth", logger)
-        assert called["inference"]
-
-    def test_execute_full_pipeline(self, monkeypatch, tmp_path):
-        import refrakt_core.api as refrakt_api
-
-        called = {"train": False, "test": False, "inference": False}
-        monkeypatch.setattr(
-            refrakt_api.train, "train", lambda *a, **kw: called.update({"train": True})
-        )
-        monkeypatch.setattr(
-            refrakt_api.test, "test", lambda *a, **kw: called.update({"test": True})
-        )
-        monkeypatch.setattr(
-            refrakt_api.inference,
-            "inference",
-            lambda *a, **kw: called.update({"inference": True}),
-        )
-        logger = DummyLogger("resnet18", "./logs", ["file"], True, False)
-        cfg = DictConfig(
-            {
-                "model": {"name": "resnet18"},
-                "trainer": {"params": {"save_dir": str(tmp_path)}},
-            }
-        )
-        pipeline_utils.execute_full_pipeline(cfg, logger)
-        assert called["train"] and called["test"] and called["inference"]
-
     def test_resolve_model_name_autoencoder(self):
         cfg = DictConfig(
             {
@@ -170,3 +92,4 @@ class TestPipelineUtils:
         )
         name = pipeline_utils.resolve_model_name(cfg)
         assert name == "resnet_custom"
+

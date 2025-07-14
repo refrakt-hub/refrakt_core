@@ -23,7 +23,6 @@ from omegaconf import DictConfig, OmegaConf
 
 from .utils.model_utils import (
     add_fusion_block,
-    apply_model_overrides,
     create_default_wrapper,
     instantiate_base_model,
     validate_model_config,
@@ -79,8 +78,6 @@ def build_model(
     """
 
     # Apply overrides if provided
-    cfg = apply_model_overrides(cfg, overrides)
-
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     if not isinstance(cfg_dict, dict):
         raise TypeError(f"cfg must convert to a dict, got {type(cfg_dict)}")

@@ -2,6 +2,8 @@ import pytest
 from omegaconf import OmegaConf
 
 from refrakt_core.api.builders.dataset_builder import build_dataset
+from refrakt_core.registry import dataset_registry as reg
+from refrakt_core.registry import transform_registry as treg
 
 
 class DummyDataset:
@@ -40,8 +42,6 @@ class DummyTransform:
 
 @pytest.fixture(autouse=True)
 def patch_dataset_registry(monkeypatch):
-    import refrakt_core.registry.dataset_registry as reg
-
     reg.DATASET_REGISTRY["dummy"] = DummyDataset
     reg.DATASET_REGISTRY["wrapper"] = DummyWrapper
     monkeypatch.setattr(
@@ -55,8 +55,6 @@ def patch_dataset_registry(monkeypatch):
 
 @pytest.fixture
 def patch_transform_registry(monkeypatch):
-    import refrakt_core.registry.transform_registry as treg
-
     treg.TRANSFORM_REGISTRY["dummy_transform"] = DummyTransform
     treg.TRANSFORM_REGISTRY["dummy"] = DummyTransform
     monkeypatch.setattr(

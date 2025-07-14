@@ -3,15 +3,7 @@ import importlib
 import pytest
 from omegaconf import ListConfig
 
-import refrakt_core.api.builders.utils.transform_utils as transform_utils
-import refrakt_core.registry.transform_registry as reg
-
-
-@pytest.fixture
-def patch_transform_registry():
-    reg.TRANSFORM_REGISTRY["dummy"] = DummyTransform
-    yield
-    reg.TRANSFORM_REGISTRY.pop("dummy", None)
+from refrakt_core.api.builders.utils import transform_utils
 
 
 class DummyTransform:
