@@ -5,8 +5,9 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-import src.refrakt_core.api.helpers.inference_helpers as inf_helpers
-from src.refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.api.helpers import inference_helpers as inf_helpers
+from refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.registry import model_registry as reg
 
 
 class DummyLogger(RefraktLogger):
@@ -24,13 +25,11 @@ class DummyModel:
 
 @pytest.fixture(autouse=True)
 def patch_model_registry(monkeypatch):
-    import src.refrakt_core.registry.model_registry as reg
-
     reg.MODEL_REGISTRY["dummy"] = DummyModel
     reg.get_model = lambda name, *args, **kwargs: DummyModel(**kwargs)
     # Also patch the module-level get_model function
     monkeypatch.setattr(
-        "src.refrakt_core.registry.model_registry.get_model",
+        "refrakt_core.registry.model_registry.get_model",
         lambda name, *args, **kwargs: DummyModel(**kwargs),
     )
     yield
@@ -48,11 +47,11 @@ class TestInferenceHelpers:
 
         called = {}
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.inference_helpers.load_config",
+            "refrakt_core.api.helpers.inference_helpers.load_config",
             lambda cfg: called.setdefault("load", True),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.inference_helpers.OmegaConf.load",
+            "refrakt_core.api.helpers.inference_helpers.OmegaConf.load",
             staticmethod(lambda x: DictConfig({"dummy": True})),
         )
         out = inf_helpers._load_and_validate_config("foo.yaml")
@@ -70,11 +69,11 @@ class TestInferenceHelpers:
                 called["log"] = True
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils.setup_logger",
+            "refrakt_core.api.utils.train_utils.setup_logger",
             lambda config, name: DummyLogger(),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.inference_helpers.OmegaConf",
+            "refrakt_core.api.helpers.inference_helpers.OmegaConf",
             type(
                 "OmegaConf",
                 (),
@@ -107,7 +106,7 @@ class TestInferenceHelpers:
             return "loader"
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils.setup_data_loader_for_inference_with_resize",
+            "refrakt_core.api.utils.train_utils.setup_data_loader_for_inference_with_resize",
             mock_resize,
         )
         out = inf_helpers._setup_data_loader(DictConfig({}), [1, 2, 3], DummyLogger())

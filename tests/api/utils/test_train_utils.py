@@ -4,8 +4,8 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-import src.refrakt_core.api.utils.train_utils as train_utils
-from src.refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.api.utils import train_utils
+from refrakt_core.api.core.logger import RefraktLogger
 
 
 class DummyLogger(RefraktLogger):

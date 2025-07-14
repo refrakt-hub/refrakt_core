@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-import src.refrakt_core.api.utils.image_analysis_utils as image_analysis_utils
+from refrakt_core.api.utils import image_analysis_utils
 
 
 class DummyDataset:

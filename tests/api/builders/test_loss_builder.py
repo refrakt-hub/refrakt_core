@@ -3,7 +3,7 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
 
-from src.refrakt_core.api.builders.loss_builder import build_loss
+from refrakt_core.api.builders.loss_builder import build_loss
 
 
 class DummyLoss(nn.Module):

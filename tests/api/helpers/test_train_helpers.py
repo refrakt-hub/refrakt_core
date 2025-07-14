@@ -5,8 +5,8 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-import src.refrakt_core.api.helpers.train_helpers as train_helpers
-from src.refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.api.helpers import train_helpers
+from refrakt_core.api.core.logger import RefraktLogger
 
 
 class DummyLogger(RefraktLogger):
@@ -57,11 +57,11 @@ class TestTrainHelpers:
         from omegaconf import DictConfig
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.train_helpers.load_config",
+            "refrakt_core.api.helpers.train_helpers.load_config",
             lambda cfg: DictConfig({"dummy": True}),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.train_helpers.OmegaConf.load",
+            "refrakt_core.api.helpers.train_helpers.OmegaConf.load",
             staticmethod(lambda x: DictConfig({"dummy": True})),
         )
         out = train_helpers._load_and_validate_config("foo.yaml")
@@ -84,11 +84,11 @@ class TestTrainHelpers:
                 called["log"] = True
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils.setup_logger",
+            "refrakt_core.api.utils.train_utils.setup_logger",
             lambda config, name: DummyLogger(),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.train_helpers.OmegaConf",
+            "refrakt_core.api.helpers.train_helpers.OmegaConf",
             type(
                 "OmegaConf",
                 (),
@@ -114,11 +114,11 @@ class TestTrainHelpers:
                 pass
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils.setup_logger",
+            "refrakt_core.api.utils.train_utils.setup_logger",
             lambda config, name: DummyLogger(),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.train_helpers.OmegaConf",
+            "refrakt_core.api.helpers.train_helpers.OmegaConf",
             type(
                 "OmegaConf",
                 (),
@@ -167,7 +167,7 @@ class TestTrainHelpers:
 
     def test_build_datasets_and_model(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils.build_datasets_and_loaders_with_resize",
+            "refrakt_core.api.utils.train_utils.build_datasets_and_loaders_with_resize",
             lambda config, logger: ("train_ds", "val_ds", "train_loader", "val_loader"),
         )
         monkeypatch.setattr(
@@ -211,7 +211,7 @@ class TestTrainHelpers:
                 self.params = params
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils._setup_optimizer_config",
+            "refrakt_core.api.utils.train_utils._setup_optimizer_config",
             lambda config: (DummyOpt, {"lr": 0.1}),
         )
         monkeypatch.setattr(
@@ -226,7 +226,7 @@ class TestTrainHelpers:
 
     def test_setup_trainer(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils._setup_trainer_params",
+            "refrakt_core.api.utils.train_utils._setup_trainer_params",
             lambda *a, **kw: (None, {"save_dir": None}, 10, "cpu"),
         )
         monkeypatch.setattr(
@@ -257,16 +257,16 @@ class TestTrainHelpers:
 
     def test_execute_training(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils._handle_fusion_training",
+            "refrakt_core.api.utils.train_utils._handle_fusion_training",
             lambda *a, **kw: None,
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils._save_config_and_log_metrics",
+            "refrakt_core.api.utils.train_utils._save_config_and_log_metrics",
             lambda *a, **kw: None,
         )
         # Mock OmegaConf.save to avoid file system issues
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.train_helpers.OmegaConf.save",
+            "refrakt_core.api.helpers.train_helpers.OmegaConf.save",
             staticmethod(lambda cfg, path: None),
         )
         trainer = DummyTrainer()

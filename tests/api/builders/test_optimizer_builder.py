@@ -2,7 +2,7 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from src.refrakt_core.api.builders.optimizer_builder import build_optimizer
+from refrakt_core.api.builders.optimizer_builder import build_optimizer
 
 
 class DummyModel(torch.nn.Module):

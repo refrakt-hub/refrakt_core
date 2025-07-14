@@ -5,8 +5,8 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-import src.refrakt_core.api.helpers.test_helpers as test_helpers
-from src.refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.api.helpers import test_helpers
+from refrakt_core.api.core.logger import RefraktLogger
 
 
 class DummyLogger(RefraktLogger):
@@ -52,11 +52,11 @@ class TestTestHelpers:
         from omegaconf import DictConfig
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.test_helpers.load_config",
+            "refrakt_core.api.helpers.test_helpers.load_config",
             lambda cfg: DictConfig({"dummy": True}),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.test_helpers.OmegaConf.load",
+            "refrakt_core.api.helpers.test_helpers.OmegaConf.load",
             staticmethod(lambda x: DictConfig({"dummy": True})),
         )
         out = test_helpers._load_and_validate_config("foo.yaml")
@@ -79,11 +79,11 @@ class TestTestHelpers:
                 called["log"] = True
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils.setup_logger",
+            "refrakt_core.api.utils.train_utils.setup_logger",
             lambda config, name: DummyLogger(),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.test_helpers.OmegaConf",
+            "refrakt_core.api.helpers.test_helpers.OmegaConf",
             type(
                 "OmegaConf",
                 (),
@@ -106,11 +106,11 @@ class TestTestHelpers:
                 pass
 
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.train_utils.setup_logger",
+            "refrakt_core.api.utils.train_utils.setup_logger",
             lambda config, name: DummyLogger(),
         )
         monkeypatch.setattr(
-            "src.refrakt_core.api.helpers.test_helpers.OmegaConf",
+            "refrakt_core.api.helpers.test_helpers.OmegaConf",
             type(
                 "OmegaConf",
                 (),
@@ -156,7 +156,7 @@ class TestTestHelpers:
 
     def test_build_test_components(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.test_utils._build_test_loader_with_resize",
+            "refrakt_core.api.utils.test_utils._build_test_loader_with_resize",
             lambda config, logger: "dataloader",
         )
         monkeypatch.setattr(
@@ -170,6 +170,15 @@ class TestTestHelpers:
         monkeypatch.setattr(
             "refrakt_core.api.builders.loss_builder.build_loss",
             lambda *a, **kw: "loss_fn",
+        )
+        class DummyDataset:
+            def __len__(self):
+                return 1
+            def __getitem__(self, idx):
+                return torch.zeros(1, 28, 28)
+        monkeypatch.setattr(
+            "refrakt_core.api.builders.dataset_builder.get_dataset",
+            lambda name, **params: DummyDataset(),
         )
         modules = {
             "get_model": lambda name=None: DummyModel(),
@@ -235,7 +244,7 @@ class TestTestHelpers:
         device = torch.device("cpu")
         logger = DummyLogger()
         monkeypatch.setattr(
-            "src.refrakt_core.api.utils.test_utils._run_manual_evaluation",
+            "refrakt_core.api.utils.test_utils._run_manual_evaluation",
             lambda *a, **kw: {"manual": True},
         )
         result = test_helpers._evaluate_model(

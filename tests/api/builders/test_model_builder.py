@@ -2,8 +2,10 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from src.refrakt_core.api.builders.model_builder import build_model
-from src.refrakt_core.wrappers.schema.default_model import DefaultModelWrapper
+from refrakt_core.api.builders.model_builder import build_model
+from refrakt_core.wrappers.schema.default_model import DefaultModelWrapper
+from refrakt_core.registry import model_registry as reg
+from refrakt_core.api.builders.utils import model_utils
 
 
 class DummyModel(torch.nn.Module):
@@ -30,8 +32,6 @@ class DummyWrapper(torch.nn.Module):
 
 @pytest.fixture(autouse=True)
 def patch_model_registry(monkeypatch):
-    import src.refrakt_core.registry.model_registry as reg
-
     reg.MODEL_REGISTRY["dummy"] = DummyModel
     reg.get_model = lambda name, *args, **kwargs: DummyModel(**kwargs)
     yield
@@ -112,8 +112,6 @@ class TestModelBuilder:
 
     def test_build_model_unit_fusion_block(self, base_cfg, modules, monkeypatch):
         called = {}
-        import src.refrakt_core.api.builders.utils.model_utils as model_utils
-
         monkeypatch.setattr(
             model_utils,
             "add_fusion_block",
@@ -128,23 +126,11 @@ class TestModelBuilder:
         captured = capsys.readouterr()
         assert "[FINALIZED]" in captured.out
 
-    def test_build_model_unit_apply_model_overrides(
-        self, base_cfg, modules, monkeypatch
-    ):
-        monkeypatch.setattr(
-            "src.refrakt_core.api.builders.utils.model_utils.apply_model_overrides",
-            lambda cfg, overrides: base_cfg,
-        )
-        model = build_model(
-            base_cfg, modules, device="cpu", overrides=["model.params.foo=99"]
-        )
-        assert isinstance(model, DefaultModelWrapper) or hasattr(model, "model")
-
     def test_build_model_unit_validate_model_config_type_error(
         self, base_cfg, modules, monkeypatch
     ):
         monkeypatch.setattr(
-            "src.refrakt_core.api.builders.utils.model_utils.validate_model_config",
+            "refrakt_core.api.builders.utils.model_utils.validate_model_config",
             lambda cfg: (_ for _ in ()).throw(TypeError("fail")),
         )
         build_model(base_cfg, modules, device="cpu")

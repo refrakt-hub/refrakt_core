@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-import src.refrakt_core.api.core.utils.logger_helpers as logger_helpers
+from refrakt_core.api.core.utils import logger_helpers
 
 
 class DummyLogger:

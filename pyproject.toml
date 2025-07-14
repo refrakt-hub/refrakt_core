@@ -1,13 +1,11 @@
-# pyproject.toml
-
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "refrakt_core"
-version = "0.3.0"
-description = "Run production-ready ML, DL, and fusion pipelines at scale — without writing a single line of code. Refrakt makes research effortless."
+version = "0.3.2"
+description = "Core ML/DL training library for Refrakt framework"
 readme = "README.md"
 authors = [
     { name = "Akshath Mangudi", email = "akshathmangudi@gmail.com" }
@@ -38,17 +36,12 @@ line-length = 88
 target-version = "py310"
 lint.select = ["E", "F", "B", "I"]
 
-
 [project.urls]
 "Homepage" = "https://github.com/refrakt-hub/refrakt_core"
-"Bug Tracker" = "https://github.com/yourusername/refrakt_core/issues"
+"Bug Tracker" = "https://github.com/refrakt-hub/refrakt_core/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 "refrakt_core.integrations.yaml" = ["*.yaml"]
-
-
-[project.scripts]
-refrakt = "refrakt_core.api.__main__:main"

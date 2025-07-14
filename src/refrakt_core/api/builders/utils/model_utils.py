@@ -23,8 +23,6 @@ import inspect
 from typing import Any, Dict, List, Optional
 
 from omegaconf import OmegaConf
-
-from refrakt_core.hooks.hyperparameter_override import apply_overrides
 from refrakt_core.wrappers.schema.default_model import DefaultModelWrapper
 
 
@@ -65,37 +63,6 @@ def validate_model_config(cfg_dict: Any) -> tuple[str, Dict[str, Any], Optional[
         raise TypeError(f"wrapper_name must be a str or None, got {type(wrapper_name)}")
 
     return model_name, model_params, wrapper_name
-
-
-def apply_model_overrides(cfg: Any, overrides: Optional[List[str]] = None) -> Any:
-    """
-    Apply configuration overrides to the model configuration.
-
-    This function allows dynamic modification of model configuration parameters
-    through override strings. Overrides are applied before model instantiation,
-    enabling runtime parameter adjustments without modifying configuration files.
-
-    Args:
-        cfg: Configuration object (OmegaConf or DictConfig) to be modified
-        overrides: Optional list of override strings in format 'path.to.param=value'
-                  to modify configuration before model building
-
-    Returns:
-        Updated configuration object with overrides applied
-
-    Note:
-        Overrides are applied using the hyperparameter override system,
-        which supports nested parameter modification.
-    """
-    if overrides:
-        # Convert to dict, apply overrides, then back to OmegaConf
-        cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-        if isinstance(cfg_dict, dict):
-            cfg_dict = apply_overrides(OmegaConf.create(cfg_dict), overrides)
-            cfg = OmegaConf.create(cfg_dict)
-
-    return cfg
-
 
 def instantiate_base_model(
     model_name: str, model_params: Dict[str, Any], modules: Dict[str, Any], device: str

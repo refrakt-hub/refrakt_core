@@ -1,0 +1,62 @@
+runtime:
+  mode: pipeline
+  log_type: []
+
+dataset:
+  name: CIFAR10
+  params:
+    root: ./data
+    train: true
+    download: true
+  transform:
+    - name: Resize
+      params: { size: [224, 224] }
+    - name: ToTensor
+    - name: Normalize
+      params:
+        mean: [0.1307]
+        std: [0.3081]
+
+
+dataloader:
+  params:
+    batch_size: 32
+    shuffle: true
+    num_workers: 4
+    drop_last: false
+
+model:
+  name: convnext
+  wrapper: convnext
+  params:
+    in_channels: 3
+    num_classes: 10
+  fusion:
+    type: sklearn
+    model: random_forest
+    params:
+      n_estimators: 100
+      max_depth: 10
+
+loss:
+  name: ce_wrapped
+  mode: logits
+  params: {}
+
+optimizer:
+  name: adamw
+  params:
+    lr: 0.0001
+    weight_decay: 0.01
+
+scheduler:
+  name: cosine
+  params:
+    T_max: 100
+
+trainer:
+  name: supervised
+  params:
+    save_dir: "./checkpoints"
+    num_epochs: 1
+    device: cuda

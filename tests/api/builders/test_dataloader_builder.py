@@ -2,7 +2,7 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from src.refrakt_core.api.builders.dataloader_builder import build_dataloader
+from refrakt_core.api.builders.dataloader_builder import build_dataloader
 
 
 class DummyDataset(torch.utils.data.Dataset):

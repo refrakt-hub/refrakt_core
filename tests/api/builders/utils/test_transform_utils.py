@@ -3,7 +3,7 @@ import importlib
 import pytest
 from omegaconf import ListConfig
 
-import src.refrakt_core.api.builders.utils.transform_utils as transform_utils
+from refrakt_core.api.builders.utils import transform_utils
 
 
 class DummyTransform:
@@ -50,7 +50,7 @@ class TestTransformUtils:
 
     def test_build_simple_transform(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.registry.transform_registry.get_transform",
+            "refrakt_core.registry.transform_registry.get_transform",
             dummy_get_transform,
         )
         t = transform_utils._build_simple_transform("dummy", {})
@@ -58,7 +58,7 @@ class TestTransformUtils:
 
     def test_build_nested_transform(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.registry.transform_registry.get_transform",
+            "refrakt_core.registry.transform_registry.get_transform",
             dummy_get_transform,
         )
         t = transform_utils._build_nested_transform(
@@ -70,7 +70,7 @@ class TestTransformUtils:
 
     def test_build_transform_list(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.registry.transform_registry.get_transform",
+            "refrakt_core.registry.transform_registry.get_transform",
             dummy_get_transform,
         )
         seq = [{"name": "dummy", "params": {}}]

@@ -2,7 +2,7 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from src.refrakt_core.api.builders.scheduler_builder import build_scheduler
+from refrakt_core.api.builders.scheduler_builder import build_scheduler
 
 
 @pytest.fixture

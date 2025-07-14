@@ -1,7 +1,8 @@
 import pytest
 from omegaconf import OmegaConf
 
-from src.refrakt_core.api.builders.transform_builder import build_transform
+from refrakt_core.api.builders.transform_builder import build_transform
+from refrakt_core.registry import transform_registry as reg
 
 
 class DummyTransform:
@@ -14,8 +15,6 @@ class DummyTransform:
 
 @pytest.fixture(autouse=True)
 def patch_transform_registry(monkeypatch):
-    import src.refrakt_core.registry.transform_registry as reg
-
     reg.TRANSFORM_REGISTRY["dummy"] = DummyTransform
     reg.TRANSFORM_REGISTRY["dummy_transform"] = DummyTransform
     reg.get_transform = lambda name, *args, **kwargs: DummyTransform(**kwargs)
@@ -50,7 +49,7 @@ class TestTransformBuilder:
     # Unit Tests
     def test_build_transform_unit_randomapply(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.registry.transform_registry.get_transform",
+            "refrakt_core.registry.transform_registry.get_transform",
             lambda name, *args, **kwargs: DummyTransform(**kwargs),
         )
         cfg = [
@@ -64,7 +63,7 @@ class TestTransformBuilder:
 
     def test_build_transform_unit_pairedtransform(self, monkeypatch):
         monkeypatch.setattr(
-            "src.refrakt_core.registry.transform_registry.get_transform",
+            "refrakt_core.registry.transform_registry.get_transform",
             lambda name, *args, **kwargs: DummyTransform(**kwargs),
         )
 
@@ -77,7 +76,7 @@ class TestTransformBuilder:
                 return x
 
         monkeypatch.setattr(
-            "src.refrakt_core.transforms.PairedTransform", MockPairedTransform
+            "refrakt_core.transforms.PairedTransform", MockPairedTransform
         )
         cfg = [
             {

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-import src.refrakt_core.api.core.utils.logging_utils as logging_utils
+from refrakt_core.api.core.utils import logging_utils
 
 
 class DummyOutput:

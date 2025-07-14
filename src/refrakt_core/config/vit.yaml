@@ -1,0 +1,61 @@
+runtime:
+  mode: pipeline
+  log_type: []
+
+dataset:
+  name: MNIST
+  params:
+    root: ./data
+    train: true
+    download: true
+  transform:
+    - name: Resize
+      params: { size: [28, 28] }
+    - name: ToTensor
+    - name: Normalize
+      params:
+        mean: [0.1307]
+        std: [0.3081]
+
+dataloader:
+  params:
+    batch_size: 32
+    shuffle: true
+    num_workers: 4
+    drop_last: false
+
+model:
+  name: vit
+  wrapper: vit
+  params:
+    in_channels: 1
+    num_classes: 10
+    image_size: 28 
+    patch_size: 7
+  fusion:
+    type: cuml
+    model: logistic_regression
+    params:
+      C: 1.0
+      penalty: l2
+      solver: qn
+      max_iter: 1000
+
+loss:
+  name: ce_wrapped
+  mode: logits
+  params: {}
+
+optimizer:
+  name: adamw
+  params:
+    lr: 0.0003
+
+scheduler: null
+
+trainer:
+  name: supervised
+  params:
+    save_dir: "./checkpoints"
+    num_epochs: 1
+    device: cuda

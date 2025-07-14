@@ -33,12 +33,12 @@ class DummyInference:
 class TestApiInit:
     # Smoke Tests
     def test_import_api_init_smoke(self):
-        mod = importlib.import_module("src.refrakt_core.api")
+        mod = importlib.import_module("refrakt_core.api")
         assert mod is not None
 
     # Sanity Tests
     def test_api_init_has_expected_attrs(self):
-        mod = importlib.import_module("src.refrakt_core.api")
+        mod = importlib.import_module("refrakt_core.api")
         assert hasattr(mod, "__file__")
         assert hasattr(mod, "__package__")
 
@@ -50,42 +50,12 @@ class TestApiInit:
 
         monkeypatch.setattr(importlib, "import_module", raise_import_error)
         with pytest.raises(ImportError):
-            importlib.import_module("src.refrakt_core.api")
-
-    def test_main_train_mode(self, monkeypatch):
-        import src.refrakt_core.api as api_mod
-
-        dummy_train = DummyTrain()
-        monkeypatch.setattr(api_mod, "train", dummy_train)
-        result = api_mod.main("dummy.yaml", "train")
-        assert result == {"train": True}
-        assert dummy_train.called
-
-    def test_main_test_mode(self, monkeypatch):
-        import src.refrakt_core.api as api_mod
-
-        dummy_test = DummyTest()
-        monkeypatch.setattr(api_mod, "test", dummy_test)
-        result = api_mod.main("dummy.yaml", "test")
-        assert result is None
-        assert dummy_test.called
-
-    def test_main_inference_mode_raises(self, monkeypatch):
-        import src.refrakt_core.api as api_mod
-
-        with pytest.raises(ValueError):
-            api_mod.main("dummy.yaml", "inference")
-
-    def test_main_invalid_mode_raises(self, monkeypatch):
-        import src.refrakt_core.api as api_mod
-
-        with pytest.raises(ValueError):
-            api_mod.main("dummy.yaml", "invalid")
+            importlib.import_module("refrakt_core.api")
 
     def test_cli_entrypoint_train(self, monkeypatch):
         import sys
 
-        import src.refrakt_core.api as api_mod
+        import refrakt_core.api as api_mod
 
         dummy_train = DummyTrain()
         monkeypatch.setattr(api_mod, "train", dummy_train)
@@ -111,7 +81,7 @@ class TestApiInit:
     def test_cli_entrypoint_test(self, monkeypatch):
         import sys
 
-        import src.refrakt_core.api as api_mod
+        import refrakt_core.api as api_mod
 
         dummy_test = DummyTest()
         monkeypatch.setattr(api_mod, "train", DummyTrain())
@@ -146,7 +116,7 @@ class TestApiInit:
     def test_cli_entrypoint_inference_requires_model_path(self, monkeypatch):
         import sys
 
-        import src.refrakt_core.api as api_mod
+        import refrakt_core.api as api_mod
 
         monkeypatch.setattr(api_mod, "train", DummyTrain())
         monkeypatch.setattr(api_mod, "test", DummyTest())

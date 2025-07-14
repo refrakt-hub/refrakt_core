@@ -1,0 +1,66 @@
+runtime:
+  mode: pipeline
+  log_type: []
+
+dataset:
+  name: custom
+  params:
+    zip_path: ./data/archive.zip
+    task_type: supervised
+  transform:
+    - name: Resize
+      params: { size: [500, 500] }  # ResNet standard input size
+    - name: RandomHorizontalFlip
+      params: { p: 0.5 }
+    - name: RandomRotation
+      params: { degrees: 10 }
+    - name: ColorJitter
+      params: { brightness: 0.2, contrast: 0.2, saturation: 0.2, hue: 0.1 }
+    - name: ToTensor
+    - name: Normalize
+      params:
+        mean: [0.485, 0.456, 0.406]  # ImageNet normalization
+        std: [0.229, 0.224, 0.225]
+
+dataloader:
+  params:
+    batch_size: 32
+    shuffle: true
+    num_workers: 4
+    drop_last: false
+
+model:
+  name: resnet18
+  wrapper: resnet
+  params:
+    in_channels: 3
+    num_classes: 10
+  # fusion:
+  #   type: sklearn
+  #   model: svc
+  #   params:
+  #     C: 1.0
+  #     kernel: rbf
+
+loss:
+  name: ce_wrapped
+  mode: logits
+  params: {}
+
+optimizer:
+  name: adamw
+  params:
+    lr: 0.0001
+    weight_decay: 0.01
+
+scheduler:
+  name: cosine
+  params:
+    T_max: 100
+
+trainer:
+  name: supervised
+  params:
+    save_dir: "./checkpoints"
+    num_epochs: 1
+    device: cuda
