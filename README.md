@@ -62,29 +62,6 @@ If you want to use GPU-accelerated ML features (cuML), you must manually install
 
 This will install the appropriate cuML and RAPIDS libraries for your environment. If you do not need GPU/cuML support, you can skip this step.
 
-## 🧪 Running Experiments
-
-```bash
-# Run with a config file
-python -m refrakt_core.api --config refrakt_core/config/vit.yaml
-
-# Or using the CLI
-refrakt --config ./refrakt_core/config/resnet.yaml
-
-# Override hyperparameters on-the-fly
-python -m refrakt_core.api.train \
-    config.optimizer.lr=0.0005 \
-    config.trainer.epochs=20
-```
-
-### Supported CLI Flags
-
-| Flag         | Description                                              |
-| ------------ | -------------------------------------------------------- |
-| `--config`   | Path to YAML config file                                 |
-| `--log_type` | Logging backend: `tensorboard`, `wandb`, or both         |
-| `--debug`    | Enable debug mode with extra verbosity                   |
-
 ## 🔧 Config Structure (YAML)
 
 All components are defined in modular YAML files under `refrakt_core/config/`.
