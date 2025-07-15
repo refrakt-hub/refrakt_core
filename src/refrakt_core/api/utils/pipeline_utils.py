@@ -21,13 +21,35 @@ complete pipelines with automatic phase coordination and logging.
 """
 
 import os
-from typing import Any, cast
+from typing import Any, cast, Dict, List, Tuple
 
 from omegaconf import DictConfig
 
 import refrakt_core.api as refrakt_api
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.global_logging import set_global_logger
+
+
+def parse_runtime_hooks(cfg: Dict[str, Any]) -> Tuple[List[str], List[str]]:
+    """
+    Parse the runtime.hooks section from the config to extract visualization and explainability hooks.
+
+    Args:
+        cfg: The loaded YAML config as a dictionary or OmegaConf DictConfig.
+
+    Returns:
+        Tuple of (visualization_hooks, explainability_hooks), each a list of strings.
+    """
+    runtime = cfg.get("runtime", {})
+    hooks = runtime.get("hooks", {})
+    visualizations = hooks.get("visualizations", [])
+    explainability = hooks.get("explainability", [])
+    # Ensure both are lists
+    if not isinstance(visualizations, list):
+        visualizations = [visualizations]
+    if not isinstance(explainability, list):
+        explainability = [explainability]
+    return visualizations, explainability
 
 
 def setup_logger_and_config(

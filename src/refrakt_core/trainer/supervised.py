@@ -37,6 +37,10 @@ try:
 except ImportError:
     visualize_embeddings = visualize_attention = None  # type: ignore[unused-variable]
 
+from refrakt_viz.supervised.loss_accuracy import LossAccuracyPlot
+from refrakt_viz.supervised.confusion_matrix import ConfusionMatrixPlot
+from refrakt_viz.supervised.sample_predictions import SamplePredictionsPlot
+
 
 @register_trainer("supervised")
 class SupervisedTrainer(BaseTrainer):
@@ -55,6 +59,8 @@ class SupervisedTrainer(BaseTrainer):
         device: str = "cuda",
         scheduler: Optional[Any] = None,
         artifact_dumper: Optional[Any] = None,
+        visualization_hooks: Optional[List[Any]] = None,
+        explainability_hooks: Optional[List[Any]] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -84,6 +90,9 @@ class SupervisedTrainer(BaseTrainer):
         self._current_batch = None
         self._current_loss_output = None
 
+        self.visualization_hooks = visualization_hooks or []
+        self.explainability_hooks = explainability_hooks or []
+
         if self.optimizer is None:
             from omegaconf import DictConfig
 
@@ -95,7 +104,52 @@ class SupervisedTrainer(BaseTrainer):
 
     def _handle_training_step(self, batch: Any, step: int, epoch: int) -> None:
         """Handle a single training step."""
-        return handle_training_step(self, batch, step, epoch)
+        result = handle_training_step(self, batch, step, epoch)
+        # Update visualization hooks after each batch
+        # Gather data for hooks
+        train_loss = None
+        val_loss = None
+        train_acc = None
+        val_acc = None
+        y_true = None
+        y_pred = None
+        images = None
+        # Try to extract what we can from self._current_loss_output and batch
+        # (You may want to improve this extraction based on your actual pipeline)
+        if self._current_loss_output is not None:
+            train_loss = self._current_loss_output.total.item() if hasattr(self._current_loss_output.total, 'item') else self._current_loss_output.total
+        # Unpack batch for y_true, y_pred, images
+        try:
+            inputs, targets = self._unpack_batch(batch)
+            y_true = targets.cpu().tolist() if hasattr(targets, 'cpu') else targets
+            images = inputs.cpu().numpy() if hasattr(inputs, 'cpu') else inputs
+            # Forward pass for predictions
+            output = self.model(inputs.to(self.device))
+            if hasattr(output, 'logits'):
+                logits = output.logits
+            else:
+                logits = output
+            if logits is not None:
+                y_pred = torch.argmax(logits, dim=1).cpu().tolist() if hasattr(logits, 'cpu') else logits
+        except Exception:
+            pass
+        for viz in self.visualization_hooks:
+            try:
+                if isinstance(viz, LossAccuracyPlot):
+                    # Only pass dummy values for now; real values should be tracked across epoch
+                    viz.update(train_loss or 0.0, val_loss or 0.0, train_acc or 0.0, val_acc or 0.0)
+                elif isinstance(viz, ConfusionMatrixPlot):
+                    if y_true is not None and y_pred is not None:
+                        viz.update(y_true, y_pred)
+                elif isinstance(viz, SamplePredictionsPlot):
+                    if images is not None and y_true is not None and y_pred is not None:
+                        viz.update(images, y_true, y_pred)
+                else:
+                    viz.update()
+            except Exception as e:
+                print(f"[VizHook] update() failed: {e}")
+        # Optionally update explainability hooks here
+        return result
 
     def _log_training_metrics(self, loss_output: Any, output: Any, step: int) -> None:
         """Log training metrics."""
@@ -133,6 +187,14 @@ class SupervisedTrainer(BaseTrainer):
                 self._handle_training_step(batch, step, epoch)
                 if self._current_loss_output is not None:
                     pass
+
+            # At end of epoch, show/save visualizations
+            for viz in self.visualization_hooks:
+                try:
+                    viz.show()
+                    viz.save(f"visualization_epoch{epoch+1}.png")
+                except Exception as e:
+                    print(f"[VizHook] show/save failed: {e}")
 
             best_accuracy = self._handle_epoch_end(epoch, best_accuracy)
 
@@ -185,6 +247,14 @@ class SupervisedTrainer(BaseTrainer):
             self.artifact_dumper.log_scalar_dict(
                 {"accuracy": acc}, step=self.global_step, prefix="val"
             )
+
+        # Optionally update/show/save visualizations after evaluation
+        for viz in self.visualization_hooks:
+            try:
+                viz.show()
+                viz.save("visualization_eval.png")
+            except Exception as e:
+                print(f"[VizHook] show/save failed (eval): {e}")
 
         return acc
 

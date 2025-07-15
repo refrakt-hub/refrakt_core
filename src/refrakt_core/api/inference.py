@@ -40,6 +40,11 @@ from refrakt_core.api.utils.inference_utils import (
     resolve_model_name_for_inference,
     run_inference_loop,
 )
+from refrakt_core.api.utils.pipeline_utils import parse_runtime_hooks
+from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
+    instantiate_visualization_hooks,
+    instantiate_explainability_hooks,
+)
 
 warnings.filterwarnings("ignore")
 
@@ -115,11 +120,45 @@ def inference(
 
         # Setup artifact dumper
         from refrakt_core.api.utils.train_utils import setup_artifact_dumper
-
         setup_artifact_dumper(config, resolved_model_name, logger)
 
-        # Run inference
-        results = run_inference_loop(model, data_loader)
+        # --- Inference-time hooks ---
+        from omegaconf import OmegaConf
+        config_dict = OmegaConf.to_container(config, resolve=True)
+        if not isinstance(config_dict, dict):
+            config_dict = {}
+        from typing import cast, Dict
+        viz_hooks, xai_hooks = parse_runtime_hooks(cast(Dict[str, Any], config_dict))
+        class_names = None
+        if hasattr(config, "dataset") and hasattr(config.dataset, "params"):
+            class_names = getattr(config.dataset.params, "class_names", None)
+        viz_components = instantiate_visualization_hooks(viz_hooks, extra_args={"class_names": class_names} if class_names else {})
+        xai_components = instantiate_explainability_hooks(xai_hooks)
+        # --- End hooks ---
+
+        # Run inference with hooks
+        results = []
+        for batch in data_loader:
+            # Standard inference
+            with torch.no_grad():
+                input_tensor = batch[0] if isinstance(batch, (tuple, list)) else batch
+                input_tensor = input_tensor.to(device)
+                output = model(input_tensor)
+            # Update visualization hooks
+            for viz in viz_components:
+                try:
+                    viz.update()
+                except Exception as e:
+                    print(f"[VizHook] update() failed (inference): {e}")
+            # Optionally update explainability hooks here
+            results.append(output)
+        # Show/save visualizations after inference
+        for viz in viz_components:
+            try:
+                viz.show()
+                viz.save("visualization_inference.png")
+            except Exception as e:
+                print(f"[VizHook] show/save failed (inference): {e}")
 
         logger.info("\n✅ Inference completed successfully!")
         return {
@@ -140,6 +179,6 @@ def inference(
         torch.cuda.empty_cache()
 
 
-inference._load_and_validate_config = _load_and_validate_config
+# inference._load_and_validate_config = _load_and_validate_config  # type: ignore
 
 __all__ = ["inference", "_load_and_validate_config"]

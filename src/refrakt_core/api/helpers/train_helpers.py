@@ -37,6 +37,11 @@ from refrakt_core.api.utils.train_utils import (
     _setup_trainer_params,
     load_config,
 )
+from refrakt_core.api.utils.pipeline_utils import parse_runtime_hooks
+from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
+    instantiate_visualization_hooks,
+    instantiate_explainability_hooks,
+)
 
 __all__ = [
     "_load_and_validate_config",
@@ -288,6 +293,32 @@ def _setup_trainer(
         config, device, logger, artifact_dumper, resolved_model_name
     )
 
+    # --- Inject hook instantiation here ---
+    config_dict = OmegaConf.to_container(config, resolve=True)
+    if not isinstance(config_dict, dict):
+        config_dict = {}
+    viz_hooks, xai_hooks = parse_runtime_hooks(cast(Dict[str, Any], config_dict))
+    # Example: pass class_names if available (for supervised)
+    class_names = None
+    if hasattr(config, "dataset") and hasattr(config.dataset, "params"):
+        class_names = getattr(config.dataset.params, "class_names", None)
+    # Fallback: try to infer class_names from num_classes
+    if class_names is None:
+        num_classes = None
+        if hasattr(config, "model") and hasattr(config.model, "params"):
+            num_classes = getattr(config.model.params, "num_classes", None)
+        if num_classes is not None:
+            class_names = [str(i) for i in range(num_classes)]
+    viz_components = instantiate_visualization_hooks(viz_hooks, extra_args={"class_names": class_names} if class_names else {})
+    xai_components = instantiate_explainability_hooks(xai_hooks)
+    # --- End hook injection ---
+
+    # Remove save_dir from trainer_params to avoid duplicate keyword argument
+    save_dir = trainer_params.pop("save_dir", None)
+    # Remove keys not accepted by initialize_trainer
+    for k in ["logger", "artifact_dumper", "visualization_hooks", "explainability_hooks", "model_name"]:
+        trainer_params.pop(k, None)
+
     trainer = initialize_trainer(
         cfg=cast(OmegaConf, config),
         model=model,
@@ -298,8 +329,16 @@ def _setup_trainer(
         scheduler=scheduler,
         device=final_device,
         modules=modules,
-        save_dir=trainer_params.get("save_dir"),
+        save_dir=save_dir,
+        **trainer_params,
     )
+    # Set model_name on the trainer instance for correct checkpoint naming
+    setattr(trainer, "model_name", resolved_model_name)
+    # Set visualization and explainability hooks as attributes if present
+    if viz_components:
+        setattr(trainer, "visualization_hooks", viz_components)
+    if xai_components:
+        setattr(trainer, "explainability_hooks", xai_components)
 
     return trainer, num_epochs, final_device
 
