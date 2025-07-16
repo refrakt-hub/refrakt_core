@@ -145,7 +145,9 @@ class SupervisedTrainer(BaseTrainer):
                     if images is not None and y_true is not None and y_pred is not None:
                         viz.update(images, y_true, y_pred)
                 else:
-                    viz.update()
+                    from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
+                    if not isinstance(viz, PerLayerMetricsPlot):
+                        viz.update()
             except Exception as e:
                 print(f"[VizHook] update() failed: {e}")
         # Optionally update explainability hooks here
@@ -222,6 +224,15 @@ class SupervisedTrainer(BaseTrainer):
                         print(f"[VizHook] per_layer_metrics update failed: {e}")
 
             # At end of epoch, show/save visualizations
+            for viz in self.visualization_hooks:
+                try:
+                    from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
+                    if isinstance(viz, PerLayerMetricsPlot):
+                        model_name = getattr(self.model, 'model_name', getattr(self, 'model_name', 'model'))
+                        viz.save_with_name(model_name, mode='train')
+                except Exception as e:
+                    print(f"[VizHook] per_layer_metrics save failed (train): {e}")
+
             best_accuracy = self._handle_epoch_end(epoch, best_accuracy)
 
         if logger:
@@ -238,6 +249,9 @@ class SupervisedTrainer(BaseTrainer):
         """
         self.model.eval()
         correct, total = 0, 0
+        total_loss = 0.0
+        num_batches = 0
+        import torch
 
         with torch.no_grad():
             loop = tqdm(self.val_loader, desc="Validating", leave=False)
@@ -264,17 +278,63 @@ class SupervisedTrainer(BaseTrainer):
 
                 correct += (preds == targets).sum().item()
                 total += targets.size(0)
-                loop.set_postfix({"acc": f"{(correct / total * 100):.2f}%"})
+                num_batches += 1
 
+                # Compute loss for this batch
+                # Create ModelOutput for loss function if it's not already one
+                if not isinstance(output, ModelOutput):
+                    output_for_loss = ModelOutput(logits=logits)
+                else:
+                    output_for_loss = output
+                loss = self.loss_fn(output_for_loss, targets)
+                if hasattr(loss, 'total'):
+                    batch_loss = loss.total.item() if hasattr(loss.total, 'item') else float(loss.total)
+                else:
+                    batch_loss = loss.item() if hasattr(loss, 'item') else float(loss)
+                total_loss += batch_loss
+
+                loop.set_postfix({"acc": f"{(correct / total * 100):.2f}%", "loss": f"{batch_loss:.4f}"})
+
+                # --- Per-layer metrics visualization after each batch (test split) ---
+                from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
+                for viz in self.visualization_hooks:
+                    try:
+                        if isinstance(viz, PerLayerMetricsPlot):
+                            if hasattr(self.model, 'get_layer_metrics'):
+                                layer_metrics = self.model.get_layer_metrics()
+                                viz.update(layer_metrics, split="test")
+                    except Exception as e:
+                        print(f"[VizHook] per_layer_metrics update failed (test): {e}")
+
+        avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
         acc = correct / total if total > 0 else 0.0
-        print(f"\nValidation Accuracy: {acc * 100:.2f}%")
+        print(f"\nValidation Accuracy: {acc * 100:.2f}% | Avg Loss: {avg_loss:.4f}")
 
         if self.artifact_dumper:
             self.artifact_dumper.log_scalar_dict(
-                {"accuracy": acc}, step=self.global_step, prefix="val"
+                {"accuracy": acc, "val_loss": avg_loss}, step=self.global_step, prefix="val"
             )
 
         # Optionally update/show/save visualizations after evaluation
+        for viz in self.visualization_hooks:
+            try:
+                from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
+                from refrakt_viz.supervised.loss_accuracy import LossAccuracyPlot
+                from refrakt_viz.supervised.confusion_matrix import ConfusionMatrixPlot
+                if isinstance(viz, PerLayerMetricsPlot):
+                    model_name = getattr(self.model, 'model_name', getattr(self, 'model_name', 'model'))
+                    viz.save_with_name(model_name, mode='test')
+                elif isinstance(viz, LossAccuracyPlot):
+                    model_name = getattr(self.model, 'model_name', getattr(self, 'model_name', 'model'))
+                    # Update with zeros for train, real values for val
+                    viz.update(0.0, avg_loss, 0.0, acc)
+                    viz.save_with_name(model_name, mode='test')
+                elif isinstance(viz, ConfusionMatrixPlot):
+                    model_name = getattr(self.model, 'model_name', getattr(self, 'model_name', 'model'))
+                    viz.save_with_name(model_name, mode='test')
+                # Do not save SamplePredictionsPlot here
+            except Exception as e:
+                print(f"[VizHook] visualization save failed (test): {e}")
 
         return acc
 

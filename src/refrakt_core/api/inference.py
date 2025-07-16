@@ -45,11 +45,6 @@ from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
     instantiate_visualization_hooks,
     instantiate_explainability_hooks,
 )
-# Add this import for ComputationGraphPlot
-try:
-    from refrakt_viz.supervised.computation_graph import ComputationGraphPlot
-except ImportError:
-    ComputationGraphPlot = None
 
 warnings.filterwarnings("ignore")
 
@@ -128,20 +123,30 @@ def inference(
         setup_artifact_dumper(config, resolved_model_name, logger)
 
         # --- Inference-time hooks ---
-        from omegaconf import OmegaConf
-        config_dict = OmegaConf.to_container(config, resolve=True)
-        if not isinstance(config_dict, dict):
-            config_dict = {}
-        from typing import cast, Dict
-        viz_hooks, xai_hooks = parse_runtime_hooks(cast(Dict[str, Any], config_dict))
+        # Skipping visualization hooks during inference
+        # from omegaconf import OmegaConf
+        # config_dict = OmegaConf.to_container(config, resolve=True)
+        # if not isinstance(config_dict, dict):
+        #     config_dict = {}
+        # from typing import cast, Dict
+        # viz_hooks, xai_hooks = parse_runtime_hooks(cast(Dict[str, Any], config_dict))
+        # class_names = None
+        # if hasattr(config, "dataset") and hasattr(config.dataset, "params"):
+        #     class_names = getattr(config.dataset.params, "class_names", None)
+        # viz_components = instantiate_visualization_hooks(viz_hooks, extra_args={"class_names": class_names} if class_names else {})
+        # xai_components = instantiate_explainability_hooks(xai_hooks)
+        # --- End hooks ---
+
+        # --- Inference-time sample predictions visualization ---
+        from refrakt_viz.supervised.sample_predictions import SamplePredictionsPlot
         class_names = None
         if hasattr(config, "dataset") and hasattr(config.dataset, "params"):
             class_names = getattr(config.dataset.params, "class_names", None)
-        viz_components = instantiate_visualization_hooks(viz_hooks, extra_args={"class_names": class_names} if class_names else {})
-        xai_components = instantiate_explainability_hooks(xai_hooks)
-        # --- End hooks ---
+        sample_pred_plot = None
+        if class_names:
+            sample_pred_plot = SamplePredictionsPlot(class_names=class_names)
 
-        # Run inference with hooks
+        # Run inference (with sample predictions visualization)
         results = []
         for batch in data_loader:
             # Standard inference
@@ -149,28 +154,30 @@ def inference(
                 input_tensor = batch[0] if isinstance(batch, (tuple, list)) else batch
                 input_tensor = input_tensor.to(device)
                 output = model(input_tensor)
-            # Update visualization hooks (skip ComputationGraphPlot)
-            for viz in viz_components:
+            # Collect sample predictions if possible
+            if sample_pred_plot is not None:
+                # Try to extract images, y_true, y_pred from batch/output
                 try:
-                    if ComputationGraphPlot is not None and isinstance(viz, ComputationGraphPlot):
-                        # Do not update or regenerate computation graph during inference
-                        continue
+                    images = batch[0].cpu().numpy() if isinstance(batch, (tuple, list)) and hasattr(batch[0], 'cpu') else None
+                    y_true = batch[1].cpu().tolist() if isinstance(batch, (tuple, list)) and hasattr(batch[1], 'cpu') else None
+                    if hasattr(output, 'logits'):
+                        logits = output.logits
                     else:
-                        viz.update()
+                        logits = output
+                    if logits is not None:
+                        y_pred = torch.argmax(logits, dim=1).cpu().tolist() if hasattr(logits, 'cpu') else None
+                    else:
+                        y_pred = None
+                    if images is not None and y_true is not None and y_pred is not None:
+                        sample_pred_plot.update(images, y_true, y_pred)
                 except Exception as e:
-                    print(f"[VizHook] update() failed (inference): {e}")
-            # Optionally update explainability hooks here
+                    print(f"[SamplePredictionsPlot] update() failed: {e}")
             results.append(output)
-        # Show/save visualizations after inference
-        for viz in viz_components:
-            try:
-                if ComputationGraphPlot is not None and isinstance(viz, ComputationGraphPlot):
-                    # Do nothing for ComputationGraphPlot during inference
-                    pass
-                else:
-                    viz.save(f"visualization_inference_{resolved_model_name}.png")
-            except Exception as e:
-                print(f"[VizHook] show/save failed (inference): {e}")
+
+        # Save sample predictions plot at the end of inference
+        if sample_pred_plot is not None:
+            model_name = getattr(model, 'model_name', resolved_model_name)
+            sample_pred_plot.save_with_name(model_name)
 
         logger.info("\n✅ Inference completed successfully!")
         return {
