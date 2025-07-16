@@ -45,6 +45,11 @@ from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
     instantiate_visualization_hooks,
     instantiate_explainability_hooks,
 )
+# Add this import for ComputationGraphPlot
+try:
+    from refrakt_viz.supervised.computation_graph import ComputationGraphPlot
+except ImportError:
+    ComputationGraphPlot = None
 
 warnings.filterwarnings("ignore")
 
@@ -144,10 +149,14 @@ def inference(
                 input_tensor = batch[0] if isinstance(batch, (tuple, list)) else batch
                 input_tensor = input_tensor.to(device)
                 output = model(input_tensor)
-            # Update visualization hooks
+            # Update visualization hooks (skip ComputationGraphPlot)
             for viz in viz_components:
                 try:
-                    viz.update()
+                    if ComputationGraphPlot is not None and isinstance(viz, ComputationGraphPlot):
+                        # Do not update or regenerate computation graph during inference
+                        continue
+                    else:
+                        viz.update()
                 except Exception as e:
                     print(f"[VizHook] update() failed (inference): {e}")
             # Optionally update explainability hooks here
@@ -155,8 +164,11 @@ def inference(
         # Show/save visualizations after inference
         for viz in viz_components:
             try:
-                viz.show()
-                viz.save("visualization_inference.png")
+                if ComputationGraphPlot is not None and isinstance(viz, ComputationGraphPlot):
+                    # Do nothing for ComputationGraphPlot during inference
+                    pass
+                else:
+                    viz.save(f"visualization_inference_{resolved_model_name}.png")
             except Exception as e:
                 print(f"[VizHook] show/save failed (inference): {e}")
 

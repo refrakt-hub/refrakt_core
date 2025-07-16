@@ -61,6 +61,7 @@ class ResidualBlock(nn.Module):
         if self.downsample:
             residual = self.downsample(x)
 
+        out = out.clone()  # Patch: avoid in-place op on view
         out += residual
         out = self.relu(out)
         return cast(Tensor, out)
@@ -120,6 +121,7 @@ class BottleneckBlock(nn.Module):
         if self.downsample:
             residual = self.downsample(x)
 
+        out = out.clone()  # Patch: avoid in-place op on view
         out += residual
         out = self.relu(out)
         return cast(Tensor, out)

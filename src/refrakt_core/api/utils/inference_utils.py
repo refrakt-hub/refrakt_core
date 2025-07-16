@@ -33,7 +33,7 @@ from refrakt_core.api.core.logger import RefraktLogger
 
 def resolve_model_name_for_inference(config: DictConfig) -> str:
     """
-    Resolve the model name for inference, handling variants and autoencoders.
+    Resolve the model name for inference, handling variants and autoencoders, and custom datasets (zip) just like in training.
 
     Args:
         config (DictConfig): The configuration object.
@@ -43,8 +43,21 @@ def resolve_model_name_for_inference(config: DictConfig) -> str:
     """
     if config.model.name == "autoencoder":
         variant = config.model.params.get("variant", "simple")
-        return f"autoencoder_{variant}"
-    return str(config.model.name)
+        resolved_model_name = f"autoencoder_{variant}"
+    else:
+        resolved_model_name = str(config.model.name)
+
+    # Check if using custom dataset and append _custom suffix (match training logic)
+    dataset_params = (
+        config.dataset.params
+        if hasattr(config, "dataset") and hasattr(config.dataset, "params")
+        else {}
+    )
+    dataset_path = dataset_params.get("path", "") or dataset_params.get("zip_path", "")
+    if dataset_path and str(dataset_path).endswith(".zip"):
+        resolved_model_name = f"{resolved_model_name}_custom"
+
+    return resolved_model_name
 
 
 def handle_pure_ml_inference(

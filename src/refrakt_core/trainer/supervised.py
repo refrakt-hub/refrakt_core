@@ -175,6 +175,29 @@ class SupervisedTrainer(BaseTrainer):
         best_accuracy = 0.0
         logger = self._get_logger()
 
+        # --- Computation graph visualization at start ---
+        for viz in self.visualization_hooks:
+            try:
+                from refrakt_viz.supervised.computation_graph import ComputationGraphPlot
+                if isinstance(viz, ComputationGraphPlot):
+                    # Use a sample batch to get input_tensor
+                    sample_batch = next(iter(self.train_loader))
+                    if isinstance(sample_batch, (tuple, list)):
+                        input_tensor = sample_batch[0].to(self.device)
+                    elif isinstance(sample_batch, dict):
+                        input_tensor = sample_batch["input"].to(self.device)
+                    else:
+                        input_tensor = sample_batch.to(self.device)
+                    # Try to get model name from self.model or fallback
+                    model_name = getattr(self.model, 'model_name', None)
+                    if model_name is None and hasattr(self, 'model_name'):
+                        model_name = getattr(self, 'model_name', 'model')
+                    if model_name is None:
+                        model_name = 'model'
+                    viz.update(self.model, input_tensor, model_name=model_name)
+            except Exception as e:
+                print(f"[VizHook] computation_graph update failed: {e}")
+
         if logger and self.global_step == 0:
             logger.log_parameters(self.model, step=self.global_step, prefix="init_")
 
@@ -187,15 +210,18 @@ class SupervisedTrainer(BaseTrainer):
                 self._handle_training_step(batch, step, epoch)
                 if self._current_loss_output is not None:
                     pass
+                # --- Per-layer metrics visualization after each batch ---
+                for viz in self.visualization_hooks:
+                    try:
+                        from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
+                        if isinstance(viz, PerLayerMetricsPlot):
+                            if hasattr(self.model, 'get_layer_metrics'):
+                                layer_metrics = self.model.get_layer_metrics()
+                                viz.update(layer_metrics)
+                    except Exception as e:
+                        print(f"[VizHook] per_layer_metrics update failed: {e}")
 
             # At end of epoch, show/save visualizations
-            for viz in self.visualization_hooks:
-                try:
-                    viz.show()
-                    viz.save(f"visualization_epoch{epoch+1}.png")
-                except Exception as e:
-                    print(f"[VizHook] show/save failed: {e}")
-
             best_accuracy = self._handle_epoch_end(epoch, best_accuracy)
 
         if logger:
@@ -249,12 +275,6 @@ class SupervisedTrainer(BaseTrainer):
             )
 
         # Optionally update/show/save visualizations after evaluation
-        for viz in self.visualization_hooks:
-            try:
-                viz.show()
-                viz.save("visualization_eval.png")
-            except Exception as e:
-                print(f"[VizHook] show/save failed (eval): {e}")
 
         return acc
 
