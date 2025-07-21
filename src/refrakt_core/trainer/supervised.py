@@ -6,6 +6,9 @@ of models using supervised objectives (e.g., classification, regression).
 It supports logging, artifact dumping, and integration with explainability/visualization tools.
 """
 
+import os
+import numpy as np
+from PIL import Image
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
@@ -23,6 +26,7 @@ from refrakt_core.trainer.utils.supervised_utils import (
     log_artifacts,
     log_training_metrics,
 )
+from refrakt_core.wrappers.utils.default_loss_utils import extract_tensor_from_model_output
 
 try:
     from refrakt_xai.utils import generate_explainability  # type: ignore
@@ -167,6 +171,65 @@ class SupervisedTrainer(BaseTrainer):
         """Handle end of epoch operations."""
         return handle_epoch_end(self, epoch, best_accuracy)
 
+    def _run_explainability_hooks(self, epoch: int) -> None:
+        """
+        Run all explainability hooks on a small batch from the validation set and save attributions as images.
+        Args:
+            epoch (int): Current epoch number (for output directory naming)
+        """
+        if not self.explainability_hooks:
+            return
+        if not hasattr(self, 'val_loader') or self.val_loader is None:
+            return
+        # Get a single batch from the validation loader
+        try:
+            sample_batch = next(iter(self.val_loader))
+            if isinstance(sample_batch, (tuple, list)):
+                input_tensor, target = sample_batch[0], sample_batch[1]
+            elif isinstance(sample_batch, dict):
+                input_tensor, target = sample_batch["input"], sample_batch["target"]
+            else:
+                input_tensor, target = sample_batch, None
+            input_tensor = input_tensor.to(self.device)
+            if target is not None:
+                target = target.to(self.device)
+        except Exception as e:
+            print(f"[XAI] Could not get validation batch for explainability: {e}")
+            return
+        for xai_cls, params in self.explainability_hooks:
+            try:
+                xai_instance = xai_cls(self.model, **params)
+                print(f"[XAI-DEBUG] input_tensor type before extraction: {type(input_tensor)}")
+                if isinstance(input_tensor, ModelOutput):
+                    print(f"[XAI-DEBUG] input_tensor is ModelOutput, extracting tensor...")
+                    input_tensor = extract_tensor_from_model_output(input_tensor)
+                    print(f"[XAI-DEBUG] input_tensor type after extraction: {type(input_tensor)}")
+                else:
+                    print(f"[XAI-DEBUG] input_tensor is not ModelOutput, type: {type(input_tensor)}")
+                attributions = xai_instance.explain(input_tensor, target=target)
+                print(f"[XAI-DEBUG] attributions type: {type(attributions)}; shape: {getattr(attributions, 'shape', 'N/A')}")
+                # Save attributions as images
+                method = xai_cls.__name__
+                save_dir = os.path.join("./explanations", method, f"epoch_{epoch+1}")
+                os.makedirs(save_dir, exist_ok=True)
+                # Convert attributions to numpy and save each sample
+                attr_np = attributions.detach().cpu().numpy()
+                for i in range(min(attr_np.shape[0], 8)):  # Save up to 8 images
+                    arr = attr_np[i]
+                    print(f"[XAI-DEBUG] Attribution stats for sample {i}: min={arr.min()}, max={arr.max()}, mean={arr.mean()}")
+                    arr = arr - arr.min()
+                    arr = arr / (arr.max() + 1e-8)
+                    arr = (arr * 255).astype(np.uint8)
+                    # If grayscale, squeeze channel
+                    if arr.shape[0] == 1:
+                        arr = arr[0]
+                    elif arr.shape[0] == 3:
+                        arr = np.transpose(arr, (1, 2, 0))
+                    img = Image.fromarray(arr)
+                    img.save(os.path.join(save_dir, f"sample_{i}.png"))
+            except Exception as e:
+                print(f"[XAI] Failed to run or save explainability for {xai_cls}: {e}")
+
     def train(self, num_epochs: int) -> Dict[str, float]:
         """
         Train the model for a specified number of epochs.
@@ -232,7 +295,8 @@ class SupervisedTrainer(BaseTrainer):
                         viz.save_with_name(model_name, mode='train')
                 except Exception as e:
                     print(f"[VizHook] per_layer_metrics save failed (train): {e}")
-
+            # --- Run XAI hooks at end of epoch ---
+            self._run_explainability_hooks(epoch)
             best_accuracy = self._handle_epoch_end(epoch, best_accuracy)
 
         if logger:

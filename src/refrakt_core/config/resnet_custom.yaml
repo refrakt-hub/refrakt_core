@@ -1,13 +1,6 @@
 runtime:
   mode: pipeline
   log_type: []
-  hooks:
-    visualizations:
-      - loss_accuracy
-      - confusion_matrix
-      - per_layer_metrics
-      - computation_graph
-    explainability: []
 
 dataset:
   name: custom

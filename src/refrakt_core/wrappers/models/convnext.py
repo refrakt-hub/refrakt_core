@@ -25,6 +25,11 @@ class ConvNeXtWrapper(nn.Module):
         self.layer_metrics = {}
         self._register_hooks()
 
+    def __call__(self, *args, **kwargs):
+        if getattr(self, '_captum_tracing', False):
+            return self.forward_for_graph(*args, **kwargs)
+        return super().__call__(*args, **kwargs)
+
     def _register_hooks(self):
         for name, module in self.backbone.named_modules():
             if len(list(module.children())) == 0:

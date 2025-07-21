@@ -79,3 +79,8 @@ class SwinTransformerWrapper(nn.Module):
         return (
             torch.as_tensor(logits) if not isinstance(logits, torch.Tensor) else logits
         )
+
+    def __call__(self, *args, **kwargs):
+        if getattr(self, '_captum_tracing', False):
+            return self.forward_for_graph(*args, **kwargs)
+        return super().__call__(*args, **kwargs)

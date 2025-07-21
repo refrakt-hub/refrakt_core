@@ -49,3 +49,9 @@ class ResNetWrapper(nn.Module):
         raise TypeError(
             "Expected torch.Tensor from backbone forward, got {}".format(type(out))
         )
+
+    def __call__(self, *args, **kwargs):
+        # Captum workaround: if _captum_tracing is set, return tensor for XAI
+        if getattr(self, '_captum_tracing', False):
+            return self.forward_for_graph(*args, **kwargs)
+        return super().__call__(*args, **kwargs)

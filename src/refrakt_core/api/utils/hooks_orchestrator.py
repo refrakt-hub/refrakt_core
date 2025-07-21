@@ -42,30 +42,40 @@ def instantiate_visualization_hooks(viz_names: List[str], extra_args: Optional[D
     return visualizations
 
 
-def instantiate_explainability_hooks(xai_names: List[str], extra_args: Optional[Dict[str, Any]] = None) -> List[Any]:
+def instantiate_explainability_hooks(
+    xai_configs: List[Dict[str, Any]], extra_args: Optional[Dict[str, Any]] = None
+) -> List[Any]:
     """
-    Instantiate explainability components from the refrakt_xai registry (future use).
+    Instantiate explainability components from the refrakt_xai registry.
 
     Args:
-        xai_names: List of explainability hook names (as specified in YAML).
-        extra_args: Optional dict of extra arguments to pass to each explainability component.
+        xai_configs: List of explainability hook configs (dicts as specified in YAML).
+        extra_args: Optional dict of extra arguments to pass to each XAI component.
 
     Returns:
-        List of instantiated explainability components.
+        List of instantiated XAI components.
     """
     if extra_args is None:
         extra_args = {}
+    # Dynamically import all XAI methods to populate the registry
     try:
-        xai_registry_module = importlib.import_module("refrakt_xai.registry")
-        get_xai = getattr(xai_registry_module, "get_xai")
-    except (ModuleNotFoundError, AttributeError):
-        print("Warning: refrakt_xai registry not found. Skipping explainability hooks.")
-        return []
-    explainability_hooks = []
-    for name in xai_names:
+        importlib.import_module("refrakt_xai.methods.integrated_gradients")
+        importlib.import_module("refrakt_xai.methods.saliency")
+        importlib.import_module("refrakt_xai.methods.occlusion")
+        importlib.import_module("refrakt_xai.methods.layer_gradcam")
+    except Exception as e:
+        print(f"Warning: Could not import one or more XAI modules: {e}")
+    xai_registry_module = importlib.import_module("refrakt_xai.registry")
+    get_xai = getattr(xai_registry_module, "get_xai")
+    xai_components = []
+    for xai_cfg in xai_configs:
         try:
-            xai_cls = get_xai(name)
-            explainability_hooks.append(xai_cls(**extra_args))
+            method = xai_cfg["method"]
+            params = {k: v for k, v in xai_cfg.items() if k != "method"}
+            params.update(extra_args)
+            xai_cls = get_xai(method)
+            # Do not instantiate yet (model is required at runtime)
+            xai_components.append((xai_cls, params))
         except Exception as e:
-            print(f"Warning: Could not instantiate explainability hook '{name}': {e}")
-    return explainability_hooks 
+            print(f"Warning: Could not instantiate XAI method '{xai_cfg}': {e}")
+    return xai_components 

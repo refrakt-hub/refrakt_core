@@ -162,6 +162,12 @@ def wrap_model(
         model = wrapper_cls(model=raw_model, **wrapper_args).to(device)
     
     print(f"[SUCCESS] Wrapped model with '{wrapper_name}'")
+
+    # Debug print: print all named modules in the wrapped model
+    # print("[DEBUG] Named modules in wrapped model:")
+    # for name, module in model.named_modules():
+    #     print(f"  {name}: {module.__class__.__name__}")
+
     return model
 
 

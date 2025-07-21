@@ -20,6 +20,9 @@ import gc
 import sys
 import traceback
 import warnings
+import os
+import numpy as np
+from PIL import Image
 from typing import Any, Dict, Optional, Union
 
 import torch
@@ -50,6 +53,79 @@ warnings.filterwarnings("ignore")
 
 gc.collect()
 torch.cuda.empty_cache()
+
+
+def _run_inference_explainability_hooks(
+    xai_hooks: Any,
+    model: Any,
+    data_loader: Any,
+    device: Any,
+    explainability_samples: Union[str, int] = 'all',
+) -> None:
+    """
+    Run XAI hooks on inference samples and save attributions as images.
+    Args:
+        xai_hooks: List of (xai_cls, params) tuples
+        model: Trained model
+        data_loader: Inference data loader
+        device: Device for computation
+        explainability_samples: 'all' or int (number of samples to explain)
+    """
+    if not xai_hooks:
+        return
+    # Prepare sample indices
+    if explainability_samples == 'all':
+        sample_indices = None  # All samples
+    else:
+        try:
+            N = int(explainability_samples)
+        except Exception:
+            N = 8
+        sample_indices = set(range(N))
+    sample_count = 0
+    for batch in data_loader:
+        if isinstance(batch, (tuple, list)):
+            input_tensor = batch[0]
+            target = batch[1] if len(batch) > 1 else None
+        elif isinstance(batch, dict):
+            input_tensor = batch["input"]
+            target = batch.get("target", None)
+        else:
+            input_tensor = batch
+            target = None
+        input_tensor = input_tensor.to(device)
+        if target is not None:
+            target = target.to(device)
+        batch_size = input_tensor.shape[0]
+        for xai_cls, params in xai_hooks:
+            try:
+                xai_instance = xai_cls(model, **params)
+                attributions = xai_instance.explain(input_tensor, target=target)
+                method = xai_cls.__name__
+                save_dir = os.path.join("./explanations_inference", method)
+                os.makedirs(save_dir, exist_ok=True)
+                attr_np = attributions.detach().cpu().numpy()
+                for i in range(batch_size):
+                    if sample_indices is not None and sample_count not in sample_indices:
+                        sample_count += 1
+                        continue
+                    arr = attr_np[i]
+                    arr = arr - arr.min()
+                    arr = arr / (arr.max() + 1e-8)
+                    arr = (arr * 255).astype(np.uint8)
+                    if arr.shape[0] == 1:
+                        arr = arr[0]
+                    elif arr.shape[0] == 3:
+                        arr = np.transpose(arr, (1, 2, 0))
+                    img = Image.fromarray(arr)
+                    img.save(os.path.join(save_dir, f"sample_{sample_count}.png"))
+                    sample_count += 1
+                    if sample_indices is not None and sample_count >= max(sample_indices) + 1:
+                        return
+            except Exception as e:
+                print(f"[XAI-Inference] Failed to run or save explainability for {xai_cls}: {e}")
+        if sample_indices is not None and sample_count >= max(sample_indices) + 1:
+            break
 
 
 def inference(
@@ -123,18 +199,20 @@ def inference(
         setup_artifact_dumper(config, resolved_model_name, logger)
 
         # --- Inference-time hooks ---
-        # Skipping visualization hooks during inference
-        # from omegaconf import OmegaConf
-        # config_dict = OmegaConf.to_container(config, resolve=True)
-        # if not isinstance(config_dict, dict):
-        #     config_dict = {}
-        # from typing import cast, Dict
-        # viz_hooks, xai_hooks = parse_runtime_hooks(cast(Dict[str, Any], config_dict))
-        # class_names = None
-        # if hasattr(config, "dataset") and hasattr(config.dataset, "params"):
-        #     class_names = getattr(config.dataset.params, "class_names", None)
-        # viz_components = instantiate_visualization_hooks(viz_hooks, extra_args={"class_names": class_names} if class_names else {})
-        # xai_components = instantiate_explainability_hooks(xai_hooks)
+        from omegaconf import OmegaConf
+        config_dict = OmegaConf.to_container(config, resolve=True)
+        if not isinstance(config_dict, dict):
+            config_dict = {}
+        from typing import cast
+        viz_hooks, xai_hooks = parse_runtime_hooks(cast(Dict[str, Any], config_dict))
+        # Convert xai_hooks to list of dicts if needed
+        xai_hook_dicts = []
+        for hook in xai_hooks:
+            if isinstance(hook, dict):
+                xai_hook_dicts.append(hook)
+            elif isinstance(hook, str):
+                xai_hook_dicts.append({"method": hook})
+        xai_components = instantiate_explainability_hooks(xai_hook_dicts)
         # --- End hooks ---
 
         # --- Inference-time sample predictions visualization ---
@@ -174,6 +252,12 @@ def inference(
                     print(f"[SamplePredictionsPlot] update() failed: {e}")
             results.append(output)
 
+        # --- Run XAI after inference if enabled ---
+        if xai_components:
+            # For each XAI method, get its per-method no_samples value (default 'all')
+            for (xai_cls, params), hook_cfg in zip(xai_components, xai_hook_dicts):
+                no_samples = hook_cfg.get('no_samples', 'all')
+                _run_inference_explainability_hooks([(xai_cls, params)], model, data_loader, device, no_samples)
         # Save sample predictions plot at the end of inference
         if sample_pred_plot is not None:
             model_name = getattr(model, 'model_name', resolved_model_name)
