@@ -19,3 +19,8 @@ class SimCLRWrapper(torch.nn.Module):
             embeddings=embeddings,
             extra={"wrapper_type": "simclr", **self.wrapper_config},
         )
+
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        if hasattr(self.model, "encode"):
+            return self.model.encode(x)
+        return self.model.forward(x)

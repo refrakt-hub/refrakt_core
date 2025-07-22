@@ -128,6 +128,12 @@ class MAE(BaseModel):
             patches, "b (h w) (p1 p2 c) -> b c (h p1) (w p2)", h=h, w=w, p1=p, p2=p, c=3
         )
 
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        """Return patch embeddings for visualization/embedding extraction."""
+        x_patch = self.patch_embed(x)  # [B, C, H', W']
+        x_patch = x_patch.flatten(2).transpose(1, 2)  # [B, N, embed_dim]
+        return x_patch
+
     def forward(self, x: Tensor) -> Tensor:
         """
         Forward pass through the MAE model.

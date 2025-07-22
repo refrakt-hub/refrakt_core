@@ -49,6 +49,17 @@ def parse_runtime_hooks(cfg: Dict[str, Any]) -> Tuple[List[str], List[str]]:
         visualizations = [visualizations]
     if not isinstance(explainability, list):
         explainability = [explainability]
+    # Extract method names if dicts, filter to str only
+    def extract_method(lst):
+        result = []
+        for v in lst:
+            if isinstance(v, dict) and "method" in v and isinstance(v["method"], str):
+                result.append(v["method"])
+            elif isinstance(v, str):
+                result.append(v)
+        return result
+    visualizations = extract_method(visualizations)
+    explainability = extract_method(explainability)
     return visualizations, explainability
 
 

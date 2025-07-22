@@ -162,6 +162,59 @@ class ContrastiveTrainer(BaseTrainer):
                     else:
                         loop.write("[WARNING] Skipping batch due to None outputs")
 
+                    # --- Visualization hooks: update after each batch ---
+                    for viz in getattr(self, "visualization_hooks", []):
+                        try:
+                            name = viz.__class__.__name__
+                            if name == "NearestNeighborsPlot":
+                                # Example: use first 8 samples as anchors, rest as candidates
+                                with torch.no_grad():
+                                    # Get embeddings for all samples in view1
+                                    embeddings = self.model.encode(view1.to(self.device)).cpu().numpy()
+                                    anchor_imgs = view1[:8].cpu().numpy()
+                                    anchors = embeddings[:8]
+                                    candidate_imgs = view1[8:24].cpu().numpy()
+                                    candidates = embeddings[8:24]
+                                viz.update(anchors, list(anchor_imgs), candidates, list(candidate_imgs))
+                            elif name == "EmbeddingSpacePlot":
+                                with torch.no_grad():
+                                    embeddings = self.model.encode(view1.to(self.device)).cpu().numpy()
+                                # If you have labels, use them; else use zeros
+                                labels = getattr(batch, 'labels', None)
+                                if labels is None:
+                                    labels = [0] * len(embeddings)
+                                viz.update(embeddings, labels)
+                            elif name == "PairSimilarityPlot":
+                                # Compute cosine similarities for positive and negative pairs
+                                with torch.no_grad():
+                                    z1 = self.model.encode(view1.to(self.device))
+                                    z2 = self.model.encode(view2.to(self.device))
+                                    z1 = torch.nn.functional.normalize(z1, dim=1)
+                                    z2 = torch.nn.functional.normalize(z2, dim=1)
+                                    pos_sims = (z1 * z2).sum(dim=1).cpu().numpy()
+                                    # For negatives, shuffle z2
+                                    z2_neg = z2[torch.randperm(z2.size(0))]
+                                    neg_sims = (z1 * z2_neg).sum(dim=1).cpu().numpy()
+                                viz.update(pos_sims, neg_sims)
+                            elif name == "ContrastiveLossCurvePlot":
+                                viz.update(float(loss_value))
+                            elif name == "ClusterAssignmentPlot":
+                                # Example: run k-means on embeddings
+                                from sklearn.cluster import KMeans
+                                with torch.no_grad():
+                                    embeddings = self.model.encode(view1.to(self.device)).cpu().numpy()
+                                n_clusters = 10
+                                kmeans = KMeans(n_clusters=n_clusters, n_init=1, random_state=0)
+                                assignments = kmeans.fit_predict(embeddings)
+                                labels = getattr(batch, 'labels', None)
+                                if labels is None:
+                                    labels = [0] * len(assignments)
+                                viz.update(assignments, labels)
+                            else:
+                                viz.update()
+                        except Exception as e:
+                            print(f"[VizHook] update() failed: {e}")
+
                 except (RuntimeError, ValueError, TypeError) as e:
                     loop.write(f"[ERROR] Batch skipped due to error: {e}")
 
@@ -179,6 +232,19 @@ class ContrastiveTrainer(BaseTrainer):
                 else 0.0
             )
             print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.4f}")
+
+            # --- Visualization hooks: save at end of epoch ---
+            model_name = getattr(self.model, "model_name", getattr(self, "model_name", "model"))
+            for viz in getattr(self, "visualization_hooks", []):
+                try:
+                    if hasattr(viz, "save_with_name"):
+                        viz.save_with_name(model_name)
+                    else:
+                        # fallback to old save method if needed
+                        viz.save(f"visualizations/{model_name}/viz_{viz.__class__.__name__}_epoch{epoch+1}.png")
+                except Exception as e:
+                    print(f"[VizHook] save() failed: {e}")
+
         return {"final_loss": avg_loss, "best_loss": best_loss}
 
     def evaluate(self) -> Optional[float]:

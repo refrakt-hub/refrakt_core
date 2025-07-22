@@ -78,3 +78,7 @@ class MSNModel(BaseModel):
         z_target = F.normalize(z_target, dim=-1)
         prototypes = F.normalize(self.prototypes, dim=-1)
         return z_anchor, z_target, prototypes
+
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        """Return encoder features for visualization/embedding extraction."""
+        return self.encoder(x)

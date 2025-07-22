@@ -135,6 +135,10 @@ class DINOModel(BaseModel):
                 momentum * teacher_param.data + (1.0 - momentum) * student_param.data
             )
 
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        """Return backbone features for visualization/embedding extraction."""
+        return self.backbone(x, return_features=True)
+
 
 class DINOBackboneWrapper(nn.Module):
     """
@@ -196,3 +200,6 @@ class DINOModelWrapper(DINOModel):
         self, x: torch.Tensor, teacher: bool = False, **kwargs: Any
     ) -> torch.Tensor:
         return super().forward(x, teacher=teacher, **kwargs)
+
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        return super().encode(x)
