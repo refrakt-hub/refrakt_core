@@ -13,6 +13,10 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import os
+import random
+import numpy as np
+import matplotlib.pyplot as plt
+import re
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
@@ -25,6 +29,14 @@ from refrakt_core.trainer.utils.autoencoder_utils import (
 )
 
 T = TypeVar("T", bound=torch.Tensor)
+
+
+def to_snake_case(name):
+    if name.isupper() or name.islower():
+        return name.lower()
+    name = re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
+    name = name.replace('__', '_')
+    return name.strip('_')
 
 
 @register_trainer("autoencoder")
@@ -47,6 +59,7 @@ class AETrainer(BaseTrainer):
         scheduler: Optional[Any] = None,
         artifact_dumper: Optional[Any] = None,
         visualization_hooks: Optional[list] = None,
+        explainability_hooks: Optional[list] = None,  # NEW: XAI hooks
         **kwargs: Any,
     ) -> None:
         """
@@ -86,6 +99,7 @@ class AETrainer(BaseTrainer):
         )  # Changed to 1 for every step
         self.global_step = 0
         self.visualization_hooks = visualization_hooks or []
+        self.explainability_hooks = explainability_hooks or []  # NEW: XAI hooks
 
         if optimizer_args is None:
             optimizer_args = {"lr": 1e-3}
@@ -144,6 +158,7 @@ class AETrainer(BaseTrainer):
             # --- Visualization hooks: save at end of epoch ---
             model_name = getattr(self.model, "model_name", getattr(self, "model_name", "model"))
             for viz in self.visualization_hooks:
+                registry_name = None
                 try:
                     registry_name = getattr(viz, "registry_name", viz.__class__.__name__)
                     print(f"[VizHook] Preparing to save: {registry_name}")
@@ -167,7 +182,13 @@ class AETrainer(BaseTrainer):
                         print(f"[VizHook] Calling save for {registry_name} with path {out_path}")
                         viz.save(out_path)
                 except Exception as e:
-                    print(f"[VizHook] save() failed for {registry_name}: {e}")
+                    if registry_name is not None:
+                        print(f"[VizHook] save() failed for {registry_name}: {e}")
+                    else:
+                        print(f"[VizHook] save() failed: {e}")
+
+            # --- Explainability hooks: run at end of epoch ---
+            self._run_explainability_hooks(epoch, inference=False)
 
         return {"final_loss": best_loss, "best_loss": best_loss}
 
@@ -206,6 +227,138 @@ class AETrainer(BaseTrainer):
         avg_loss = total_loss / len(self.val_loader)
         print(f"Validation Loss: {avg_loss:.4f}")
         return avg_loss
+
+    def _run_explainability_hooks(self, epoch: int, inference: bool = False) -> None:
+        """
+        Run all explainability hooks on a small batch from the validation set and save attributions as images or arrays.
+        Args:
+            epoch (int): Current epoch number (for output directory naming)
+            inference (bool): If True, only save a single random sample per batch (for explanations_inference)
+        """
+        if not self.explainability_hooks:
+            return
+        if not hasattr(self, 'val_loader') or self.val_loader is None:
+            return
+        try:
+            sample_batch = next(iter(self.val_loader))
+            if isinstance(sample_batch, (tuple, list)):
+                input_tensor = sample_batch[0]
+            elif isinstance(sample_batch, dict):
+                input_tensor = sample_batch.get("image") or sample_batch.get("input")
+                if input_tensor is None:
+                    raise ValueError("Batch dict does not contain a valid 'image' or 'input' tensor for XAI.")
+            else:
+                input_tensor = sample_batch
+            input_tensor = input_tensor.to(self.device)
+        except Exception as e:
+            print(f"[XAI] Could not get validation batch for explainability: {e}")
+            return
+        for xai_cls, params in self.explainability_hooks:
+            try:
+                if xai_cls.__name__ == "ConceptSaliencyXAI":
+                    xai_method = xai_cls(self.model, dataloader=self.val_loader, device=self.device, **params)
+                else:
+                    xai_method = xai_cls(self.model, **params)
+                attributions = xai_method.explain(input_tensor)
+                # Save attribution as image (if 2D/3D) or numpy array
+                import os
+                import numpy as np
+                import matplotlib.pyplot as plt
+                model_name = getattr(self.model, "model_name", getattr(self, "model_name", "autoencoder"))
+                # Use registry_name from params if present, else method name, always lowercased with underscores, no 'xai' suffix
+                registry_name = params.get("registry_name", params.get("method", xai_cls.__name__)).replace(" ", "_")
+                if registry_name.lower().endswith("xai"):
+                    registry_name = registry_name[:-3]
+                registry_name = to_snake_case(registry_name)
+                out_dir = f"explanations/{model_name}"
+                os.makedirs(out_dir, exist_ok=True)
+                arr = attributions.detach().cpu().numpy()
+                # For explanations_inference, only save a single random sample (regardless of shape)
+                if inference and arr.shape[0] > 1:
+                    idx = random.randint(0, arr.shape[0] - 1)
+                    arr = arr[idx]
+                # If arr is 4D (B, C, H, W), or 3D (B, H, W), ensure only one sample is saved
+                elif not inference and arr.ndim >= 3 and arr.shape[0] > 1:
+                    arr = arr[0]
+                fname = f"{out_dir}/{registry_name}.png"
+                if arr.ndim in [2, 3]:
+                    plt.figure()
+                    if arr.ndim == 3 and arr.shape[0] in [1, 3]:  # e.g., (C, H, W)
+                        # If single-channel or RGB, show as image
+                        arr_disp = arr.transpose(1, 2, 0) if arr.shape[0] == 3 else arr[0]
+                        plt.imshow(arr_disp, cmap="hot")
+                    else:
+                        plt.imshow(arr, cmap="hot")
+                    plt.colorbar()
+                    plt.title(f"{registry_name} Attribution")
+                    plt.savefig(fname)
+                    plt.close()
+                else:
+                    # Save as numpy array
+                    np.save(fname.replace('.png', '.npy'), arr)
+                print(f"[XAI] Saved attribution: {fname}")
+            except Exception as e:
+                print(f"[XAI] {xai_cls.__name__} failed: {e}")
+
+    def _run_explainability_inference(self):
+        """
+        Run all explainability hooks on a single random sample from the validation set and save attributions as images.
+        """
+        if not self.explainability_hooks:
+            return
+        if not hasattr(self, 'val_loader') or self.val_loader is None:
+            return
+        try:
+            sample_batch = next(iter(self.val_loader))
+            if isinstance(sample_batch, (tuple, list)):
+                input_tensor = sample_batch[0]
+            elif isinstance(sample_batch, dict):
+                input_tensor = sample_batch.get("image") or sample_batch.get("input")
+                if input_tensor is None:
+                    raise ValueError("Batch dict does not contain a valid 'image' or 'input' tensor for XAI.")
+            else:
+                input_tensor = sample_batch
+            input_tensor = input_tensor.to(self.device)
+        except Exception as e:
+            print(f"[XAI] Could not get validation batch for explainability: {e}")
+            return
+        for xai_cls, params in self.explainability_hooks:
+            try:
+                if xai_cls.__name__ == "ConceptSaliencyXAI":
+                    xai_method = xai_cls(self.model, dataloader=self.val_loader, device=self.device, **params)
+                else:
+                    xai_method = xai_cls(self.model, **params)
+                attributions = xai_method.explain(input_tensor)
+                arr = attributions.detach().cpu().numpy()
+                # Always select a single random sample, regardless of shape
+                if arr.shape[0] > 1:
+                    idx = random.randint(0, arr.shape[0] - 1)
+                    arr = arr[idx]
+                # If arr is still 4D (C, H, W, ...), reduce to 2D or 3D for visualization
+                if arr.ndim == 4:
+                    arr = arr[0]
+                model_name = getattr(self.model, "model_name", getattr(self, "model_name", "autoencoder"))
+                registry_name = params.get("registry_name", params.get("method", xai_cls.__name__)).replace(" ", "_")
+                if registry_name.lower().endswith("xai"):
+                    registry_name = registry_name[:-3]
+                registry_name = to_snake_case(registry_name)
+                out_dir = f"explanations_inference/{model_name}"
+                os.makedirs(out_dir, exist_ok=True)
+                fname = f"{out_dir}/{registry_name}.png"
+                # Save as image
+                plt.figure()
+                if arr.ndim == 3 and arr.shape[0] in [1, 3]:
+                    arr_disp = arr.transpose(1, 2, 0) if arr.shape[0] == 3 else arr[0]
+                    plt.imshow(arr_disp, cmap="hot")
+                else:
+                    plt.imshow(arr, cmap="hot")
+                plt.colorbar()
+                plt.title(f"{registry_name} Attribution")
+                plt.savefig(fname)
+                plt.close()
+                print(f"[XAI] Saved inference attribution: {fname}")
+            except Exception as e:
+                print(f"[XAI] {xai_cls.__name__} failed: {e}")
 
     def _unwrap_output(
         self, output: Union[ModelOutput, Dict[str, Any], torch.Tensor]

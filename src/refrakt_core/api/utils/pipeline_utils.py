@@ -30,7 +30,7 @@ from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.global_logging import set_global_logger
 
 
-def parse_runtime_hooks(cfg: Dict[str, Any]) -> Tuple[List[str], List[str]]:
+def parse_runtime_hooks(cfg: Dict[str, Any]) -> Tuple[List[str], List[Dict[str, Any]]]:
     """
     Parse the runtime.hooks section from the config to extract visualization and explainability hooks.
 
@@ -38,7 +38,7 @@ def parse_runtime_hooks(cfg: Dict[str, Any]) -> Tuple[List[str], List[str]]:
         cfg: The loaded YAML config as a dictionary or OmegaConf DictConfig.
 
     Returns:
-        Tuple of (visualization_hooks, explainability_hooks), each a list of strings.
+        Tuple of (visualization_hooks, explainability_hooks), each a list.
     """
     runtime = cfg.get("runtime", {})
     hooks = runtime.get("hooks", {})
@@ -49,8 +49,8 @@ def parse_runtime_hooks(cfg: Dict[str, Any]) -> Tuple[List[str], List[str]]:
         visualizations = [visualizations]
     if not isinstance(explainability, list):
         explainability = [explainability]
-    # Extract method names if dicts, filter to str only
-    def extract_method(lst):
+    # Extract method names for visualizations, and always return list of dicts for explainability
+    def extract_viz(lst):
         result = []
         for v in lst:
             if isinstance(v, dict) and "method" in v and isinstance(v["method"], str):
@@ -58,8 +58,16 @@ def parse_runtime_hooks(cfg: Dict[str, Any]) -> Tuple[List[str], List[str]]:
             elif isinstance(v, str):
                 result.append(v)
         return result
-    visualizations = extract_method(visualizations)
-    explainability = extract_method(explainability)
+    def extract_xai(lst):
+        result = []
+        for v in lst:
+            if isinstance(v, dict) and "method" in v and isinstance(v["method"], str):
+                result.append(v)
+            elif isinstance(v, str):
+                result.append({"method": v})
+        return result
+    visualizations = extract_viz(visualizations)
+    explainability = extract_xai(explainability)
     return visualizations, explainability
 
 

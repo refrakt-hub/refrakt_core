@@ -48,11 +48,18 @@ from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
     instantiate_visualization_hooks,
     instantiate_explainability_hooks,
 )
+import re
 
 warnings.filterwarnings("ignore")
 
 gc.collect()
 torch.cuda.empty_cache()
+
+
+def to_snake_case(name):
+    name = re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
+    name = name.replace('__', '_')
+    return name.strip('_')
 
 
 def _run_inference_explainability_hooks(
@@ -61,6 +68,7 @@ def _run_inference_explainability_hooks(
     data_loader: Any,
     device: Any,
     explainability_samples: Union[str, int] = 'all',
+    resolved_model_name: str = None,
 ) -> None:
     """
     Run XAI hooks on inference samples and save attributions as images.
@@ -99,10 +107,20 @@ def _run_inference_explainability_hooks(
         batch_size = input_tensor.shape[0]
         for xai_cls, params in xai_hooks:
             try:
-                xai_instance = xai_cls(model, **params)
+                if xai_cls.__name__ == "ConceptSaliencyXAI":
+                    xai_instance = xai_cls(model, dataloader=data_loader, device=device, **params)
+                else:
+                    xai_instance = xai_cls(model, **params)
                 attributions = xai_instance.explain(input_tensor, target=target)
                 method = xai_cls.__name__
-                save_dir = os.path.join("./explanations_inference", method)
+                # Determine model_name
+                model_name = resolved_model_name if resolved_model_name is not None else getattr(model, "model_name", "model")
+                # Use registry_name from params if present, else method name, always lowercased with underscores, no 'xai' suffix
+                registry_name = params.get("registry_name", params.get("method", xai_cls.__name__)).replace(" ", "_")
+                if registry_name.lower().endswith("xai"):
+                    registry_name = registry_name[:-3]
+                registry_name = to_snake_case(registry_name)
+                save_dir = os.path.join("./explanations_inference", model_name)
                 os.makedirs(save_dir, exist_ok=True)
                 attr_np = attributions.detach().cpu().numpy()
                 for i in range(batch_size):
@@ -118,7 +136,8 @@ def _run_inference_explainability_hooks(
                     elif arr.shape[0] == 3:
                         arr = np.transpose(arr, (1, 2, 0))
                     img = Image.fromarray(arr)
-                    img.save(os.path.join(save_dir, f"sample_{sample_count}.png"))
+                    # Save as {concept_saliency_inference.png}, etc.
+                    img.save(os.path.join(save_dir, f"{registry_name}_inference.png"))
                     sample_count += 1
                     if sample_indices is not None and sample_count >= max(sample_indices) + 1:
                         return
@@ -254,10 +273,10 @@ def inference(
 
         # --- Run XAI after inference if enabled ---
         if xai_components:
-            # For each XAI method, get its per-method no_samples value (default 'all')
+            # For each XAI method, get its per-method no_samples value (default 1)
             for (xai_cls, params), hook_cfg in zip(xai_components, xai_hook_dicts):
-                no_samples = hook_cfg.get('no_samples', 'all')
-                _run_inference_explainability_hooks([(xai_cls, params)], model, data_loader, device, no_samples)
+                no_samples = hook_cfg.get('no_samples', 1)  # Default to 1 if not set
+                _run_inference_explainability_hooks([(xai_cls, params)], model, data_loader, device, no_samples, resolved_model_name)
         # Save sample predictions plot at the end of inference
         if sample_pred_plot is not None:
             model_name = getattr(model, 'model_name', resolved_model_name)

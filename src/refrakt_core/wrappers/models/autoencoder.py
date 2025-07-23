@@ -177,3 +177,6 @@ class AutoencoderWrapper(nn.Module):
         with torch.no_grad():
             samples = self.decode(z)
         return samples.detach().cpu().numpy()
+
+    def get_latent(self, x):
+        return self.backbone.get_latent(x)
