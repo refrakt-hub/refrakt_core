@@ -23,6 +23,8 @@ from refrakt_core.trainer.utils.gan_utils import (
     handle_gan_scheduler_step,
 )
 
+import os
+
 
 @register_trainer("gan")
 class GANTrainer(BaseTrainer):
@@ -44,6 +46,7 @@ class GANTrainer(BaseTrainer):
         device: str = "cuda",
         scheduler: Optional[Any] = None,
         artifact_dumper: Optional[Any] = None,
+        visualization_hooks: Optional[list] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -100,6 +103,8 @@ class GANTrainer(BaseTrainer):
             "discriminator": GradScaler(enabled=(device == "cuda")),
         }
 
+        self.visualization_hooks = visualization_hooks or []
+
     def train(self, num_epochs: int) -> Dict[str, float]:
         """
         Train the GAN model for a specified number of epochs.
@@ -129,6 +134,15 @@ class GANTrainer(BaseTrainer):
                 logger=self._get_logger(),
             )
 
+            # --- Visualization hooks: update after each batch (if possible) ---
+            # Note: If handle_gan_epoch_training can be modified to yield batch/loss, do so. Otherwise, update hooks here as needed.
+            # for batch in self.train_loader:
+            #     for viz in self.visualization_hooks:
+            #         try:
+            #             viz.update_from_batch(self.model, batch, None, epoch)
+            #         except Exception as e:
+            #             print(f"[VizHook] update_from_batch() failed: {e}")
+
             # Update schedulers
             handle_gan_scheduler_step(self.scheduler)
 
@@ -153,6 +167,18 @@ class GANTrainer(BaseTrainer):
             print(
                 f"Epoch [{epoch+1}/{num_epochs}], G Loss: {final_avg_g_loss:.4f}, D Loss: {final_avg_d_loss:.4f}"
             )
+
+            # --- Visualization hooks: save at end of epoch ---
+            model_name = getattr(self.model, "model_name", getattr(self, "model_name", "model"))
+            for viz in self.visualization_hooks:
+                try:
+                    registry_name = getattr(viz, "registry_name", viz.__class__.__name__)
+                    out_dir = f"visualizations/{model_name}/{registry_name}"
+                    os.makedirs(out_dir, exist_ok=True)
+                    out_path = f"{out_dir}/epoch_{epoch+1}.png"
+                    viz.save(out_path)
+                except Exception as e:
+                    print(f"[VizHook] save() failed: {e}")
 
         return {
             "final_g_loss": final_avg_g_loss,

@@ -12,6 +12,7 @@ from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import os
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
@@ -45,6 +46,7 @@ class AETrainer(BaseTrainer):
         device: str = "cuda",
         scheduler: Optional[Any] = None,
         artifact_dumper: Optional[Any] = None,
+        visualization_hooks: Optional[list] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -83,6 +85,7 @@ class AETrainer(BaseTrainer):
             getattr(artifact_dumper, "log_every", 1) if artifact_dumper else None
         )  # Changed to 1 for every step
         self.global_step = 0
+        self.visualization_hooks = visualization_hooks or []
 
         if optimizer_args is None:
             optimizer_args = {"lr": 1e-3}
@@ -118,6 +121,13 @@ class AETrainer(BaseTrainer):
                     artifact_dumper=self.artifact_dumper,
                 )
 
+                # --- Visualization hooks: update after each batch ---
+                for viz in self.visualization_hooks:
+                    try:
+                        viz.update_from_batch(self.model, batch, loss_value, epoch)
+                    except Exception as e:
+                        print(f"[VizHook] update_from_batch() failed: {e}")
+
                 self.global_step += 1
                 loop.set_postfix({"loss": loss_value})
 
@@ -130,6 +140,34 @@ class AETrainer(BaseTrainer):
                 print(f"New best model saved with loss: {val_loss:.4f}")
 
             self.save(suffix="latest")
+
+            # --- Visualization hooks: save at end of epoch ---
+            model_name = getattr(self.model, "model_name", getattr(self, "model_name", "model"))
+            for viz in self.visualization_hooks:
+                try:
+                    registry_name = getattr(viz, "registry_name", viz.__class__.__name__)
+                    print(f"[VizHook] Preparing to save: {registry_name}")
+                    # Compose model_name and variant for directory, avoid duplicate variant
+                    variant = getattr(self.model, "variant", getattr(self.model, "backbone", None) and getattr(self.model.backbone, "variant", "simple") or "simple")
+                    model_name = getattr(self.model, "model_name", getattr(self, "model_name", "autoencoder"))
+                    if model_name.endswith(f"_{variant}"):
+                        model_variant_dir = model_name
+                    else:
+                        model_variant_dir = f"{model_name}_{variant}"
+                    if registry_name == "latent_space_projection":
+                        out_dir = f"visualizations/{model_variant_dir}"
+                        os.makedirs(out_dir, exist_ok=True)
+                        out_path = f"{out_dir}/{registry_name}.png"
+                        print(f"[VizHook] Calling save for {registry_name} with path {out_path} (with epoch)")
+                        viz.save(out_path, epoch=epoch+1)
+                    elif registry_name in ["disentanglement_analysis", "feature_attribution", "reconstruction_viz", "sample_generation"]:
+                        out_dir = f"visualizations/{model_variant_dir}"
+                        os.makedirs(out_dir, exist_ok=True)
+                        out_path = f"{out_dir}/{registry_name}.png"
+                        print(f"[VizHook] Calling save for {registry_name} with path {out_path}")
+                        viz.save(out_path)
+                except Exception as e:
+                    print(f"[VizHook] save() failed for {registry_name}: {e}")
 
         return {"final_loss": best_loss, "best_loss": best_loss}
 
