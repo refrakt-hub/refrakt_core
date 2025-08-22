@@ -49,6 +49,10 @@ class MSNWrapper(nn.Module):
             if k not in {"encoder_name", "projector_dim", "num_prototypes", "pretrained", "model"}
         }
         self.wrapper_config = {"wrapper_type": "msn", **filtered_kwargs}
+        
+        # Set model attributes for XAI detection
+        self.model_name = "msn"
+        self.model_type = "contrastive"
 
     def forward(self, x: Dict[str, torch.Tensor]) -> ModelOutput:
         """

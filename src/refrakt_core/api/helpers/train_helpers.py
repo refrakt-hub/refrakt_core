@@ -21,6 +21,8 @@ Typical usage involves calling these helper functions from the main train
 API to set up and execute training operations.
 """
 
+import os
+import json
 import sys
 from typing import Any, Dict, Optional, Tuple, Union, cast
 
@@ -35,6 +37,7 @@ from refrakt_core.api.utils.train_utils import (
     _save_config_and_log_metrics,
     _setup_optimizer_config,
     _setup_trainer_params,
+    build_optimizer_and_scheduler,
     load_config,
 )
 from refrakt_core.api.utils.pipeline_utils import parse_runtime_hooks
@@ -42,6 +45,8 @@ from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
     instantiate_visualization_hooks,
     instantiate_explainability_hooks,
 )
+
+from refrakt_cli.llm_explainer import extract_comprehensive_metadata
 
 __all__ = [
     "_load_and_validate_config",
@@ -54,6 +59,8 @@ __all__ = [
     "_execute_training",
     "load_config",
     "OmegaConf",
+    "_save_test_summary_metrics",
+    "_save_inference_summary_metrics",
 ]
 
 # For tests expecting train_helpers.train_helpers
@@ -210,41 +217,39 @@ def _build_datasets_and_model(
             "model": model_cls,
         },
         device=str(device),
+        logger=logger,
     )
+    
+    # for name, module in model.named_modules():
+    #     print(f" {name}: {module}")
 
-    loss_fn = build_loss(cast(OmegaConf, config), modules=modules, device=str(device))
+    loss_fn = build_loss(cast(OmegaConf, config), modules=modules, device=str(device), logger=logger)
 
     return train_loader, val_loader, model, loss_fn
 
 
 def _setup_optimizer_and_scheduler(
-    config: DictConfig, model: torch.nn.Module
+    config: DictConfig, model: torch.nn.Module, logger: Optional[RefraktLogger] = None
 ) -> Tuple[Any, Optional[Any]]:
     """
     Setup optimizer and scheduler for training.
 
     This function configures the optimizer and optional learning rate scheduler
-    based on the training configuration.
+    based on the training configuration. It supports both standard single optimizers
+    and GAN-style nested optimizer structures.
 
     Args:
         config: Configuration object containing optimizer and scheduler settings
         model: Model whose parameters will be optimized
+        logger: Optional logger instance for debug output
 
     Returns:
         Tuple containing:
-        - optimizer: Configured optimizer instance
+        - optimizer: Configured optimizer instance or dictionary for GAN models
         - scheduler: Optional learning rate scheduler
     """
-    opt_cls, optimizer_args = _setup_optimizer_config(config)
-    optimizer = opt_cls(model.parameters(), **optimizer_args)
-
-    scheduler: Optional[Any] = None
-    if hasattr(config, "scheduler") and config.scheduler:
-        from refrakt_core.api.builders.scheduler_builder import build_scheduler
-
-        scheduler = build_scheduler(cast(OmegaConf, config), optimizer)
-
-    return optimizer, scheduler
+    # Use the proper optimizer builder that supports GAN nested structures
+    return build_optimizer_and_scheduler(config, model, logger)
 
 
 def _setup_trainer(
@@ -260,6 +265,7 @@ def _setup_trainer(
     artifact_dumper: Any,
     resolved_model_name: str,
     logger: RefraktLogger,
+    experiment_id: Optional[str] = None,
 ) -> Tuple[Any, int, str]:
     """
     Setup and initialize trainer for training.
@@ -280,6 +286,7 @@ def _setup_trainer(
         artifact_dumper: Artifact dumper for saving outputs
         resolved_model_name: Name of the model for trainer configuration
         logger: Logger instance for status messages
+        experiment_id: Optional experiment ID for consistent directory naming
 
     Returns:
         Tuple containing:
@@ -297,7 +304,7 @@ def _setup_trainer(
     config_dict = OmegaConf.to_container(config, resolve=True)
     if not isinstance(config_dict, dict):
         config_dict = {}
-    viz_hooks, xai_hooks = parse_runtime_hooks(cast(Dict[str, Any], config_dict))
+    viz_hooks, xai_hooks, explain_flag = parse_runtime_hooks(cast(Dict[str, Any], config_dict))
     # Example: pass class_names if available (for supervised)
     class_names = None
     if hasattr(config, "dataset") and hasattr(config.dataset, "params"):
@@ -330,10 +337,15 @@ def _setup_trainer(
         device=final_device,
         modules=modules,
         save_dir=save_dir,
+        experiment_id=experiment_id,
+        logger=logger,
         **trainer_params,
     )
     # Set model_name on the trainer instance for correct checkpoint naming
     setattr(trainer, "model_name", resolved_model_name)
+    # Set experiment directory if artifact_dumper provides it
+    if hasattr(artifact_dumper, 'experiment_dir'):
+        setattr(trainer, "experiment_dir", artifact_dumper.experiment_dir)
     # Set visualization and explainability hooks as attributes if present
     if viz_components:
         setattr(trainer, "visualization_hooks", viz_components)
@@ -354,54 +366,107 @@ def _execute_training(
     artifact_dumper: Any,
     resolved_model_name: str,
     logger: RefraktLogger,
+    experiment_id: Optional[str] = None,
+    config_path: str = None,
 ) -> Dict[str, Any]:
     """
-    Execute the training process.
-
-    This function runs the training loop, handles fusion head training if needed,
-    and logs final metrics and configuration.
-
-    Args:
-        trainer: Configured trainer instance
-        num_epochs: Number of training epochs
-        config: Configuration object for logging
-        model: Trained model
-        train_loader: Training data loader
-        val_loader: Validation data loader
-        final_device: Device string used for training
-        artifact_dumper: Artifact dumper for saving outputs
-        resolved_model_name: Name of the model for logging
-        logger: Logger instance for status messages
-
-    Returns:
-        Dictionary containing final training metrics
-
-    Note:
-        This function handles both standard training and fusion head training,
-        ensuring all components are properly trained and logged.
+    Execute the training process and save results in the new directory structure.
     """
-    logger.info(f"\n🚀 Starting training for {num_epochs} epochs...")
-    final_metrics = trainer.train(num_epochs)
+    # Execute training
+    training_results = trainer.train(num_epochs)
+    
+    if logger:
+        logger.info(f"Training results: {training_results}")
+    
+    # Save summary metrics in experiment directory
+    # Use checkpoint directory if experiment_dir is not available
+    experiment_dir = None
+    if hasattr(trainer, 'experiment_dir') and trainer.experiment_dir:
+        experiment_dir = trainer.experiment_dir
+    elif hasattr(trainer, 'save_dir') and trainer.save_dir and experiment_id:
+        # The save_dir is typically ./checkpoints/autoencoder_vae_{experiment_id}/weights
+        # So we need to go up one level to get the experiment directory
+        experiment_dir = os.path.dirname(trainer.save_dir)  # This should be ./checkpoints/autoencoder_vae_{experiment_id}
+    
+    if experiment_dir:
+        summary_metrics_path = os.path.join(experiment_dir, "explanations", "summary_metrics.json")
+        
+        # Create explanations directory if it doesn't exist
+        os.makedirs(os.path.dirname(summary_metrics_path), exist_ok=True)
+        
+        # Extract comprehensive metadata
+        metadata = extract_comprehensive_metadata([config_path] if config_path else [], os.getcwd(), experiment_dir, logger, training_results)
+        
+        # --- Robust summary_metrics merging logic ---
+        if os.path.exists(summary_metrics_path):
+            try:
+                with open(summary_metrics_path, 'r') as f:
+                    existing_metrics = json.load(f)
+                # Merge experiment_info, model_info, dataset_info, trainer_info, optimizer_info, run_metadata
+                for key in ['experiment_info', 'model_info', 'dataset_info', 'trainer_info', 'optimizer_info', 'run_metadata']:
+                    if key in existing_metrics and key in metadata:
+                        if not metadata[key]:
+                            metadata[key] = existing_metrics[key]
+                # Merge performance_metrics, preferring most complete (non-'N/A') values
+                merged_perf = existing_metrics.get('performance_metrics', {}).copy()
+                for k, v in metadata.get('performance_metrics', {}).items():
+                    if v not in [None, '', 'N/A']:
+                        merged_perf[k] = v
+                    elif k in merged_perf and merged_perf[k] not in [None, '', 'N/A']:
+                        continue  # keep existing good value
+                    else:
+                        merged_perf[k] = v  # fallback
+                metadata['performance_metrics'] = merged_perf
+            except Exception as e:
+                if logger:
+                    logger.warning(f"Could not merge with existing summary_metrics.json: {e}")
+        # Save to experiment directory
+        with open(summary_metrics_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        
+        if logger:
+            logger.info(f"Summary metrics saved to {summary_metrics_path}")
+    
+    return training_results
 
-    # Fusion Head Training
-    _handle_fusion_training(
-        config,
-        model,
-        train_loader,
-        val_loader,
-        final_device,
-        artifact_dumper,
-        trainer,
-        logger,
-    )
 
-    # Save config and log final metrics
-    _save_config_and_log_metrics(
-        config, trainer, resolved_model_name, final_metrics, logger
-    )
+def _save_test_summary_metrics(trainer, eval_results, resolved_model_name, logger, experiment_id, config_files=None):
+    """Save summary_metrics.json for test phase, using config_files for metadata."""
+    experiment_dir = None
+    if hasattr(trainer, 'experiment_dir') and trainer.experiment_dir:
+        experiment_dir = trainer.experiment_dir
+    elif hasattr(trainer, 'save_dir') and trainer.save_dir and experiment_id:
+        experiment_dir = os.path.dirname(trainer.save_dir)
+    if experiment_dir:
+        summary_metrics_path = os.path.join(experiment_dir, "explanations", "summary_metrics.json")
+        os.makedirs(os.path.dirname(summary_metrics_path), exist_ok=True)
+        base_dir = os.getcwd()
+        checkpoints_dir = experiment_dir
+        metadata = extract_comprehensive_metadata(config_files or [], base_dir, checkpoints_dir, logger, eval_results)
+        with open(summary_metrics_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        if logger:
+            logger.info(f"Summary metrics saved to {summary_metrics_path}")
 
-    # Ensure we return a Dict[str, Any] even if final_metrics is not a dict
-    if isinstance(final_metrics, dict):
-        return final_metrics
+def _save_inference_summary_metrics(model, results, resolved_model_name, logger, experiment_id, config_files=None):
+    """Save summary_metrics.json for inference phase, using config_files for metadata."""
+    experiment_dir = None
+    if hasattr(model, 'experiment_dir') and model.experiment_dir:
+        experiment_dir = model.experiment_dir
     else:
-        return {"metrics": final_metrics}
+        experiment_dir = os.path.join("./checkpoints", f"{resolved_model_name}_{experiment_id}")
+    if experiment_dir:
+        summary_metrics_path = os.path.join(experiment_dir, "explanations", "summary_metrics.json")
+        os.makedirs(os.path.dirname(summary_metrics_path), exist_ok=True)
+        base_dir = os.getcwd()
+        checkpoints_dir = experiment_dir
+        metrics = results[-1] if isinstance(results, list) and results else {}
+        # --- Patch: Convert ModelOutput to dict if needed ---
+        from refrakt_core.schema.model_output import ModelOutput
+        if isinstance(metrics, ModelOutput):
+            metrics = metrics.summary()
+        metadata = extract_comprehensive_metadata(config_files or [], base_dir, checkpoints_dir, logger, metrics)
+        with open(summary_metrics_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+        if logger:
+            logger.info(f"Summary metrics saved to {summary_metrics_path}")

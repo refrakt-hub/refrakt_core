@@ -23,7 +23,7 @@ import torch
 from omegaconf import OmegaConf
 
 
-def build_scheduler(cfg: OmegaConf, optimizer: Any) -> Optional[Any]:
+def build_scheduler(cfg: OmegaConf, optimizer: Any, logger: Optional[Any] = None) -> Optional[Any]:
     """
     Build a learning rate scheduler from configuration for a given optimizer.
 
@@ -41,6 +41,7 @@ def build_scheduler(cfg: OmegaConf, optimizer: Any) -> Optional[Any]:
              parameters, and optional settings
         optimizer: The optimizer to which the scheduler will be attached.
                   Can be any PyTorch optimizer or optimizer dictionary
+        logger: Optional logger instance for debug output
 
     Returns:
         The instantiated scheduler object if configuration is provided,
@@ -56,7 +57,10 @@ def build_scheduler(cfg: OmegaConf, optimizer: Any) -> Optional[Any]:
         raise TypeError(f"cfg must convert to a dict, got {type(cfg_dict)}")
     scheduler_cfg = cfg_dict.get("scheduler")
     if scheduler_cfg and isinstance(scheduler_cfg, dict) and scheduler_cfg.get("name"):
-        print("Building scheduler...")
+        if logger:
+            logger.debug("Building scheduler...")
+        else:
+            print("Building scheduler...")
         sched_map = {
             "cosine": torch.optim.lr_scheduler.CosineAnnealingLR,
             "steplr": torch.optim.lr_scheduler.StepLR,
@@ -76,6 +80,9 @@ def build_scheduler(cfg: OmegaConf, optimizer: Any) -> Optional[Any]:
                 f"scheduler_params must be a dict, got {type(scheduler_params)}"
             )
         scheduler = scheduler_cls(optimizer, **scheduler_params)
-        print(f"Scheduler: {scheduler_name} with params: {scheduler_params}")
+        if logger:
+            logger.debug(f"Scheduler: {scheduler_name} with params: {scheduler_params}")
+        else:
+            print(f"Scheduler: {scheduler_name} with params: {scheduler_params}")
 
     return scheduler

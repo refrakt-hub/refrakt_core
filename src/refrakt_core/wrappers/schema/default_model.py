@@ -23,6 +23,10 @@ class DefaultModelWrapper(nn.Module):
                 "modules['get_model'] must be provided for DefaultModelWrapper."
             )
         self.model = modules["get_model"](model_name, **model_params)
+        
+        # Set model attributes for XAI detection
+        self.model_name = model_name
+        self.model_type = "unknown"  # Default type for wrapped models
 
     def forward(self, x: torch.Tensor, **kwargs: Any) -> ModelOutput:
         output = self.model(x, **kwargs)

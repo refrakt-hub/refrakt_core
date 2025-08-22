@@ -110,32 +110,33 @@ def wrap_model(
     model_params: Dict[str, Any],
     modules: Dict[str, Any],
     device: str,
+    logger: Optional[Any] = None,
 ) -> Any:
     """
-    Wrap the model with the specified wrapper class.
+    Wrap a raw model with a specified wrapper class.
 
-    This function applies a wrapper to the base model using the wrapper registry.
-    It automatically filters wrapper parameters based on the wrapper's constructor
-    signature and handles special cases like AutoEncoder variant mapping.
+    This function takes a raw model and wraps it with a specified wrapper class
+    from the modules registry. The wrapper provides additional functionality
+    such as loss computation, metric tracking, or specialized training logic.
 
     Args:
-        raw_model: The base model object to be wrapped
-        wrapper_name: Name of the wrapper class to apply from the registry
-        model_params: Model parameters that may include wrapper-specific parameters
-        modules: Registry dictionary containing available wrapper functions
+        raw_model: The raw model object to be wrapped
+        wrapper_name: Name of the wrapper class to use
+        model_params: Model parameters to be passed to the wrapper
+        modules: Registry dictionary containing available wrapper classes
         device: Target device string for the wrapped model
+        logger: Optional logger instance for debug output
 
     Returns:
-        Wrapped model object moved to the specified device
+        The wrapped model object moved to the specified device
 
     Raises:
-        ValueError: If the get_wrapper function is not found in the modules registry
-                  or if the specified wrapper class is not found
+        ValueError: If the wrapper class is not found in the modules registry
     """
     get_wrapper_fn = modules.get("get_wrapper")
     if get_wrapper_fn is None:
         raise ValueError("[ERROR] get_wrapper function not found in modules registry.")
-
+    
     wrapper_cls = get_wrapper_fn(wrapper_name)
     if wrapper_cls is None:
         raise ValueError(f"[ERROR] Wrapper class for '{wrapper_name}' not found.")
@@ -161,18 +162,15 @@ def wrap_model(
     else:
         model = wrapper_cls(model=raw_model, **wrapper_args).to(device)
     
-    print(f"[SUCCESS] Wrapped model with '{wrapper_name}'")
-
-    # Debug print: print all named modules in the wrapped model
-    # print("[DEBUG] Named modules in wrapped model:")
-    # for name, module in model.named_modules():
-    #     print(f"  {name}: {module.__class__.__name__}")
-
+    if logger:
+        logger.debug(f"[SUCCESS] Wrapped model with '{wrapper_name}'")
+    else:
+        print(f"[SUCCESS] Wrapped model with '{wrapper_name}'")
     return model
 
 
 def create_default_wrapper(
-    model_name: str, model_params: Dict[str, Any], modules: Dict[str, Any], device: str
+    model_name: str, model_params: Dict[str, Any], modules: Dict[str, Any], device: str, logger: Optional[Any] = None
 ) -> Any:
     """
     Create a default model wrapper as a fallback mechanism.
@@ -186,6 +184,7 @@ def create_default_wrapper(
         model_params: Model parameters to be stored in the wrapper
         modules: Registry dictionary containing available functions
         device: Target device string for the wrapped model
+        logger: Optional logger instance for debug output
 
     Returns:
         DefaultModelWrapper instance moved to the specified device
@@ -194,17 +193,17 @@ def create_default_wrapper(
         This function provides a safety net for models that don't specify
         a custom wrapper, ensuring all models have a consistent interface.
     """
-    print(
-        f"[INFO] No wrapper specified. Using DefaultModelWrapper for model \
-            '{model_name}'"
-    )
+    if logger:
+        logger.debug(f"[INFO] No wrapper specified. Using DefaultModelWrapper for model '{model_name}'")
+    else:
+        print(f"[INFO] No wrapper specified. Using DefaultModelWrapper for model '{model_name}'")
     model = DefaultModelWrapper(
         model_name=model_name, model_params=model_params, modules=modules
     ).to(device)
     return model
 
 
-def add_fusion_block(model: Any, model_cfg: Any, device: str) -> Any:
+def add_fusion_block(model: Any, model_cfg: Any, device: str, logger: Optional[Any] = None) -> Any:
     """
     Add a fusion block to the model if specified in configuration.
 
@@ -216,6 +215,7 @@ def add_fusion_block(model: Any, model_cfg: Any, device: str) -> Any:
         model: The model object to potentially wrap with fusion block
         model_cfg: Model configuration that may contain fusion settings
         device: Target device string for the fusion block
+        logger: Optional logger instance for debug output
 
     Returns:
         Either the original model or the model wrapped with FusionBlock,
@@ -229,10 +229,12 @@ def add_fusion_block(model: Any, model_cfg: Any, device: str) -> Any:
     if fusion_cfg:
         from refrakt_core.integrations.fusion.block import FusionBlock
 
-        print(
-            f"[INFO] Wrapping model with FusionBlock using fusion config: {fusion_cfg}"
-        )
+        if logger:
+            logger.debug(f"[INFO] Wrapping model with FusionBlock using fusion config: {fusion_cfg}")
+            logger.debug("[SUCCESS] Model wrapped with FusionBlock.")
+        else:
+            print(f"[INFO] Wrapping model with FusionBlock using fusion config: {fusion_cfg}")
+            print("[SUCCESS] Model wrapped with FusionBlock.")
         model = FusionBlock(backbone=model, fusion_cfg=fusion_cfg).to(device)
-        print("[SUCCESS] Model wrapped with FusionBlock.")
 
     return model

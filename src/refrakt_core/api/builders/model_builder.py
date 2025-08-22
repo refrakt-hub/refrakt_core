@@ -35,6 +35,7 @@ def build_model(
     modules: Dict[str, Any],
     device: str,
     overrides: Optional[List[str]] = None,
+    logger: Optional[Any] = None,
 ) -> Any:
     """
     Build and wrap a model from configuration, with optional fusion block
@@ -62,6 +63,7 @@ def build_model(
         device: Target device string (e.g., "cuda", "cpu") for model placement
         overrides: Optional list of override strings in format
             'path.to.param=value' to modify configuration before model building
+        logger: Optional logger instance for debug output
 
     Returns:
         The instantiated and wrapped model object, ready for training or
@@ -94,20 +96,26 @@ def build_model(
 
         # Step 2: Wrap model (if wrapper is specified)
         if wrapper_name:
-            model = wrap_model(raw_model, wrapper_name, model_params, modules, device)
+            model = wrap_model(raw_model, wrapper_name, model_params, modules, device, logger)
         else:
-            model = create_default_wrapper(model_name, model_params, modules, device)
+            model = create_default_wrapper(model_name, model_params, modules, device, logger)
 
     except Exception as e:
         import traceback
 
         traceback.print_exc()
-        print(f"[FALLBACK] Using DefaultModelWrapper due to error: {e}")
+        if logger:
+            logger.debug(f"[FALLBACK] Using DefaultModelWrapper due to error: {e}")
+        else:
+            print(f"[FALLBACK] Using DefaultModelWrapper due to error: {e}")
         model = create_default_wrapper(model_name, model_params, modules, device)
 
     # Step 3: Add fusion block if specified
     model_cfg = cfg_dict.get("model")
-    model = add_fusion_block(model, model_cfg, device)
+    model = add_fusion_block(model, model_cfg, device, logger)
 
-    print(f"[FINALIZED] Model: {model_name} with params: {model_params}")
+    if logger:
+        logger.debug(f"[FINALIZED] Model: {model_name} with params: {model_params}")
+    else:
+        print(f"[FINALIZED] Model: {model_name} with params: {model_params}")
     return model

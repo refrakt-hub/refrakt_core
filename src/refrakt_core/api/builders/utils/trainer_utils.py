@@ -75,6 +75,7 @@ def setup_standard_trainer(
     artifact_dumper: Optional[Any],
     trainer_params: Dict[str, Any],
     cfg_dict: Any,
+    experiment_id: Optional[str] = None,
 ) -> Any:
     """
     Setup a standard trainer for supervised, autoencoder, or MSN training.
@@ -94,6 +95,7 @@ def setup_standard_trainer(
         artifact_dumper: Optional artifact dumper for saving outputs
         trainer_params: Trainer-specific parameters dictionary
         cfg_dict: Configuration dictionary containing optimizer settings
+        experiment_id: Optional experiment ID for consistent directory naming
 
     Returns:
         Configured trainer instance ready for training
@@ -133,6 +135,7 @@ def setup_standard_trainer(
         device=device,
         scheduler=scheduler,
         artifact_dumper=artifact_dumper,
+        experiment_id=experiment_id,
         **trainer_params,
     )
 

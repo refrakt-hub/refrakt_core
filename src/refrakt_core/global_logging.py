@@ -18,7 +18,21 @@ def get_global_logger() -> logging.Logger:
     """
     Get the global logger instance. Returns dummy if not initialized yet.
     """
-    return get_logger("default")
+    # Only return the default logger if it already exists, don't create it automatically
+    try:
+        from refrakt_core.logging_config import _logging_manager
+        if "default" in _logging_manager._loggers:
+            return _logging_manager._loggers["default"]
+        else:
+            # Return a dummy logger that does nothing to avoid creating default log files
+            dummy_logger = logging.getLogger("dummy")
+            dummy_logger.addHandler(logging.NullHandler())
+            return dummy_logger
+    except Exception:
+        # Fallback to dummy logger if anything goes wrong
+        dummy_logger = logging.getLogger("dummy")
+        dummy_logger.addHandler(logging.NullHandler())
+        return dummy_logger
 
 
 def set_global_logger(logger: logging.Logger) -> None:

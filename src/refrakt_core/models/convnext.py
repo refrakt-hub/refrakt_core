@@ -78,11 +78,13 @@ class ConvNeXt(BaseClassifier):
         model_name: str = "convnext",
     ) -> None:
         super().__init__(num_classes=num_classes, model_name=model_name)
-        self.stem: nn.Conv2d = nn.Conv2d(in_channels, 96, kernel_size=4, stride=4)
-        self.block1: ConvNeXtBlock = ConvNeXtBlock(96, 192)
-        self.block2: ConvNeXtBlock = ConvNeXtBlock(192, 384)
-        self.block3: ConvNeXtBlock = ConvNeXtBlock(384, 768)
-        self.gap: nn.AdaptiveAvgPool2d = nn.AdaptiveAvgPool2d(1)
+        self.backbone = nn.Sequential(
+            nn.Conv2d(in_channels, 96, kernel_size=4, stride=4),
+            ConvNeXtBlock(96, 192),
+            ConvNeXtBlock(192, 384),
+            ConvNeXtBlock(384, 768),
+            nn.AdaptiveAvgPool2d(1)
+        )
         self.fc: nn.Linear = nn.Linear(768, num_classes)
 
     def forward(self, x: Tensor, return_features: bool = False) -> Tensor:
@@ -96,13 +98,9 @@ class ConvNeXt(BaseClassifier):
         Returns:
             torch.Tensor: Output logits of shape (B, num_classes) or features if return_features is True
         """
-        x = self.stem(x)
-        x = self.block1(x)
-        x = self.block2(x)
-        x = self.block3(x)
-        x = self.gap(x)
-        x = x.view(x.size(0), -1)
+        features = self.backbone(x)
+        features = features.view(features.size(0), -1)
         if return_features:
-            return x  # features before fc
-        x = self.fc(x)
-        return x  # logits
+            return features
+        logits = self.fc(features)
+        return logits

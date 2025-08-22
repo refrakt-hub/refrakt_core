@@ -40,8 +40,7 @@ class RefraktLogger:
         Args:
             model_name (str): Name of the model for logging context.
             log_dir (str, optional): Directory for logs. Defaults to './logs'.
-            log_types (Optional[List[str]], optional): Types of logging to enable. \
-                Defaults to None.
+            log_types (Optional[List[str]], optional): Types of logging to enable. Defaults to None.
             console (bool, optional): Whether to log to console. Defaults to False.
             debug (bool, optional): Enable debug logging. Defaults to False.
         """
@@ -54,6 +53,7 @@ class RefraktLogger:
         self.console: bool = console
         self.debug_enabled: bool = debug
         self.log_types: List[str] = log_types or []
+        self.experiment_id: Optional[str] = None
 
         self.logger: logging.Logger = self._initialize_logger(timestamp)
         self.tb_writer: Optional[Any] = None
@@ -76,19 +76,22 @@ class RefraktLogger:
             logging.Logger: Configured logger instance.
         """
         logger = logging.getLogger(f"refrakt:{timestamp}")
-        level = logging.DEBUG if self.debug_enabled else logging.INFO
-        logger.setLevel(level)
+        logger.setLevel(logging.DEBUG)  # Set to lowest level to capture all messages
         logger.propagate = False
 
         formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
+        # File handler - always captures all levels, but only DEBUG+ when debug is enabled
         file_handler = logging.FileHandler(self.log_file)
         file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.DEBUG if self.debug_enabled else logging.INFO)
         logger.addHandler(file_handler)
 
+        # Console handler - only shows INFO and above (essential messages)
         if self.console:
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setFormatter(logging.Formatter("%(message)s"))
+            console_handler.setLevel(logging.INFO)  # Only show INFO and above in console
             logger.addHandler(console_handler)
 
         return logger

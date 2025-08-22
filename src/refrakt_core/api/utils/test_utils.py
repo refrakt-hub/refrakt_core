@@ -214,7 +214,7 @@ def _handle_pure_ml_pipeline(
     preds = ml_model.predict(feature_pipeline.transform(X_val))
     acc = (preds == y_val).mean() if y_val is not None else None
     logger.info(f"[ML] Test complete. Accuracy: {acc}")
-    print("\nEvaluation Results:", {"accuracy": acc})
+    logger.info(f"Evaluation Results: {{'accuracy': {acc}}}")
 
 
 def _setup_fusion_evaluation(

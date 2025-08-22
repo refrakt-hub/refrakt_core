@@ -120,6 +120,7 @@ class BaseTrainer(ABC):
         if dir_path:
             os.makedirs(dir_path, exist_ok=True)
 
+        print(f"[DEBUG] save() called with path: {path}, model_name: {self.model_name}, save_dir: {self.save_dir}")
         checkpoint: Dict[str, Any] = {
             "model_state_dict": self.model.state_dict(),
             "model_name": self.model_name,

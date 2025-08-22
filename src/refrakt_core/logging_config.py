@@ -243,7 +243,15 @@ def temporary_logger(name: str, **config: Any) -> Any:
 # Convenience function for backward compatibility
 def get_global_logger() -> logging.Logger:
     """Get the default global logger for backward compatibility."""
-    return get_logger("default")
+    # Only return the default logger if it already exists, don't create it automatically
+    if "default" in _logging_manager._loggers:
+        return _logging_manager._loggers["default"]
+    else:
+        # Return a dummy logger that does nothing to avoid creating default log files
+        import logging
+        dummy_logger = logging.getLogger("dummy")
+        dummy_logger.addHandler(logging.NullHandler())
+        return dummy_logger
 
 
 def set_global_logger(logger: logging.Logger) -> None:

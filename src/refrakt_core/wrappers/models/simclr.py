@@ -12,6 +12,10 @@ class SimCLRWrapper(torch.nn.Module):
         super().__init__()
         self.model = model
         self.wrapper_config = kwargs
+        
+        # Set model attributes for XAI detection
+        self.model_name = "simclr"
+        self.model_type = "contrastive"
 
     def forward(self, x: torch.Tensor) -> ModelOutput:
         embeddings = self.model(x)

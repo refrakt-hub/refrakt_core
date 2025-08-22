@@ -21,7 +21,7 @@ Typical usage involves passing configuration dictionaries and module registries
 to build loss functions for training pipelines.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from omegaconf import OmegaConf
 from torch import nn
@@ -94,10 +94,10 @@ def _validate_loss_config(cfg: OmegaConf) -> Dict[str, Any]:
 
 
 def _build_gan_style_loss(
-    loss_cfg: Dict[str, Any], modules: Dict[str, Any], device: str
+    loss_cfg: Dict[str, Any], modules: Dict[str, Any], device: str, logger: Optional[Any] = None
 ) -> Dict[str, nn.Module]:
     """
-    Build GAN-style generator/discriminator losses.
+    Build GAN-style losses for generator and discriminator components.
 
     This function constructs separate loss functions for generator and discriminator
     components in GAN architectures. It supports optional components, allowing
@@ -108,6 +108,7 @@ def _build_gan_style_loss(
             generator/discriminator settings
         modules: Registry dictionary containing available loss functions
         device: Target device string for loss function placement
+        logger: Optional logger instance for debug output
 
     Returns:
         Dictionary mapping component names ('generator', 'discriminator') to their
@@ -129,12 +130,15 @@ def _build_gan_style_loss(
             loss_fn[comp_name] = _create_wrapped_loss(
                 loss_name, loss_params, modules, device
             )
-            print(f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}")
+            if logger:
+                logger.debug(f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}")
+            else:
+                print(f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}")
     return loss_fn
 
 
 def _build_multi_component_loss(
-    loss_cfg: Dict[str, Any], modules: Dict[str, Any], device: str
+    loss_cfg: Dict[str, Any], modules: Dict[str, Any], device: str, logger: Optional[Any] = None
 ) -> Dict[str, nn.Module]:
     """
     Build multi-component losses for complex training scenarios.
@@ -147,6 +151,7 @@ def _build_multi_component_loss(
         loss_cfg: Loss configuration dictionary containing component specifications
         modules: Registry dictionary containing available loss functions
         device: Target device string for loss function placement
+        logger: Optional logger instance for debug output
 
     Returns:
         Dictionary mapping component names to their respective loss functions
@@ -169,12 +174,15 @@ def _build_multi_component_loss(
         loss_fn[comp_name] = _create_wrapped_loss(
             loss_name, loss_params, modules, device
         )
-        print(f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}")
+        if logger:
+            logger.debug(f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}")
+        else:
+            print(f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}")
     return loss_fn
 
 
 def _build_single_loss(
-    loss_cfg: Dict[str, Any], modules: Dict[str, Any], device: str
+    loss_cfg: Dict[str, Any], modules: Dict[str, Any], device: str, logger: Optional[Any] = None
 ) -> nn.Module:
     """
     Build a single loss function for standard training scenarios.
@@ -186,6 +194,7 @@ def _build_single_loss(
         loss_cfg: Loss configuration dictionary containing loss name and parameters
         modules: Registry dictionary containing available loss functions
         device: Target device string for loss function placement
+        logger: Optional logger instance for debug output
 
     Returns:
         Loss function as nn.Module instance moved to the specified device
@@ -197,5 +206,8 @@ def _build_single_loss(
     loss_name = loss_cfg["name"]
     loss_params = loss_cfg.get("params", {})
     wrapped = _create_wrapped_loss(loss_name, loss_params, modules, device)
-    print(f"[INFO] Loss: {loss_name} with params: {loss_params}")
+    if logger:
+        logger.debug(f"[INFO] Loss: {loss_name} with params: {loss_params}")
+    else:
+        print(f"[INFO] Loss: {loss_name} with params: {loss_params}")
     return wrapped

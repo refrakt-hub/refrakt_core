@@ -21,6 +21,7 @@ from refrakt_core.trainer.utils.msn_utils import (
     handle_msn_training_step,
     prepare_msn_inputs,
 )
+from refrakt_core.error_handling import XAINotSupportedError
 
 
 @register_trainer("msn")
@@ -42,6 +43,8 @@ class MSNTrainer(BaseTrainer):
         device: str = "cuda",
         scheduler: Optional[Any] = None,
         artifact_dumper: Optional[Any] = None,
+        visualization_hooks: Optional[list] = None,
+        explainability_hooks: Optional[list] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -57,6 +60,8 @@ class MSNTrainer(BaseTrainer):
             device (str, optional): Device to use (default: "cuda").
             scheduler (Optional[Any], optional): Learning rate scheduler.
             artifact_dumper (Optional[Any], optional): Artifact logger/dumper.
+            visualization_hooks (Optional[list], optional): Visualization hooks.
+            explainability_hooks (Optional[list], optional): Explainability hooks.
             **kwargs: Additional keyword arguments.
         """
         super().__init__(
@@ -81,6 +86,9 @@ class MSNTrainer(BaseTrainer):
             getattr(artifact_dumper, "log_every", 10) if artifact_dumper else None
         )
         self.global_step = 0
+
+        self.visualization_hooks = visualization_hooks or []
+        self.explainability_hooks = explainability_hooks or []
 
     def train(self, num_epochs: int) -> Dict[str, float]:
         """
@@ -196,3 +204,30 @@ class MSNTrainer(BaseTrainer):
             return {"anchor": batch, "target": batch}
         else:
             raise TypeError(f"Unsupported batch type: {type(batch)}")
+
+    def _get_logger(self) -> Optional[Any]:
+        """
+        Retrieve the logger from the artifact dumper if available.
+
+        Returns:
+            Optional[Any]: Logger object if available, else None.
+        """
+        return getattr(self.artifact_dumper, "logger", None)
+
+    def _run_explainability_hooks(self, epoch: int, inference: bool = False) -> None:
+        """
+        Run explainability hooks for MSN models.
+        
+        Note: XAI components are currently not supported for contrastive family models 
+        (SimCLR, DINO, MSN) in refrakt v1. This method simply warns about this limitation.
+        
+        Args:
+            epoch (int): Current training epoch.
+            inference (bool): Whether this is being called during inference.
+        """
+        if self.explainability_hooks:
+            raise XAINotSupportedError(
+                "XAI components are currently not supported for contrastive family models "
+                "(SimCLR, DINO, MSN) in refrakt v1. These models output embeddings rather "
+                "than class predictions, making traditional XAI methods incompatible."
+            )

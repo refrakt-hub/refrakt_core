@@ -22,7 +22,7 @@ from refrakt_core.trainer.utils.dino_utils import (
     handle_dino_training_step,
 )
 from refrakt_core.utils.methods import unpack_views_from_batch
-
+from refrakt_core.error_handling import XAINotSupportedError
 
 @register_trainer("dino")
 class DINOTrainer(BaseTrainer):
@@ -43,6 +43,8 @@ class DINOTrainer(BaseTrainer):
         scheduler: Optional[Any] = None,
         device: str = "cuda",
         artifact_dumper: Optional[Any] = None,
+        visualization_hooks: Optional[list] = None,
+        explainability_hooks: Optional[list] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -58,6 +60,8 @@ class DINOTrainer(BaseTrainer):
             scheduler (Optional[Any], optional): Learning rate scheduler.
             device (str, optional): Device to use (default: "cuda").
             artifact_dumper (Optional[Any], optional): Artifact logger/dumper.
+            visualization_hooks (Optional[list], optional): Visualization hooks.
+            explainability_hooks (Optional[list], optional): Explainability hooks.
             **kwargs: Additional keyword arguments.
         """
         if val_loader is None:
@@ -93,6 +97,9 @@ class DINOTrainer(BaseTrainer):
             else None
         )
 
+        self.visualization_hooks = visualization_hooks or []
+        self.explainability_hooks = explainability_hooks or []
+
     def _unpack_views(self, batch: Any) -> List[torch.Tensor]:
         """
         Unpack multiple augmented views from a batch for DINO learning.
@@ -113,6 +120,24 @@ class DINOTrainer(BaseTrainer):
             Optional[Any]: Logger object if available, else None.
         """
         return getattr(self.artifact_dumper, "logger", None)
+
+    def _run_explainability_hooks(self, epoch: int, inference: bool = False) -> None:
+        """
+        Run explainability hooks for DINO models.
+        
+        Note: XAI components are currently not supported for contrastive family models 
+        (SimCLR, DINO, MSN) in refrakt v1. This method simply warns about this limitation.
+        
+        Args:
+            epoch (int): Current training epoch.
+            inference (bool): Whether this is being called during inference.
+        """
+        if self.explainability_hooks:
+            raise XAINotSupportedError(
+                "XAI components are currently not supported for contrastive family models "
+                "(SimCLR, DINO, MSN) in refrakt v1. These models output embeddings rather "
+                "than class predictions, making traditional XAI methods incompatible."
+            )
 
     def train(self, num_epochs: int) -> Dict[str, float]:
         """

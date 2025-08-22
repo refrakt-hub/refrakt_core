@@ -28,6 +28,10 @@ class DINOWrapper(nn.Module):
             k: v for k, v in kwargs.items() if k not in {"backbone", "out_dim", "model"}
         }
         self.wrapper_config = {"wrapper_type": "dino", **filtered_kwargs}
+        
+        # Set model attributes for XAI detection
+        self.model_name = "dino"
+        self.model_type = "contrastive"
 
     def forward(
         self, x: torch.Tensor, teacher: bool = False, **kwargs: Any

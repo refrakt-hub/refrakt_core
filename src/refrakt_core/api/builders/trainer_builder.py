@@ -62,28 +62,29 @@ def initialize_trainer(
     device: str,
     modules: Dict[str, Any],
     save_dir: Optional[str],
+    experiment_id: Optional[str] = None,
+    logger: Optional[Any] = None,
 ) -> Any:
     """
-    Initialize a trainer based on configuration and provided components.
+    Initialize a trainer from configuration with all necessary components.
 
-    This function supports standard, GAN, and fusion trainers, and ensures all \
-        parameters are type-checked and compatible with the training pipeline. \
-        It handles special cases for GAN and fusion trainers, including artifact \
-        dumping and fusion head construction.
+    This function creates and configures a trainer object based on the provided
+    configuration. It supports various trainer types including standard supervised
+    learning, GAN training, fusion training, and provides fallback mechanisms.
 
-    The function automatically detects the trainer type and sets up the appropriate
-    configuration:
-    - Standard: Supervised learning, autoencoders, MSN
-    - GAN: Generator/discriminator training with specialized setup
-    - Fusion: Ensemble model training with fusion components
-    - Fallback: Generic trainer for unsupported types
+    The function handles:
+    - Trainer configuration validation and parsing
+    - Trainer class instantiation from registry
+    - Component setup (model, data loaders, loss, optimizer, scheduler)
+    - Device placement and artifact dumping configuration
+    - Specialized trainer setup for different training paradigms
 
     Args:
         cfg: Configuration object (OmegaConf) specifying the trainer type,
-             parameters, and optional settings
-        model: The model to be trained. Can be a single model or model components
-        train_loader: DataLoader for training data
-        val_loader: DataLoader for validation data
+             parameters, and component settings
+        model: The model object to be trained
+        train_loader: Training data loader
+        val_loader: Validation data loader
         loss_fn: Loss function or dictionary of loss functions for \
             multi-component setups
         optimizer: Optimizer or dictionary of optimizers for \
@@ -93,6 +94,8 @@ def initialize_trainer(
         modules: Registry dictionary containing available trainer, artifact, and \
             utility functions
         save_dir: Optional directory path for saving checkpoints and artifacts
+        experiment_id: Optional experiment ID for consistent directory naming
+        logger: Optional logger instance for debug output
 
     Returns:
         The instantiated trainer object, ready for training or evaluation.
@@ -103,7 +106,10 @@ def initialize_trainer(
         ValueError: If required trainer or fusion components are missing or not found
                    in the registry
     """
-    print("Initializing trainer...")
+    if logger:
+        logger.debug("Initializing trainer...")
+    else:
+        print("Initializing trainer...")
     if OmegaConf.is_config(cfg):
         cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     else:
@@ -134,6 +140,7 @@ def initialize_trainer(
             artifact_dumper,
             trainer_params,
             cfg_dict,
+            experiment_id,
         )
 
     # === GAN Trainer ===

@@ -9,6 +9,7 @@ It supports logging, artifact dumping, and integration with explainability/visua
 import os
 import numpy as np
 from PIL import Image
+import json
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import torch
@@ -16,6 +17,7 @@ from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from datetime import datetime
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.model_output import ModelOutput
@@ -28,23 +30,9 @@ from refrakt_core.trainer.utils.supervised_utils import (
 )
 from refrakt_core.wrappers.utils.default_loss_utils import extract_tensor_from_model_output
 
-try:
-    from refrakt_xai.utils import generate_explainability  # type: ignore
-except ImportError:
-    generate_explainability = None
-
-try:
-    from refrakt_viz.utils import (  # type: ignore[import-not-found]
-        visualize_attention,
-        visualize_embeddings,
-    )
-except ImportError:
-    visualize_embeddings = visualize_attention = None  # type: ignore[unused-variable]
-
 from refrakt_viz.supervised.loss_accuracy import LossAccuracyPlot
 from refrakt_viz.supervised.confusion_matrix import ConfusionMatrixPlot
 from refrakt_viz.supervised.sample_predictions import SamplePredictionsPlot
-
 
 @register_trainer("supervised")
 class SupervisedTrainer(BaseTrainer):
@@ -65,6 +53,7 @@ class SupervisedTrainer(BaseTrainer):
         artifact_dumper: Optional[Any] = None,
         visualization_hooks: Optional[List[Any]] = None,
         explainability_hooks: Optional[List[Any]] = None,
+        experiment_id: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(
@@ -82,6 +71,7 @@ class SupervisedTrainer(BaseTrainer):
 
         self.loss_fn = loss_fn
         self.scheduler = scheduler
+        self.experiment_id = experiment_id
         self.extra_params = kwargs
         self.grad_log_interval = kwargs.get("grad_log_interval", 100)
         self.param_log_interval = kwargs.get("param_log_interval", 500)
@@ -153,7 +143,11 @@ class SupervisedTrainer(BaseTrainer):
                     if not isinstance(viz, PerLayerMetricsPlot):
                         viz.update()
             except Exception as e:
-                print(f"[VizHook] update() failed: {e}")
+                logger = self._get_logger()
+                if logger:
+                    logger.warning(f"[VizHook] update() failed: {e}")
+                else:
+                    print(f"[VizHook] update() failed: {e}")
         # Optionally update explainability hooks here
         return result
 
@@ -173,62 +167,159 @@ class SupervisedTrainer(BaseTrainer):
 
     def _run_explainability_hooks(self, epoch: int) -> None:
         """
-        Run all explainability hooks on a small batch from the validation set and save attributions as images.
-        Args:
-            epoch (int): Current epoch number (for output directory naming)
+        Run all explainability hooks on a single random sample from the validation set and save attributions as images.
         """
         if not self.explainability_hooks:
             return
         if not hasattr(self, 'val_loader') or self.val_loader is None:
             return
-        # Get a single batch from the validation loader
         try:
             sample_batch = next(iter(self.val_loader))
             if isinstance(sample_batch, (tuple, list)):
-                input_tensor, target = sample_batch[0], sample_batch[1]
+                input_tensor, target = sample_batch[0], sample_batch[1] if len(sample_batch) > 1 else None
             elif isinstance(sample_batch, dict):
-                input_tensor, target = sample_batch["input"], sample_batch["target"]
+                input_tensor = sample_batch.get("image") or sample_batch.get("input")
+                target = sample_batch.get("target", None)
+                if input_tensor is None:
+                    raise ValueError("Batch dict does not contain a valid 'image' or 'input' tensor for XAI.")
             else:
-                input_tensor, target = sample_batch, None
+                input_tensor = sample_batch
+                target = None
             input_tensor = input_tensor.to(self.device)
             if target is not None:
                 target = target.to(self.device)
         except Exception as e:
-            print(f"[XAI] Could not get validation batch for explainability: {e}")
+            logger = self._get_logger()
+            if logger:
+                logger.warning(f"[XAI] Could not get validation batch for explainability: {e}")
+            else:
+                print(f"[XAI] Could not get validation batch for explainability: {e}")
             return
         for xai_cls, params in self.explainability_hooks:
             try:
-                xai_instance = xai_cls(self.model, **params)
-                print(f"[XAI-DEBUG] input_tensor type before extraction: {type(input_tensor)}")
-                if isinstance(input_tensor, ModelOutput):
-                    print(f"[XAI-DEBUG] input_tensor is ModelOutput, extracting tensor...")
-                    input_tensor = extract_tensor_from_model_output(input_tensor)
-                    print(f"[XAI-DEBUG] input_tensor type after extraction: {type(input_tensor)}")
+                if xai_cls.__name__ == "ConceptSaliencyXAI":
+                    xai_method = xai_cls(self.model, dataloader=self.val_loader, device=self.device, **params)
                 else:
-                    print(f"[XAI-DEBUG] input_tensor is not ModelOutput, type: {type(input_tensor)}")
-                attributions = xai_instance.explain(input_tensor, target=target)
-                print(f"[XAI-DEBUG] attributions type: {type(attributions)}; shape: {getattr(attributions, 'shape', 'N/A')}")
+                    xai_method = xai_cls(self.model, **params)
+                
+                # Save runtime XAI info for metadata collection
+                try:
+                    from refrakt_cli.helpers.shared_core import save_runtime_xai_info
+                    # Determine base directory for saving runtime info
+                    model_name = getattr(self.model, 'model_name', None) or getattr(self, 'model_name', 'model')
+                    if hasattr(self, 'experiment_id') and self.experiment_id:
+                        experiment_id = self.experiment_id
+                    else:
+                        experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    
+                    # Use checkpoints directory structure
+                    checkpoints_base_dir = f"./checkpoints/{model_name}_{experiment_id}"
+                    save_runtime_xai_info(xai_method, xai_cls.__name__, params, checkpoints_base_dir, self._get_logger())
+                except Exception as e:
+                    logger = self._get_logger()
+                    if logger:
+                        logger.warning(f"Failed to save runtime XAI info: {e}")
+                
+                input_device = input_tensor.device
+                model_device = next(self.model.parameters()).device
+                if input_device != model_device:
+                    input_tensor = input_tensor.to(model_device)
+                attributions = xai_method.explain(input_tensor, target=target)
                 # Save attributions as images
-                method = xai_cls.__name__
-                save_dir = os.path.join("./explanations", method, f"epoch_{epoch+1}")
-                os.makedirs(save_dir, exist_ok=True)
+                # Use registry_name from params if present, else method name, always lowercased with underscores, no 'xai' suffix
+                registry_name = params.get("registry_name", params.get("method", xai_cls.__name__)).replace(" ", "_")
+                if registry_name.lower().endswith("xai"):
+                    registry_name = registry_name[:-3]
+                # Use to_snake_case for consistent naming with inference phase
+                def to_snake_case(name):
+                    """Convert camelCase or PascalCase to snake_case."""
+                    import re
+                    # Handle special cases
+                    if name == "LayerGradCAM":
+                        return "layer_gradcam"
+                    elif name == "GradCAM":
+                        return "gradcam"
+                    elif name == "IntegratedGradients":
+                        return "integrated_gradients"
+                    
+                    # General conversion
+                    name = re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
+                    name = name.replace('__', '_')
+                    return name.strip('_')
+                
+                registry_name = to_snake_case(registry_name)
+                # Get model name and datetime for unique output dir
+                model_name = getattr(self.model, 'model_name', None) or getattr(self, 'model_name', 'model')
+                # Use experiment_id if available, otherwise generate timestamp
+                if hasattr(self, 'experiment_id') and self.experiment_id:
+                    dt_str = self.experiment_id
+                else:
+                    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+                # Use explanations directory structure for training
+                base_dir = os.path.join("./explanations", f"{model_name}_{dt_str}", "train", registry_name)
+                os.makedirs(base_dir, exist_ok=True)
                 # Convert attributions to numpy and save each sample
                 attr_np = attributions.detach().cpu().numpy()
-                for i in range(min(attr_np.shape[0], 8)):  # Save up to 8 images
+                
+                for i in range(min(attr_np.shape[0], 8)):
                     arr = attr_np[i]
-                    print(f"[XAI-DEBUG] Attribution stats for sample {i}: min={arr.min()}, max={arr.max()}, mean={arr.mean()}")
+                    
+                    # Handle different attribution shapes
+                    if len(arr.shape) == 0:  # Scalar
+                        continue
+                    elif len(arr.shape) == 1 and arr.shape[0] == 1:  # [1] - class-specific attribution
+                        continue
+                    elif len(arr.shape) == 1:  # 1D array
+                        # Reshape to 2D for visualization
+                        arr = arr.reshape((int(np.sqrt(arr.shape[0])), int(np.sqrt(arr.shape[0]))))
+                    elif len(arr.shape) == 2:  # 2D array (spatial heatmap)
+                        pass  # Keep as is
+                    elif len(arr.shape) == 3:  # 3D array
+                        if arr.shape[0] == 1:  # [1, H, W]
+                            arr = arr[0]
+                        elif arr.shape[0] == 3:  # [3, H, W] - RGB
+                            arr = np.transpose(arr, (1, 2, 0))
+                        else:
+                            continue
+                    else:
+                        continue
+                    
+                    # Normalize and convert to image
                     arr = arr - arr.min()
                     arr = arr / (arr.max() + 1e-8)
                     arr = (arr * 255).astype(np.uint8)
-                    # If grayscale, squeeze channel
-                    if arr.shape[0] == 1:
-                        arr = arr[0]
-                    elif arr.shape[0] == 3:
-                        arr = np.transpose(arr, (1, 2, 0))
-                    img = Image.fromarray(arr)
-                    img.save(os.path.join(save_dir, f"sample_{i}.png"))
+                    
+                    # Convert to PIL Image
+                    if len(arr.shape) == 2:  # Grayscale
+                        img = Image.fromarray(arr, mode='L')
+                    elif len(arr.shape) == 3:  # RGB
+                        img = Image.fromarray(arr, mode='RGB')
+                    else:
+                        continue
+                    
+                    img_path = os.path.join(base_dir, f"sample_{i}.png")
+                    img.save(img_path)
+                    
+                    # Save raw attribution as .npy
+                    npy_path = os.path.join(base_dir, f"sample_{i}.npy")
+                    np.save(npy_path, attr_np[i])
+                    metadata = {
+                        "method": registry_name,
+                        "epoch": epoch+1,
+                        "sample_index": i,
+                        "image_path": img_path,
+                        "attribution_path": npy_path,
+                    }
+                    meta_path = os.path.join(base_dir, f"sample_{i}_metadata.json")
+                    with open(meta_path, "w") as f:
+                        json.dump(metadata, f)
+                    # (No explanation .md file is saved)
             except Exception as e:
-                print(f"[XAI] Failed to run or save explainability for {xai_cls}: {e}")
+                logger = self._get_logger()
+                if logger:
+                    logger.warning(f"[XAI] Failed to run or save explainability for {xai_cls}: {e}")
+                else:
+                    print(f"[XAI] Failed to run or save explainability for {xai_cls}: {e}")
 
     def train(self, num_epochs: int) -> Dict[str, float]:
         """
@@ -237,7 +328,10 @@ class SupervisedTrainer(BaseTrainer):
         Args:
             num_epochs (int): Number of epochs to train.
         """
+        import time
+        start_time = time.time()
         best_accuracy = 0.0
+        final_loss = 0.0
         logger = self._get_logger()
 
         # --- Computation graph visualization at start ---
@@ -261,7 +355,10 @@ class SupervisedTrainer(BaseTrainer):
                         model_name = 'model'
                     viz.update(self.model, input_tensor, model_name=model_name)
             except Exception as e:
-                print(f"[VizHook] computation_graph update failed: {e}")
+                if logger:
+                    logger.warning(f"[VizHook] computation_graph update failed: {e}")
+                else:
+                    print(f"[VizHook] computation_graph update failed: {e}")
 
         if logger and self.global_step == 0:
             logger.log_parameters(self.model, step=self.global_step, prefix="init_")
@@ -284,7 +381,10 @@ class SupervisedTrainer(BaseTrainer):
                                 layer_metrics = self.model.get_layer_metrics()
                                 viz.update(layer_metrics)
                     except Exception as e:
-                        print(f"[VizHook] per_layer_metrics update failed: {e}")
+                        if logger:
+                            logger.warning(f"[VizHook] per_layer_metrics update failed: {e}")
+                        else:
+                            print(f"[VizHook] per_layer_metrics update failed: {e}")
 
             # At end of epoch, show/save visualizations
             for viz in self.visualization_hooks:
@@ -294,15 +394,28 @@ class SupervisedTrainer(BaseTrainer):
                         model_name = getattr(self.model, 'model_name', getattr(self, 'model_name', 'model'))
                         viz.save_with_name(model_name, mode='train')
                 except Exception as e:
-                    print(f"[VizHook] per_layer_metrics save failed (train): {e}")
+                    if logger:
+                        logger.warning(f"[VizHook] per_layer_metrics save failed (train): {e}")
+                    else:
+                        print(f"[VizHook] per_layer_metrics save failed (train): {e}")
             # --- Run XAI hooks at end of epoch ---
             self._run_explainability_hooks(epoch)
             best_accuracy = self._handle_epoch_end(epoch, best_accuracy)
+            
+            # Update final_loss with the current loss if available
+            if self._current_loss_output is not None:
+                final_loss = self._current_loss_output.total.item() if hasattr(self._current_loss_output.total, 'item') else float(self._current_loss_output.total)
 
         if logger:
             logger.log_parameters(self.model, step=self.global_step, prefix="final_")
 
-        return {"best_accuracy": best_accuracy}
+        training_time = time.time() - start_time
+        return {
+            "best_accuracy": best_accuracy,
+            "final_loss": final_loss,
+            "training_time": training_time,
+            "epochs_completed": num_epochs
+        }
 
     def evaluate(self) -> float:
         """
@@ -368,11 +481,20 @@ class SupervisedTrainer(BaseTrainer):
                                 layer_metrics = self.model.get_layer_metrics()
                                 viz.update(layer_metrics, split="test")
                     except Exception as e:
-                        print(f"[VizHook] per_layer_metrics update failed (test): {e}")
+                        if logger:
+                            logger.warning(f"[VizHook] per_layer_metrics update failed (test): {e}")
+                        else:
+                            print(f"[VizHook] per_layer_metrics update failed (test): {e}")
 
         avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
         acc = correct / total if total > 0 else 0.0
-        print(f"\nValidation Accuracy: {acc * 100:.2f}% | Avg Loss: {avg_loss:.4f}")
+        
+        # Get logger from artifact dumper or extra params
+        logger = self._get_logger()
+        if logger:
+            logger.info(f"Validation Accuracy: {acc * 100:.2f}% | Avg Loss: {avg_loss:.4f}")
+        else:
+            print(f"\nValidation Accuracy: {acc * 100:.2f}% | Avg Loss: {avg_loss:.4f}")
 
         if self.artifact_dumper:
             self.artifact_dumper.log_scalar_dict(
@@ -398,7 +520,10 @@ class SupervisedTrainer(BaseTrainer):
                     viz.save_with_name(model_name, mode='test')
                 # Do not save SamplePredictionsPlot here
             except Exception as e:
-                print(f"[VizHook] visualization save failed (test): {e}")
+                if logger:
+                    logger.warning(f"[VizHook] visualization save failed (test): {e}")
+                else:
+                    print(f"[VizHook] visualization save failed (test): {e}")
 
         return acc
 

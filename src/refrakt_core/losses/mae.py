@@ -17,15 +17,18 @@ class MAELoss(BaseLoss):
 
     Computes MSE only over masked patches, following the methodology in the MAE paper.
     Optionally normalizes target patches before computing the loss.
+    Loss is normalized by 100 to keep values in reasonable range (0-100).
 
     Args:
         normalize_target (bool): Whether to normalize the original patches before loss computation.
+        normalization_factor (float): Factor to divide loss by for better training visualization.
     """
 
-    def __init__(self, normalize_target: bool = False, patch_size: int = 16) -> None:
+    def __init__(self, normalize_target: bool = False, patch_size: int = 16, normalization_factor: float = 100.0) -> None:
         super().__init__(name="MAELoss")
         self.normalize_target: bool = normalize_target
         self.patch_size = patch_size
+        self.normalization_factor = normalization_factor
 
     def patchify(self, imgs: Tensor) -> Tensor:
         """
@@ -61,7 +64,7 @@ class MAELoss(BaseLoss):
             targets (Tensor, optional): Not used for MAE loss since targets are in predictions dict.
 
         Returns:
-            Tensor: Scalar loss value representing masked MSE.
+            Tensor: Scalar loss value representing masked MSE, normalized by normalization_factor.
         """
         pred: Tensor = predictions["recon"]  # (B, C, H, W)
         mask: Tensor = predictions["mask"].unsqueeze(-1)  # (B, N, 1)
@@ -75,7 +78,10 @@ class MAELoss(BaseLoss):
             original = (original - mean) / std
 
         loss: Tensor = ((pred_patches - original) ** 2) * mask
-        return loss.sum() / mask.sum()
+        normalized_loss = loss.sum() / mask.sum()
+        
+        # Apply normalization factor to keep loss in reasonable range
+        return normalized_loss / self.normalization_factor
 
     def get_config(self) -> dict[str, bool]:
         """
@@ -85,7 +91,10 @@ class MAELoss(BaseLoss):
             dict: Dictionary containing loss configuration.
         """
         config = super().get_config()
-        config.update({"normalize_target": self.normalize_target})
+        config.update({
+            "normalize_target": self.normalize_target,
+            "normalization_factor": self.normalization_factor
+        })
         return config
 
     def extra_repr(self) -> str:
@@ -95,4 +104,4 @@ class MAELoss(BaseLoss):
         Returns:
             str: Informative string for debugging/logging.
         """
-        return f"name={self.name}, normalize_target={self.normalize_target}"
+        return f"name={self.name}, normalize_target={self.normalize_target}, normalization_factor={self.normalization_factor}"

@@ -3,6 +3,8 @@ import os
 from typing import Any, Dict, Optional, Tuple, Union, cast
 
 import torch
+import yaml
+from datetime import datetime
 from omegaconf import DictConfig, OmegaConf
 from PIL import Image
 from torch.utils.data import Dataset
@@ -124,7 +126,7 @@ def analyze_and_resize_dataset_images(
         create_resized_dataset,
     )
 
-    logger.info("🔍 Analyzing dataset image sizes...")
+    logger.debug("🔍 Analyzing dataset image sizes...")
 
     # Analyze image sizes
     sizes, needs_resize, oversized_count, undersized_count = analyze_image_sizes(
@@ -140,26 +142,26 @@ def analyze_and_resize_dataset_images(
         calculate_size_statistics(sizes)
     )
 
-    logger.info("📈 Image size statistics:")
-    logger.info(f"   Average: {avg_width:.1f}x{avg_height:.1f}")
-    logger.info(f"   Range: {min_width}x{min_height} to {max_width}x{max_height}")
-    logger.info(f"   Oversized images: {oversized_count}")
-    logger.info(f"   Undersized images: {undersized_count}")
+    logger.debug("📈 Image size statistics:")
+    logger.debug(f"   Average: {avg_width:.1f}x{avg_height:.1f}")
+    logger.debug(f"   Range: {min_width}x{min_height} to {max_width}x{max_height}")
+    logger.debug(f"   Oversized images: {oversized_count}")
+    logger.debug(f"   Undersized images: {undersized_count}")
 
     if needs_resize:
-        logger.info(
+        logger.debug(
             "🔄 Dataset contains images outside acceptable size range \
                 (28x28 to 448x448)"
         )
-        logger.info(f"📏 Resizing images to {target_size[0]}x{target_size[1]}...")
+        logger.debug(f"📏 Resizing images to {target_size[0]}x{target_size[1]}...")
 
         # Create resized dataset
         resized_dataset = create_resized_dataset(dataset, target_size)
-        logger.info("✅ Dataset resizing complete!")
+        logger.debug("✅ Dataset resizing complete!")
 
         return True, resized_dataset
     else:
-        logger.info("✅ All images are within acceptable size range (28x28 to 448x448)")
+        logger.debug("✅ All images are within acceptable size range (28x28 to 448x448)")
         return False, dataset
 
 
@@ -234,6 +236,7 @@ def build_model_and_log_graph(
             "model": model_cls,
         },
         device=device,
+        logger=logger,
     )
     # Log model graph
     try:
@@ -251,7 +254,7 @@ def build_model_and_log_graph(
     return model
 
 
-def build_optimizer_and_scheduler(cfg: DictConfig, model: Any) -> Tuple[Any, Any]:
+def build_optimizer_and_scheduler(cfg: DictConfig, model: Any, logger: Optional[RefraktLogger] = None) -> Tuple[Any, Any]:
     """
     Build optimizer and scheduler from config and model.
     """
@@ -259,28 +262,68 @@ def build_optimizer_and_scheduler(cfg: DictConfig, model: Any) -> Tuple[Any, Any
 
     optimizer = build_optimizer(cfg, model)
     scheduler = (
-        build_scheduler(cast(OmegaConf, cfg), optimizer)
+        build_scheduler(cast(OmegaConf, cfg), optimizer, logger)
         if cfg.get("scheduler")
         else None
     )
     return optimizer, scheduler
 
 
-def setup_artifact_dumper(
-    cfg: DictConfig, model_name: str, logger: RefraktLogger
-) -> ArtifactDumper:
+def setup_artifact_dumper(config: DictConfig, resolved_model_name: str, logger=None, experiment_id: Optional[str] = None) -> Any:
     """
-    Set up an ArtifactDumper from config, model name, and logger.
+    Setup artifact dumper for saving experiment artifacts in the new directory structure.
+    
+    Args:
+        config: Configuration object
+        resolved_model_name: Name of the model
+        logger: Logger instance
+        experiment_id: Optional experiment ID. If None, generates a new one.
     """
-    artifact_log_every = cfg.get("artifacts", {}).get("log_every", 1)
-    artifact_enabled = cfg.get("artifacts", {}).get("enabled", True)
-    return ArtifactDumper(
-        enabled=artifact_enabled,
-        base_path="./artifacts",
-        model_name=model_name,
-        log_every=artifact_log_every,
+    from refrakt_core.schema.artifact import ArtifactDumper
+    
+    # Create experiment-specific directory structure
+    if experiment_id is None:
+        experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+        if logger:
+            logger.warning(f"No experiment_id provided, generated new one: {experiment_id}")
+    exp_dir_name = f"{resolved_model_name}_{experiment_id}"
+    
+    # Create main experiment directory
+    exp_dir = os.path.join("./checkpoints", exp_dir_name)
+    os.makedirs(exp_dir, exist_ok=True)
+    
+    # Create subdirectories
+    weights_dir = os.path.join(exp_dir, "weights")
+    explanations_dir = os.path.join(exp_dir, "explanations")
+    os.makedirs(weights_dir, exist_ok=True)
+    os.makedirs(explanations_dir, exist_ok=True)
+    
+    # Save config to experiment directory
+    config_path = os.path.join(exp_dir, f"{resolved_model_name}.yaml")
+    with open(config_path, 'w') as f:
+        # Convert DictConfig to regular dict for serialization
+        config_dict = OmegaConf.to_container(config, resolve=True)
+        yaml.dump(config_dict, f, default_flow_style=False)
+    
+    if logger:
+        logger.debug(f"Created experiment directory: {exp_dir}")
+        logger.debug(f"  - Weights: {weights_dir}")
+        logger.debug(f"  - Explanations: {explanations_dir}")
+        logger.debug(f"  - Config: {config_path}")
+    
+    # Update save_dir in config to point to weights directory
+    config.trainer.params.save_dir = weights_dir
+    
+    # Create and return ArtifactDumper object
+    artifact_dumper = ArtifactDumper(
+        enabled=True,
+        model_name=resolved_model_name,
+        base_path=exp_dir,
         logger=logger,
+        metadata={"experiment_id": experiment_id}
     )
+    
+    return artifact_dumper
 
 
 def load_checkpoint(
@@ -545,7 +588,7 @@ def _handle_pure_ml_training(
     metrics = trainer.train()  # type: ignore[no-untyped-call]
 
     logger.info(f"[ML] Training complete. Metrics: {metrics}")
-    print("\nTraining Results:", metrics)
+    logger.info(f"Training Results: {metrics}")
 
     # Save model and pipeline
     import joblib
@@ -676,7 +719,7 @@ def _save_config_and_log_metrics(
     logger.info(f"Saved config to {config_save_path}")
 
     # Log Final Metrics
-    print("\nFinal Metrics:", final_metrics)
+    logger.info(f"Final Metrics: {final_metrics}")
     if logger:
         logger.log_metrics(final_metrics, step=trainer.global_step, prefix="final")
     logger.info("\n✅ Training completed successfully!")

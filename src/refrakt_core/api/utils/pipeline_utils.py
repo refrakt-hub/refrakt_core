@@ -21,7 +21,7 @@ complete pipelines with automatic phase coordination and logging.
 """
 
 import os
-from typing import Any, cast, Dict, List, Tuple
+from typing import Any, cast, Dict, List, Tuple, Optional
 
 from omegaconf import DictConfig
 
@@ -30,26 +30,21 @@ from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.global_logging import set_global_logger
 
 
-def parse_runtime_hooks(cfg: Dict[str, Any]) -> Tuple[List[str], List[Dict[str, Any]]]:
+def parse_runtime_hooks(cfg: Dict[str, Any]):
     """
-    Parse the runtime.hooks section from the config to extract visualization and explainability hooks.
-
-    Args:
-        cfg: The loaded YAML config as a dictionary or OmegaConf DictConfig.
-
-    Returns:
-        Tuple of (visualization_hooks, explainability_hooks), each a list.
+    Parse the runtime.hooks section from the config to extract visualization and explainability hooks, and the 'explain' flag.
+    Returns: (visualization_hooks, explainability_hooks, explain_flag)
     """
     runtime = cfg.get("runtime", {})
     hooks = runtime.get("hooks", {})
     visualizations = hooks.get("visualizations", [])
     explainability = hooks.get("explainability", [])
+    explain_flag = hooks.get("explain", False)
     # Ensure both are lists
     if not isinstance(visualizations, list):
         visualizations = [visualizations]
     if not isinstance(explainability, list):
         explainability = [explainability]
-    # Extract method names for visualizations, and always return list of dicts for explainability
     def extract_viz(lst):
         result = []
         for v in lst:
@@ -68,7 +63,7 @@ def parse_runtime_hooks(cfg: Dict[str, Any]) -> Tuple[List[str], List[Dict[str, 
         return result
     visualizations = extract_viz(visualizations)
     explainability = extract_xai(explainability)
-    return visualizations, explainability
+    return visualizations, explainability, explain_flag
 
 
 def setup_logger_and_config(
@@ -79,6 +74,7 @@ def setup_logger_and_config(
     console: bool,
     debug: bool,
     all_overrides: list[str],
+    experiment_id: Optional[str] = None,
 ) -> RefraktLogger:
     """
     Setup logger and apply configuration overrides.

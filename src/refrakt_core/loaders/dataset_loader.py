@@ -357,7 +357,6 @@ def _create_supervised_dataset(
 ) -> Tuple[Dataset[Any], Optional[Dataset[Any]]]:
     """Create a supervised dataset from the extracted files."""
     train_dir: Optional[Path] = _find_train_directory(dataset_path)
-    print(f"[DEBUG] train_dir: {train_dir}")
     if train_dir is None:
         train_dir = dataset_path / "train"
     if not train_dir.exists():

@@ -21,7 +21,8 @@ class ConvNeXtWrapper(nn.Module):
 
     def __init__(self, model: nn.Module) -> None:
         super().__init__()
-        self.backbone = model
+        self.backbone = model.backbone
+        self.fc = model.fc
         self.layer_metrics = {}
         self._register_hooks()
 
@@ -57,8 +58,9 @@ class ConvNeXtWrapper(nn.Module):
         Forward pass for ConvNeXtWrapper.
         Returns ModelOutput with logits and embeddings.
         """
-        embeddings = self.backbone(x, return_features=True)
-        logits = self.backbone.fc(embeddings)
+        embeddings = self.backbone(x)
+        embeddings = embeddings.view(embeddings.size(0), -1)
+        logits = self.fc(embeddings)
         return ModelOutput(logits=logits, embeddings=embeddings)
 
     def forward_for_graph(self, x: torch.Tensor) -> torch.Tensor:

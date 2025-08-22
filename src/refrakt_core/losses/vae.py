@@ -19,17 +19,20 @@ class VAELoss(nn.Module):
     - KL divergence between latent distribution and standard normal prior.
 
     Can also function as a standard autoencoder loss when latent stats (mu/logvar) are absent.
+    Loss is normalized by a factor to keep values in reasonable range (0-100).
 
     Args:
         recon_loss_type (str): Type of reconstruction loss to use. Options: 'mse', 'l1'.
         kld_weight (float): Scaling factor for the KL divergence term.
+        normalization_factor (float): Factor to divide loss by for better training visualization.
     """
 
-    def __init__(self, recon_loss_type: str = "mse", kld_weight: float = 1.0) -> None:
+    def __init__(self, recon_loss_type: str = "mse", kld_weight: float = 1.0, normalization_factor: float = 100.0) -> None:
         super().__init__()
         self.recon_loss_type = recon_loss_type
         self.kld_weight = kld_weight
         self.normalize = True
+        self.normalization_factor = normalization_factor
 
     def forward(
         self, model_output: Union[Tensor, Dict[str, Tensor]], target: Tensor
@@ -46,7 +49,7 @@ class VAELoss(nn.Module):
             target (Tensor): Ground truth tensor.
 
         Returns:
-            Tensor: Total loss (reconstruction + KL divergence if applicable).
+            Tensor: Total loss (reconstruction + KL divergence if applicable), normalized.
 
         Raises:
             ValueError: If `recon_loss_type` is not one of {'mse', 'l1'}.
@@ -81,9 +84,10 @@ class VAELoss(nn.Module):
 
         # Only return recon loss if not a VAE
         if mu is None or logvar is None:
-            return recon_loss
+            return recon_loss / self.normalization_factor
 
         # KL Divergence loss
         kld_loss: Tensor = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
-        return recon_loss + self.kld_weight * kld_loss
+        total_loss = recon_loss + self.kld_weight * kld_loss
+        return total_loss / self.normalization_factor

@@ -202,5 +202,15 @@ def run_inference_loop(model: torch.nn.Module, data_loader: Any) -> List[torch.T
             if inputs is None:
                 continue
             outputs = model(inputs)
-            results.append(cast(torch.Tensor, outputs))
+            # --- Fix: handle ModelOutput objects ---
+            if hasattr(outputs, 'logits') and outputs.logits is not None:
+                results.append(outputs.logits)
+            elif hasattr(outputs, 'reconstruction') and outputs.reconstruction is not None:
+                results.append(outputs.reconstruction)
+            elif hasattr(outputs, 'embeddings') and outputs.embeddings is not None:
+                results.append(outputs.embeddings)
+            elif isinstance(outputs, torch.Tensor):
+                results.append(outputs)
+            else:
+                raise TypeError(f"Unsupported model output type: {type(outputs)}")
     return results

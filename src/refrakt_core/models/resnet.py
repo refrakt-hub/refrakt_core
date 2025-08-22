@@ -76,7 +76,6 @@ class ResNet(BaseClassifier):
     def forward(
         self, x: Tensor, return_features: bool = False, **kwargs: Any
     ) -> torch.Tensor:
-        # print("[DEBUG ResNet] return_features:", return_features)
 
         x = self.conv1(x)
         x = self.maxpool(x)

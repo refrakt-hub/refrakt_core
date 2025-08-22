@@ -48,6 +48,8 @@ def test(
     cfg: Union[str, DictConfig],
     model_path: Optional[str] = None,
     logger: Optional[RefraktLogger] = None,
+    experiment_id: Optional[str] = None,
+    config_path: Optional[str] = None,  # <-- Fix type
 ) -> None:
     """
     Orchestrate the test pipeline for Refrakt.
@@ -67,6 +69,9 @@ def test(
             will be inferred from configuration
         logger: Optional RefraktLogger instance for logging. If None, a new logger
             will be created based on configuration
+        experiment_id: Optional experiment ID for consistent directory naming across
+            pipeline components
+        config_path: Optional path to the config file for metadata/summary_metrics
 
     Returns:
         None. Evaluation results are printed to console and logged to files.
@@ -100,7 +105,7 @@ def test(
         # Setup artifact dumper
         from refrakt_core.api.utils.train_utils import setup_artifact_dumper
 
-        artifact_dumper = setup_artifact_dumper(config, resolved_model_name, logger)
+        artifact_dumper = setup_artifact_dumper(config, resolved_model_name, logger, experiment_id)
 
         # Setup trainer for testing
         trainer = _setup_trainer_for_testing(
@@ -128,8 +133,12 @@ def test(
             trainer, model, dataloader, device, fusion_acc, logger
         )
 
+        # --- Save summary_metrics.json with config_path if needed ---
+        from refrakt_core.api.helpers.train_helpers import _save_test_summary_metrics
+        _save_test_summary_metrics(trainer, eval_results, resolved_model_name, logger, experiment_id, [config_path] if config_path else [])
+
         logger.info("\n✅ Testing completed successfully!")
-        print("\nEvaluation Results:", eval_results)
+        logger.info(f"Evaluation Results: {eval_results}")
 
     except Exception as e:
         if not (logger and hasattr(logger, "error")):

@@ -62,7 +62,6 @@ class ContrastiveDataset(Dataset[Any]):
             view1 = self.transform(x)
             view2 = self.transform(x)
             label = item[1] if isinstance(item, tuple) and len(item) >= 2 else -1
-            # print(f"[DEBUG] Label: {label}")
             return view1, view2, label
 
         return x, x, -1

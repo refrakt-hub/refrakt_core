@@ -3,39 +3,65 @@ Contains a set of transform classes for specific use-cases.
 Available transforms are:
 - PairedTransform
 - FlattenTransform
-PatchifyTransform
+- PatchifyTransform
+- PairedResize
 """
 
 import random
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 
 import torch
 import torchvision.transforms as T
+import torchvision.transforms.functional as F
 from torch import Tensor
 
 from refrakt_core.registry.transform_registry import register_transform
 
-
 @register_transform("paired")
 class PairedTransform:
     """
-    A transform class for SR-based training.
+    A transform class for SR-based training that handles paired LR/HR images.
+    Can optionally resize images before applying other transforms.
     """
 
-    def __init__(self, crop_size: int = 96) -> None:
+    def __init__(self, crop_size: int = 96, resize_lr: Optional[Tuple[int, int]] = None, resize_hr: Optional[Tuple[int, int]] = None, scale_factor: int = 4) -> None:
         self.crop_size = crop_size
+        self.scale_factor = scale_factor
+        
+        # Set up resize transforms if specified
+        self.lr_resize = None
+        self.hr_resize = None
+        
+        if resize_lr is not None:
+            self.lr_resize = T.Resize(resize_lr, interpolation=T.InterpolationMode.BICUBIC)
+            
+        if resize_hr is not None:
+            self.hr_resize = T.Resize(resize_hr, interpolation=T.InterpolationMode.BICUBIC)
+        elif resize_lr is not None:
+            # If only LR resize is specified, calculate HR size using scale factor
+            hr_size = (resize_lr[0] * scale_factor, resize_lr[1] * scale_factor)
+            self.hr_resize = T.Resize(hr_size, interpolation=T.InterpolationMode.BICUBIC)
 
     def __call__(self, lr: Any, hr: Any) -> Tuple[Tensor, Tensor]:
+        # Apply resize if specified
+        if self.lr_resize is not None:
+            lr = self.lr_resize(lr)
+        if self.hr_resize is not None:
+            hr = self.hr_resize(hr)
+            
+        # Apply cropping
         i, j, h, w = T.RandomCrop.get_params(
             hr, output_size=(self.crop_size * 4, self.crop_size * 4)
         )
-        hr = T.functional.crop(hr, i, j, h, w)
-        lr = T.functional.crop(lr, i // 4, j // 4, h // 4, w // 4)
+        hr = F.crop(hr, i, j, h, w)
+        lr = F.crop(lr, i // 4, j // 4, h // 4, w // 4)
 
+        # Apply random horizontal flip
         if random.random() > 0.5:
-            hr = T.functional.hflip(hr)
-            lr = T.functional.hflip(lr)
+            hr = F.hflip(hr)
+            lr = F.hflip(lr)
 
+        # Convert to tensors
         hr = T.ToTensor()(hr)
         lr = T.ToTensor()(lr)
 

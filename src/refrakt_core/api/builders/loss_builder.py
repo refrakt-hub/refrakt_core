@@ -17,7 +17,7 @@ Typical usage involves passing a configuration (OmegaConf) and a modules
 registry to build loss functions for training.
 """
 
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, Optional
 
 from omegaconf import OmegaConf
 from torch import nn
@@ -31,7 +31,7 @@ from refrakt_core.api.builders.utils.loss_utils import (
 
 
 def build_loss(
-    cfg: OmegaConf, modules: Dict[str, Any], device: str
+    cfg: OmegaConf, modules: Dict[str, Any], device: str, logger: Optional[Any] = None
 ) -> Union[nn.Module, Dict[str, nn.Module]]:
     """
     Build and wrap loss functions to return LossOutput objects.
@@ -52,6 +52,7 @@ def build_loss(
             utilities
         device: Target device string (e.g., "cuda", "cpu") for loss function
             placement
+        logger: Optional logger instance for debug output
 
     Returns:
         Either a single loss module (nn.Module) or a dictionary of loss modules
@@ -67,11 +68,11 @@ def build_loss(
 
     # GAN-style: generator/discriminator
     if loss_cfg.get("generator") or loss_cfg.get("discriminator"):
-        return _build_gan_style_loss(loss_cfg, modules, device)
+        return _build_gan_style_loss(loss_cfg, modules, device, logger)
 
     # Multi-component losses
     if loss_cfg.get("components"):
-        return _build_multi_component_loss(loss_cfg, modules, device)
+        return _build_multi_component_loss(loss_cfg, modules, device, logger)
 
     # Single loss
-    return _build_single_loss(loss_cfg, modules, device)
+    return _build_single_loss(loss_cfg, modules, device, logger)

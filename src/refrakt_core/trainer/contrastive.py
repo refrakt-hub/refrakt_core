@@ -6,6 +6,10 @@ of models using contrastive objectives (e.g., SimCLR, MoCo, etc.).
 It supports logging, artifact dumping, and checkpointing.
 """
 
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import random
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import torch
@@ -23,6 +27,8 @@ from refrakt_core.trainer.utils.contrastive_utils import (
     handle_contrastive_training_step,
 )
 from refrakt_core.utils.methods import unpack_views_from_batch
+from refrakt_core.trainer.utils.string_utils import to_snake_case
+
 
 
 @register_trainer("contrastive")
@@ -44,6 +50,8 @@ class ContrastiveTrainer(BaseTrainer):
         device: str = "cuda",
         scheduler: Optional[Any] = None,
         artifact_dumper: Optional[Any] = None,
+        visualization_hooks: Optional[list] = None,
+        explainability_hooks: Optional[list] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -94,6 +102,9 @@ class ContrastiveTrainer(BaseTrainer):
             else None
         )
 
+        self.visualization_hooks = visualization_hooks or []
+        self.explainability_hooks = explainability_hooks or []
+
     def _unpack_views(self, batch: Any) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Unpack two augmented views from a batch for contrastive learning.
@@ -119,6 +130,32 @@ class ContrastiveTrainer(BaseTrainer):
             Optional[Any]: Logger object if available, else None.
         """
         return getattr(self.artifact_dumper, "logger", None)
+
+    def _run_explainability_hooks(self, epoch: int, inference: bool = False) -> None:
+        """
+        Run explainability hooks for contrastive models.
+        
+        Note: XAI components are currently not supported for contrastive family models 
+        (SimCLR, DINO, MSN) in refrakt v1. This method handles the case gracefully
+        by logging a warning instead of raising an exception.
+        
+        Args:
+            epoch (int): Current training epoch.
+            inference (bool): Whether this is being called during inference.
+        """
+        if self.explainability_hooks:
+            # Log a warning instead of raising an exception
+            logger = self._get_logger()
+            if logger:
+                logger.warning(
+                    "XAI components are currently not supported for contrastive family models "
+                    "(SimCLR, DINO, MSN) in refrakt v1."
+                )
+            else:
+                print(
+                    "[WARNING] XAI components are currently not supported for contrastive family models "
+                    "(SimCLR, DINO, MSN) in refrakt v1."
+                )
 
     def train(self, num_epochs: int) -> Dict[str, float]:
         """
@@ -244,6 +281,8 @@ class ContrastiveTrainer(BaseTrainer):
                         viz.save(f"visualizations/{model_name}/viz_{viz.__class__.__name__}_epoch{epoch+1}.png")
                 except Exception as e:
                     print(f"[VizHook] save() failed: {e}")
+            # --- XAI hooks: run at end of epoch ---
+            self._run_explainability_hooks(epoch, inference=False)
 
         return {"final_loss": avg_loss, "best_loss": best_loss}
 
