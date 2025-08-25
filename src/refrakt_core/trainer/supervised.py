@@ -108,16 +108,14 @@ class SupervisedTrainer(BaseTrainer):
         y_true = None
         y_pred = None
         images = None
-        # Try to extract what we can from self._current_loss_output and batch
-        # (You may want to improve this extraction based on your actual pipeline)
+
         if self._current_loss_output is not None:
             train_loss = self._current_loss_output.total.item() if hasattr(self._current_loss_output.total, 'item') else self._current_loss_output.total
-        # Unpack batch for y_true, y_pred, images
         try:
             inputs, targets = self._unpack_batch(batch)
             y_true = targets.cpu().tolist() if hasattr(targets, 'cpu') else targets
             images = inputs.cpu().numpy() if hasattr(inputs, 'cpu') else inputs
-            # Forward pass for predictions
+
             output = self.model(inputs.to(self.device))
             if hasattr(output, 'logits'):
                 logits = output.logits
@@ -248,51 +246,46 @@ class SupervisedTrainer(BaseTrainer):
                     return name.strip('_')
                 
                 registry_name = to_snake_case(registry_name)
-                # Get model name and datetime for unique output dir
                 model_name = getattr(self.model, 'model_name', None) or getattr(self, 'model_name', 'model')
-                # Use experiment_id if available, otherwise generate timestamp
+
                 if hasattr(self, 'experiment_id') and self.experiment_id:
                     dt_str = self.experiment_id
                 else:
                     dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-                # Use explanations directory structure for training
+
                 base_dir = os.path.join("./explanations", f"{model_name}_{dt_str}", "train", registry_name)
                 os.makedirs(base_dir, exist_ok=True)
-                # Convert attributions to numpy and save each sample
+
                 attr_np = attributions.detach().cpu().numpy()
                 
                 for i in range(min(attr_np.shape[0], 8)):
                     arr = attr_np[i]
                     
-                    # Handle different attribution shapes
-                    if len(arr.shape) == 0:  # Scalar
+                    if len(arr.shape) == 0:
                         continue
-                    elif len(arr.shape) == 1 and arr.shape[0] == 1:  # [1] - class-specific attribution
+                    elif len(arr.shape) == 1 and arr.shape[0] == 1:
                         continue
-                    elif len(arr.shape) == 1:  # 1D array
-                        # Reshape to 2D for visualization
+                    elif len(arr.shape) == 1:
                         arr = arr.reshape((int(np.sqrt(arr.shape[0])), int(np.sqrt(arr.shape[0]))))
-                    elif len(arr.shape) == 2:  # 2D array (spatial heatmap)
-                        pass  # Keep as is
-                    elif len(arr.shape) == 3:  # 3D array
-                        if arr.shape[0] == 1:  # [1, H, W]
+                    elif len(arr.shape) == 2:
+                        pass
+                    elif len(arr.shape) == 3:
+                        if arr.shape[0] == 1:
                             arr = arr[0]
-                        elif arr.shape[0] == 3:  # [3, H, W] - RGB
+                        elif arr.shape[0] == 3:
                             arr = np.transpose(arr, (1, 2, 0))
                         else:
                             continue
                     else:
                         continue
                     
-                    # Normalize and convert to image
                     arr = arr - arr.min()
                     arr = arr / (arr.max() + 1e-8)
                     arr = (arr * 255).astype(np.uint8)
                     
-                    # Convert to PIL Image
-                    if len(arr.shape) == 2:  # Grayscale
+                    if len(arr.shape) == 2:
                         img = Image.fromarray(arr, mode='L')
-                    elif len(arr.shape) == 3:  # RGB
+                    elif len(arr.shape) == 3:
                         img = Image.fromarray(arr, mode='RGB')
                     else:
                         continue
@@ -300,7 +293,6 @@ class SupervisedTrainer(BaseTrainer):
                     img_path = os.path.join(base_dir, f"sample_{i}.png")
                     img.save(img_path)
                     
-                    # Save raw attribution as .npy
                     npy_path = os.path.join(base_dir, f"sample_{i}.npy")
                     np.save(npy_path, attr_np[i])
                     metadata = {
@@ -313,7 +305,6 @@ class SupervisedTrainer(BaseTrainer):
                     meta_path = os.path.join(base_dir, f"sample_{i}_metadata.json")
                     with open(meta_path, "w") as f:
                         json.dump(metadata, f)
-                    # (No explanation .md file is saved)
             except Exception as e:
                 logger = self._get_logger()
                 if logger:

@@ -216,8 +216,12 @@ class ContrastiveTrainer(BaseTrainer):
                             elif name == "EmbeddingSpacePlot":
                                 with torch.no_grad():
                                     embeddings = self.model.encode(view1.to(self.device)).cpu().numpy()
-                                # If you have labels, use them; else use zeros
-                                labels = getattr(batch, 'labels', None)
+                                # Extract labels from contrastive batch structure [view1, view2, labels]
+                                labels = batch[2] if isinstance(batch, (tuple, list)) and len(batch) > 2 else None
+                                if labels is not None and hasattr(labels, "cpu"):
+                                    labels = labels.cpu().numpy()
+                                elif labels is not None and hasattr(labels, "numpy"):
+                                    labels = labels.numpy()
                                 if labels is None:
                                     labels = [0] * len(embeddings)
                                 viz.update(embeddings, labels)
@@ -243,7 +247,12 @@ class ContrastiveTrainer(BaseTrainer):
                                 n_clusters = 10
                                 kmeans = KMeans(n_clusters=n_clusters, n_init=1, random_state=0)
                                 assignments = kmeans.fit_predict(embeddings)
-                                labels = getattr(batch, 'labels', None)
+                                # Extract labels from contrastive batch structure [view1, view2, labels]
+                                labels = batch[2] if isinstance(batch, (tuple, list)) and len(batch) > 2 else None
+                                if labels is not None and hasattr(labels, "cpu"):
+                                    labels = labels.cpu().numpy()
+                                elif labels is not None and hasattr(labels, "numpy"):
+                                    labels = labels.numpy()
                                 if labels is None:
                                     labels = [0] * len(assignments)
                                 viz.update(assignments, labels)
