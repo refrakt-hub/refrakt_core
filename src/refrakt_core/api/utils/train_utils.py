@@ -670,10 +670,10 @@ def _handle_fusion_training(
     artifact_dumper: Any,
     trainer: Any,
     logger: RefraktLogger,
-) -> None:
+) -> Optional[Dict[str, Any]]:
     """Handle fusion head training if configured."""
     if not hasattr(cfg.model, "fusion"):
-        return
+        return None
 
     logger.info(
         "\n[FUSION] Fusion head config detected. Starting fusion head training..."
@@ -687,12 +687,16 @@ def _handle_fusion_training(
         val_loader=val_loader,
         device=device,
         artifact_dumper=artifact_dumper,
-        model_name=cfg.trainer.params.model_name,
+        model_name=getattr(trainer, 'model_name', 'model'),
     )
     fusion_metrics = fusion_trainer.train()
+    
+    # Use trainer's save_dir for consistency
+    trainer_save_dir = getattr(trainer, 'save_dir', cfg.trainer.params.save_dir)
+    resolved_model_name = getattr(trainer, 'model_name', cfg.model.name)
     fusion_save_path = os.path.join(
-        cfg.trainer.params.save_dir,
-        f"{cfg.trainer.params.model_name}_fusion.joblib",
+        trainer_save_dir,
+        f"{resolved_model_name}_fusion.joblib",
     )
     save_method = getattr(fusion_head, "save", None)
     if callable(save_method):
@@ -700,6 +704,8 @@ def _handle_fusion_training(
         logger.info(f"[FUSION] Fusion head saved to {fusion_save_path}")
     if logger:
         logger.log_metrics(fusion_metrics, step=trainer.global_step, prefix="fusion")
+    
+    return fusion_metrics
 
 
 def _save_config_and_log_metrics(

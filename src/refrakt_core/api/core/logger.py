@@ -178,7 +178,7 @@ class RefraktLogger:
         from .utils.logging_utils import create_scalar_config
 
         if self.wandb_run:
-            self.wandb_run.config.update(config)
+            self.wandb_run.config.update(config, allow_val_change=True)
 
         if self.tb_writer:
             try:

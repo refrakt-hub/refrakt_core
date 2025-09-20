@@ -125,7 +125,7 @@ def test(
 
         # Setup fusion evaluation
         fusion_acc = _setup_fusion_evaluation(
-            config, model, dataloader, device, artifact_dumper, logger
+            config, model, dataloader, device, artifact_dumper, logger, model_path
         )
 
         # Evaluate model performance

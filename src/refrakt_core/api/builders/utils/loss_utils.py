@@ -30,7 +30,7 @@ from refrakt_core.wrappers.schema.default_loss import DefaultLossWrapper
 
 
 def _create_wrapped_loss(
-    name: str, params: Dict[str, Any], modules: Dict[str, Any], device: str
+    name: str, params: Dict[str, Any], modules: Dict[str, Any], device: str, logger = None
 ) -> nn.Module:
     """
     Create a wrapped loss function with proper device placement.
@@ -57,10 +57,11 @@ def _create_wrapped_loss(
     if isinstance(raw_loss, nn.Module) and hasattr(raw_loss, "forward"):
         return raw_loss.to(device)
 
-    print(
-        f"[DEBUG] Loss is not a full nn.Module, wrapping with \
-            DefaultLossWrapper: {type(raw_loss)}"
-    )
+    if logger:
+        logger.debug(
+            f"[DEBUG] Loss is not a full nn.Module, wrapping with \
+                DefaultLossWrapper: {type(raw_loss)}"
+        )
     return DefaultLossWrapper(raw_loss).to(device)
 
 

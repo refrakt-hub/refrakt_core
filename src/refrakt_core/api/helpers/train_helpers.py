@@ -46,7 +46,7 @@ from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
     instantiate_explainability_hooks,
 )
 
-from refrakt_cli.llm_explainer import extract_comprehensive_metadata
+from refrakt_cli.helpers.shared_core import extract_comprehensive_metadata
 
 __all__ = [
     "_load_and_validate_config",
@@ -367,7 +367,7 @@ def _execute_training(
     resolved_model_name: str,
     logger: RefraktLogger,
     experiment_id: Optional[str] = None,
-    config_path: str = None,
+    config_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Execute the training process and save results in the new directory structure.
@@ -377,6 +377,18 @@ def _execute_training(
     
     if logger:
         logger.info(f"Training results: {training_results}")
+    
+    # Handle fusion training if configured and merge results
+    fusion_results = _handle_fusion_training(
+        config, model, train_loader, val_loader, final_device, artifact_dumper, trainer, logger
+    )
+    
+    # Merge fusion results with training results
+    if fusion_results:
+        if isinstance(training_results, dict) and isinstance(fusion_results, dict):
+            training_results.update(fusion_results)
+        elif logger:
+            logger.info(f"Fusion training results: {fusion_results}")
     
     # Save summary metrics in experiment directory
     # Use checkpoint directory if experiment_dir is not available
