@@ -76,7 +76,9 @@ class ModelOutput:
             return self.embeddings.shape
         elif self.image is not None and isinstance(self.image, torch.Tensor):
             return self.image.shape
-        elif self.reconstruction is not None and isinstance(self.reconstruction, torch.Tensor):
+        elif self.reconstruction is not None and isinstance(
+            self.reconstruction, torch.Tensor
+        ):
             return self.reconstruction.shape
         else:
             return None
@@ -93,7 +95,9 @@ class ModelOutput:
             return self.embeddings.device
         elif self.image is not None and isinstance(self.image, torch.Tensor):
             return self.image.device
-        elif self.reconstruction is not None and isinstance(self.reconstruction, torch.Tensor):
+        elif self.reconstruction is not None and isinstance(
+            self.reconstruction, torch.Tensor
+        ):
             return self.reconstruction.device
         else:
             return None
@@ -109,7 +113,9 @@ class ModelOutput:
             return self.embeddings.shape[0]
         elif self.image is not None and isinstance(self.image, torch.Tensor):
             return self.image.shape[0]
-        elif self.reconstruction is not None and isinstance(self.reconstruction, torch.Tensor):
+        elif self.reconstruction is not None and isinstance(
+            self.reconstruction, torch.Tensor
+        ):
             return self.reconstruction.shape[0]
         else:
             return 0
@@ -134,7 +140,7 @@ class ModelOutput:
             return primary_tensor.gather(dim, index, *args, **kwargs)
         else:
             raise RuntimeError("No primary tensor available for gather operation")
-    
+
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
         """
@@ -143,7 +149,7 @@ class ModelOutput:
         """
         if kwargs is None:
             kwargs = {}
-        
+
         # Handle torch.gather specifically
         if func == torch.gather:
             # Extract the ModelOutput from args
@@ -154,15 +160,17 @@ class ModelOutput:
                     model_output = arg
                 else:
                     other_args.append(arg)
-            
+
             if model_output is not None:
                 primary_tensor = model_output._get_primary_tensor()
                 if primary_tensor is not None:
                     # Call torch.gather on the primary tensor
                     return torch.gather(primary_tensor, *other_args, **kwargs)
                 else:
-                    raise RuntimeError("No primary tensor available for gather operation")
-        
+                    raise RuntimeError(
+                        "No primary tensor available for gather operation"
+                    )
+
         # For other torch functions, try to delegate to the primary tensor
         # Find the first ModelOutput in args
         model_output = None
@@ -170,7 +178,7 @@ class ModelOutput:
             if isinstance(arg, ModelOutput):
                 model_output = arg
                 break
-        
+
         if model_output is not None:
             primary_tensor = model_output._get_primary_tensor()
             if primary_tensor is not None:
@@ -181,11 +189,13 @@ class ModelOutput:
                         new_args.append(primary_tensor)
                     else:
                         new_args.append(arg)
-                
+
                 return func(*new_args, **kwargs)
             else:
-                raise RuntimeError(f"No primary tensor available for {func.__name__} operation")
-        
+                raise RuntimeError(
+                    f"No primary tensor available for {func.__name__} operation"
+                )
+
         # If no ModelOutput found, let PyTorch handle it normally
         return func(*args, **kwargs)
 
@@ -220,7 +230,9 @@ class ModelOutput:
             return self.embeddings
         elif self.image is not None and isinstance(self.image, torch.Tensor):
             return self.image
-        elif self.reconstruction is not None and isinstance(self.reconstruction, torch.Tensor):
+        elif self.reconstruction is not None and isinstance(
+            self.reconstruction, torch.Tensor
+        ):
             return self.reconstruction
         else:
             return None

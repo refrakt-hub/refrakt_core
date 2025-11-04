@@ -30,7 +30,7 @@ model:
   params:
     in_channels: 1
     num_classes: 10
-    image_size: 28 
+    image_size: 28
     patch_size: 7
   fusion:
     type: cuml

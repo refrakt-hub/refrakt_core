@@ -21,7 +21,7 @@ complete pipelines with automatic phase coordination and logging.
 """
 
 import os
-from typing import Any, cast, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from omegaconf import DictConfig
 
@@ -45,6 +45,7 @@ def parse_runtime_hooks(cfg: Dict[str, Any]):
         visualizations = [visualizations]
     if not isinstance(explainability, list):
         explainability = [explainability]
+
     def extract_viz(lst):
         result = []
         for v in lst:
@@ -53,6 +54,7 @@ def parse_runtime_hooks(cfg: Dict[str, Any]):
             elif isinstance(v, str):
                 result.append(v)
         return result
+
     def extract_xai(lst):
         result = []
         for v in lst:
@@ -61,6 +63,7 @@ def parse_runtime_hooks(cfg: Dict[str, Any]):
             elif isinstance(v, str):
                 result.append({"method": v})
         return result
+
     visualizations = extract_viz(visualizations)
     explainability = extract_xai(explainability)
     return visualizations, explainability, explain_flag

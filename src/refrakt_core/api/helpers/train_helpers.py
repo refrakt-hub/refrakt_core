@@ -21,8 +21,8 @@ Typical usage involves calling these helper functions from the main train
 API to set up and execute training operations.
 """
 
-import os
 import json
+import os
 import sys
 from typing import Any, Dict, Optional, Tuple, Union, cast
 
@@ -31,7 +31,13 @@ import torch
 # Export for test compatibility
 from omegaconf import DictConfig, OmegaConf
 
+from refrakt_cli.helpers.shared_core import extract_comprehensive_metadata
 from refrakt_core.api.core.logger import RefraktLogger
+from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
+    instantiate_explainability_hooks,
+    instantiate_visualization_hooks,
+)
+from refrakt_core.api.utils.pipeline_utils import parse_runtime_hooks
 from refrakt_core.api.utils.train_utils import (
     _handle_fusion_training,
     _save_config_and_log_metrics,
@@ -40,13 +46,6 @@ from refrakt_core.api.utils.train_utils import (
     build_optimizer_and_scheduler,
     load_config,
 )
-from refrakt_core.api.utils.pipeline_utils import parse_runtime_hooks
-from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
-    instantiate_visualization_hooks,
-    instantiate_explainability_hooks,
-)
-
-from refrakt_cli.helpers.shared_core import extract_comprehensive_metadata
 
 __all__ = [
     "_load_and_validate_config",
@@ -219,11 +218,13 @@ def _build_datasets_and_model(
         device=str(device),
         logger=logger,
     )
-    
+
     # for name, module in model.named_modules():
     #     print(f" {name}: {module}")
 
-    loss_fn = build_loss(cast(OmegaConf, config), modules=modules, device=str(device), logger=logger)
+    loss_fn = build_loss(
+        cast(OmegaConf, config), modules=modules, device=str(device), logger=logger
+    )
 
     return train_loader, val_loader, model, loss_fn
 
@@ -304,7 +305,9 @@ def _setup_trainer(
     config_dict = OmegaConf.to_container(config, resolve=True)
     if not isinstance(config_dict, dict):
         config_dict = {}
-    viz_hooks, xai_hooks, explain_flag = parse_runtime_hooks(cast(Dict[str, Any], config_dict))
+    viz_hooks, xai_hooks, explain_flag = parse_runtime_hooks(
+        cast(Dict[str, Any], config_dict)
+    )
     # Example: pass class_names if available (for supervised)
     class_names = None
     if hasattr(config, "dataset") and hasattr(config.dataset, "params"):
@@ -316,14 +319,22 @@ def _setup_trainer(
             num_classes = getattr(config.model.params, "num_classes", None)
         if num_classes is not None:
             class_names = [str(i) for i in range(num_classes)]
-    viz_components = instantiate_visualization_hooks(viz_hooks, extra_args={"class_names": class_names} if class_names else {})
+    viz_components = instantiate_visualization_hooks(
+        viz_hooks, extra_args={"class_names": class_names} if class_names else {}
+    )
     xai_components = instantiate_explainability_hooks(xai_hooks)
     # --- End hook injection ---
 
     # Remove save_dir from trainer_params to avoid duplicate keyword argument
     save_dir = trainer_params.pop("save_dir", None)
     # Remove keys not accepted by initialize_trainer
-    for k in ["logger", "artifact_dumper", "visualization_hooks", "explainability_hooks", "model_name"]:
+    for k in [
+        "logger",
+        "artifact_dumper",
+        "visualization_hooks",
+        "explainability_hooks",
+        "model_name",
+    ]:
         trainer_params.pop(k, None)
 
     trainer = initialize_trainer(
@@ -344,7 +355,7 @@ def _setup_trainer(
     # Set model_name on the trainer instance for correct checkpoint naming
     setattr(trainer, "model_name", resolved_model_name)
     # Set experiment directory if artifact_dumper provides it
-    if hasattr(artifact_dumper, 'experiment_dir'):
+    if hasattr(artifact_dumper, "experiment_dir"):
         setattr(trainer, "experiment_dir", artifact_dumper.experiment_dir)
     # Set visualization and explainability hooks as attributes if present
     if viz_components:
@@ -374,111 +385,153 @@ def _execute_training(
     """
     # Execute training
     training_results = trainer.train(num_epochs)
-    
+
     if logger:
         logger.info(f"Training results: {training_results}")
-    
+
     # Handle fusion training if configured and merge results
     fusion_results = _handle_fusion_training(
-        config, model, train_loader, val_loader, final_device, artifact_dumper, trainer, logger
+        config,
+        model,
+        train_loader,
+        val_loader,
+        final_device,
+        artifact_dumper,
+        trainer,
+        logger,
     )
-    
+
     # Merge fusion results with training results
     if fusion_results:
         if isinstance(training_results, dict) and isinstance(fusion_results, dict):
             training_results.update(fusion_results)
         elif logger:
             logger.info(f"Fusion training results: {fusion_results}")
-    
+
     # Save summary metrics in experiment directory
     # Use checkpoint directory if experiment_dir is not available
     experiment_dir = None
-    if hasattr(trainer, 'experiment_dir') and trainer.experiment_dir:
+    if hasattr(trainer, "experiment_dir") and trainer.experiment_dir:
         experiment_dir = trainer.experiment_dir
-    elif hasattr(trainer, 'save_dir') and trainer.save_dir and experiment_id:
+    elif hasattr(trainer, "save_dir") and trainer.save_dir and experiment_id:
         # The save_dir is typically ./checkpoints/autoencoder_vae_{experiment_id}/weights
         # So we need to go up one level to get the experiment directory
-        experiment_dir = os.path.dirname(trainer.save_dir)  # This should be ./checkpoints/autoencoder_vae_{experiment_id}
-    
+        experiment_dir = os.path.dirname(
+            trainer.save_dir
+        )  # This should be ./checkpoints/autoencoder_vae_{experiment_id}
+
     if experiment_dir:
-        summary_metrics_path = os.path.join(experiment_dir, "explanations", "summary_metrics.json")
-        
+        summary_metrics_path = os.path.join(
+            experiment_dir, "explanations", "summary_metrics.json"
+        )
+
         # Create explanations directory if it doesn't exist
         os.makedirs(os.path.dirname(summary_metrics_path), exist_ok=True)
-        
+
         # Extract comprehensive metadata
-        metadata = extract_comprehensive_metadata([config_path] if config_path else [], os.getcwd(), experiment_dir, logger, training_results)
-        
+        metadata = extract_comprehensive_metadata(
+            [config_path] if config_path else [],
+            os.getcwd(),
+            experiment_dir,
+            logger,
+            training_results,
+        )
+
         # --- Robust summary_metrics merging logic ---
         if os.path.exists(summary_metrics_path):
             try:
-                with open(summary_metrics_path, 'r') as f:
+                with open(summary_metrics_path, "r") as f:
                     existing_metrics = json.load(f)
                 # Merge experiment_info, model_info, dataset_info, trainer_info, optimizer_info, run_metadata
-                for key in ['experiment_info', 'model_info', 'dataset_info', 'trainer_info', 'optimizer_info', 'run_metadata']:
+                for key in [
+                    "experiment_info",
+                    "model_info",
+                    "dataset_info",
+                    "trainer_info",
+                    "optimizer_info",
+                    "run_metadata",
+                ]:
                     if key in existing_metrics and key in metadata:
                         if not metadata[key]:
                             metadata[key] = existing_metrics[key]
                 # Merge performance_metrics, preferring most complete (non-'N/A') values
-                merged_perf = existing_metrics.get('performance_metrics', {}).copy()
-                for k, v in metadata.get('performance_metrics', {}).items():
-                    if v not in [None, '', 'N/A']:
+                merged_perf = existing_metrics.get("performance_metrics", {}).copy()
+                for k, v in metadata.get("performance_metrics", {}).items():
+                    if v not in [None, "", "N/A"]:
                         merged_perf[k] = v
-                    elif k in merged_perf and merged_perf[k] not in [None, '', 'N/A']:
+                    elif k in merged_perf and merged_perf[k] not in [None, "", "N/A"]:
                         continue  # keep existing good value
                     else:
                         merged_perf[k] = v  # fallback
-                metadata['performance_metrics'] = merged_perf
+                metadata["performance_metrics"] = merged_perf
             except Exception as e:
                 if logger:
-                    logger.warning(f"Could not merge with existing summary_metrics.json: {e}")
+                    logger.warning(
+                        f"Could not merge with existing summary_metrics.json: {e}"
+                    )
         # Save to experiment directory
-        with open(summary_metrics_path, 'w') as f:
+        with open(summary_metrics_path, "w") as f:
             json.dump(metadata, f, indent=2)
-        
+
         if logger:
             logger.info(f"Summary metrics saved to {summary_metrics_path}")
-    
+
     return training_results
 
 
-def _save_test_summary_metrics(trainer, eval_results, resolved_model_name, logger, experiment_id, config_files=None):
+def _save_test_summary_metrics(
+    trainer, eval_results, resolved_model_name, logger, experiment_id, config_files=None
+):
     """Save summary_metrics.json for test phase, using config_files for metadata."""
     experiment_dir = None
-    if hasattr(trainer, 'experiment_dir') and trainer.experiment_dir:
+    if hasattr(trainer, "experiment_dir") and trainer.experiment_dir:
         experiment_dir = trainer.experiment_dir
-    elif hasattr(trainer, 'save_dir') and trainer.save_dir and experiment_id:
+    elif hasattr(trainer, "save_dir") and trainer.save_dir and experiment_id:
         experiment_dir = os.path.dirname(trainer.save_dir)
     if experiment_dir:
-        summary_metrics_path = os.path.join(experiment_dir, "explanations", "summary_metrics.json")
+        summary_metrics_path = os.path.join(
+            experiment_dir, "explanations", "summary_metrics.json"
+        )
         os.makedirs(os.path.dirname(summary_metrics_path), exist_ok=True)
         base_dir = os.getcwd()
         checkpoints_dir = experiment_dir
-        metadata = extract_comprehensive_metadata(config_files or [], base_dir, checkpoints_dir, logger, eval_results)
-        with open(summary_metrics_path, 'w') as f:
+        metadata = extract_comprehensive_metadata(
+            config_files or [], base_dir, checkpoints_dir, logger, eval_results
+        )
+        with open(summary_metrics_path, "w") as f:
             json.dump(metadata, f, indent=2)
         if logger:
             logger.info(f"Summary metrics saved to {summary_metrics_path}")
 
-def _save_inference_summary_metrics(model, results, resolved_model_name, logger, experiment_id, config_files=None):
+
+def _save_inference_summary_metrics(
+    model, results, resolved_model_name, logger, experiment_id, config_files=None
+):
     """Save summary_metrics.json for inference phase, using config_files for metadata."""
     experiment_dir = None
-    if hasattr(model, 'experiment_dir') and model.experiment_dir:
+    if hasattr(model, "experiment_dir") and model.experiment_dir:
         experiment_dir = model.experiment_dir
     else:
-        experiment_dir = os.path.join("./checkpoints", f"{resolved_model_name}_{experiment_id}")
+        experiment_dir = os.path.join(
+            "./checkpoints", f"{resolved_model_name}_{experiment_id}"
+        )
     if experiment_dir:
-        summary_metrics_path = os.path.join(experiment_dir, "explanations", "summary_metrics.json")
+        summary_metrics_path = os.path.join(
+            experiment_dir, "explanations", "summary_metrics.json"
+        )
         os.makedirs(os.path.dirname(summary_metrics_path), exist_ok=True)
         base_dir = os.getcwd()
         checkpoints_dir = experiment_dir
         metrics = results[-1] if isinstance(results, list) and results else {}
         # --- Patch: Convert ModelOutput to dict if needed ---
         from refrakt_core.schema.model_output import ModelOutput
+
         if isinstance(metrics, ModelOutput):
             metrics = metrics.summary()
-        metadata = extract_comprehensive_metadata(config_files or [], base_dir, checkpoints_dir, logger, metrics)
-        with open(summary_metrics_path, 'w') as f:
+        metadata = extract_comprehensive_metadata(
+            config_files or [], base_dir, checkpoints_dir, logger, metrics
+        )
+        with open(summary_metrics_path, "w") as f:
             json.dump(metadata, f, indent=2)
         if logger:
             logger.info(f"Summary metrics saved to {summary_metrics_path}")

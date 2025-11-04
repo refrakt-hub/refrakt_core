@@ -1,4 +1,4 @@
-runtime: 
+runtime:
   mode: pipeline
   log_type: []
 
@@ -29,7 +29,7 @@ dataset:
         std: [0.2023, 0.1994, 0.2010]
 
 dataloader:
-  params: 
+  params:
     batch_size: 32
     shuffle: true
     num_workers: 4

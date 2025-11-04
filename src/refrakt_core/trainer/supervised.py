@@ -6,18 +6,18 @@ of models using supervised objectives (e.g., classification, regression).
 It supports logging, artifact dumping, and integration with explainability/visualization tools.
 """
 
-import os
-import numpy as np
-from PIL import Image
 import json
+import os
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import numpy as np
 import torch
+from PIL import Image
 from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from datetime import datetime
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.model_output import ModelOutput
@@ -28,11 +28,13 @@ from refrakt_core.trainer.utils.supervised_utils import (
     log_artifacts,
     log_training_metrics,
 )
-from refrakt_core.wrappers.utils.default_loss_utils import extract_tensor_from_model_output
-
-from refrakt_viz.supervised.loss_accuracy import LossAccuracyPlot
+from refrakt_core.wrappers.utils.default_loss_utils import (
+    extract_tensor_from_model_output,
+)
 from refrakt_viz.supervised.confusion_matrix import ConfusionMatrixPlot
+from refrakt_viz.supervised.loss_accuracy import LossAccuracyPlot
 from refrakt_viz.supervised.sample_predictions import SamplePredictionsPlot
+
 
 @register_trainer("supervised")
 class SupervisedTrainer(BaseTrainer):
@@ -110,26 +112,39 @@ class SupervisedTrainer(BaseTrainer):
         images = None
 
         if self._current_loss_output is not None:
-            train_loss = self._current_loss_output.total.item() if hasattr(self._current_loss_output.total, 'item') else self._current_loss_output.total
+            train_loss = (
+                self._current_loss_output.total.item()
+                if hasattr(self._current_loss_output.total, "item")
+                else self._current_loss_output.total
+            )
         try:
             inputs, targets = self._unpack_batch(batch)
-            y_true = targets.cpu().tolist() if hasattr(targets, 'cpu') else targets
-            images = inputs.cpu().numpy() if hasattr(inputs, 'cpu') else inputs
+            y_true = targets.cpu().tolist() if hasattr(targets, "cpu") else targets
+            images = inputs.cpu().numpy() if hasattr(inputs, "cpu") else inputs
 
             output = self.model(inputs.to(self.device))
-            if hasattr(output, 'logits'):
+            if hasattr(output, "logits"):
                 logits = output.logits
             else:
                 logits = output
             if logits is not None:
-                y_pred = torch.argmax(logits, dim=1).cpu().tolist() if hasattr(logits, 'cpu') else logits
+                y_pred = (
+                    torch.argmax(logits, dim=1).cpu().tolist()
+                    if hasattr(logits, "cpu")
+                    else logits
+                )
         except Exception:
             pass
         for viz in self.visualization_hooks:
             try:
                 if isinstance(viz, LossAccuracyPlot):
                     # Only pass dummy values for now; real values should be tracked across epoch
-                    viz.update(train_loss or 0.0, val_loss or 0.0, train_acc or 0.0, val_acc or 0.0)
+                    viz.update(
+                        train_loss or 0.0,
+                        val_loss or 0.0,
+                        train_acc or 0.0,
+                        val_acc or 0.0,
+                    )
                 elif isinstance(viz, ConfusionMatrixPlot):
                     if y_true is not None and y_pred is not None:
                         viz.update(y_true, y_pred)
@@ -137,7 +152,10 @@ class SupervisedTrainer(BaseTrainer):
                     if images is not None and y_true is not None and y_pred is not None:
                         viz.update(images, y_true, y_pred)
                 else:
-                    from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
+                    from refrakt_viz.supervised.per_layer_metrics import (
+                        PerLayerMetricsPlot,
+                    )
+
                     if not isinstance(viz, PerLayerMetricsPlot):
                         viz.update()
             except Exception as e:
@@ -169,17 +187,21 @@ class SupervisedTrainer(BaseTrainer):
         """
         if not self.explainability_hooks:
             return
-        if not hasattr(self, 'val_loader') or self.val_loader is None:
+        if not hasattr(self, "val_loader") or self.val_loader is None:
             return
         try:
             sample_batch = next(iter(self.val_loader))
             if isinstance(sample_batch, (tuple, list)):
-                input_tensor, target = sample_batch[0], sample_batch[1] if len(sample_batch) > 1 else None
+                input_tensor, target = sample_batch[0], (
+                    sample_batch[1] if len(sample_batch) > 1 else None
+                )
             elif isinstance(sample_batch, dict):
                 input_tensor = sample_batch.get("image") or sample_batch.get("input")
                 target = sample_batch.get("target", None)
                 if input_tensor is None:
-                    raise ValueError("Batch dict does not contain a valid 'image' or 'input' tensor for XAI.")
+                    raise ValueError(
+                        "Batch dict does not contain a valid 'image' or 'input' tensor for XAI."
+                    )
             else:
                 input_tensor = sample_batch
                 target = None
@@ -189,35 +211,51 @@ class SupervisedTrainer(BaseTrainer):
         except Exception as e:
             logger = self._get_logger()
             if logger:
-                logger.warning(f"[XAI] Could not get validation batch for explainability: {e}")
+                logger.warning(
+                    f"[XAI] Could not get validation batch for explainability: {e}"
+                )
             else:
                 print(f"[XAI] Could not get validation batch for explainability: {e}")
             return
         for xai_cls, params in self.explainability_hooks:
             try:
                 if xai_cls.__name__ == "ConceptSaliencyXAI":
-                    xai_method = xai_cls(self.model, dataloader=self.val_loader, device=self.device, **params)
+                    xai_method = xai_cls(
+                        self.model,
+                        dataloader=self.val_loader,
+                        device=self.device,
+                        **params,
+                    )
                 else:
                     xai_method = xai_cls(self.model, **params)
-                
+
                 # Save runtime XAI info for metadata collection
                 try:
                     from refrakt_cli.helpers.shared_core import save_runtime_xai_info
+
                     # Determine base directory for saving runtime info
-                    model_name = getattr(self.model, 'model_name', None) or getattr(self, 'model_name', 'model')
-                    if hasattr(self, 'experiment_id') and self.experiment_id:
+                    model_name = getattr(self.model, "model_name", None) or getattr(
+                        self, "model_name", "model"
+                    )
+                    if hasattr(self, "experiment_id") and self.experiment_id:
                         experiment_id = self.experiment_id
                     else:
-                        experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    
+                        experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
                     # Use checkpoints directory structure
                     checkpoints_base_dir = f"./checkpoints/{model_name}_{experiment_id}"
-                    save_runtime_xai_info(xai_method, xai_cls.__name__, params, checkpoints_base_dir, self._get_logger())
+                    save_runtime_xai_info(
+                        xai_method,
+                        xai_cls.__name__,
+                        params,
+                        checkpoints_base_dir,
+                        self._get_logger(),
+                    )
                 except Exception as e:
                     logger = self._get_logger()
                     if logger:
                         logger.warning(f"Failed to save runtime XAI info: {e}")
-                
+
                 input_device = input_tensor.device
                 model_device = next(self.model.parameters()).device
                 if input_device != model_device:
@@ -225,13 +263,17 @@ class SupervisedTrainer(BaseTrainer):
                 attributions = xai_method.explain(input_tensor, target=target)
                 # Save attributions as images
                 # Use registry_name from params if present, else method name, always lowercased with underscores, no 'xai' suffix
-                registry_name = params.get("registry_name", params.get("method", xai_cls.__name__)).replace(" ", "_")
+                registry_name = params.get(
+                    "registry_name", params.get("method", xai_cls.__name__)
+                ).replace(" ", "_")
                 if registry_name.lower().endswith("xai"):
                     registry_name = registry_name[:-3]
+
                 # Use to_snake_case for consistent naming with inference phase
                 def to_snake_case(name):
                     """Convert camelCase or PascalCase to snake_case."""
                     import re
+
                     # Handle special cases
                     if name == "LayerGradCAM":
                         return "layer_gradcam"
@@ -239,34 +281,40 @@ class SupervisedTrainer(BaseTrainer):
                         return "gradcam"
                     elif name == "IntegratedGradients":
                         return "integrated_gradients"
-                    
-                    # General conversion
-                    name = re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
-                    name = name.replace('__', '_')
-                    return name.strip('_')
-                
-                registry_name = to_snake_case(registry_name)
-                model_name = getattr(self.model, 'model_name', None) or getattr(self, 'model_name', 'model')
 
-                if hasattr(self, 'experiment_id') and self.experiment_id:
+                    # General conversion
+                    name = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+                    name = name.replace("__", "_")
+                    return name.strip("_")
+
+                registry_name = to_snake_case(registry_name)
+                model_name = getattr(self.model, "model_name", None) or getattr(
+                    self, "model_name", "model"
+                )
+
+                if hasattr(self, "experiment_id") and self.experiment_id:
                     dt_str = self.experiment_id
                 else:
-                    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-                base_dir = os.path.join("./explanations", f"{model_name}_{dt_str}", "train", registry_name)
+                base_dir = os.path.join(
+                    "./explanations", f"{model_name}_{dt_str}", "train", registry_name
+                )
                 os.makedirs(base_dir, exist_ok=True)
 
                 attr_np = attributions.detach().cpu().numpy()
-                
+
                 for i in range(min(attr_np.shape[0], 8)):
                     arr = attr_np[i]
-                    
+
                     if len(arr.shape) == 0:
                         continue
                     elif len(arr.shape) == 1 and arr.shape[0] == 1:
                         continue
                     elif len(arr.shape) == 1:
-                        arr = arr.reshape((int(np.sqrt(arr.shape[0])), int(np.sqrt(arr.shape[0]))))
+                        arr = arr.reshape(
+                            (int(np.sqrt(arr.shape[0])), int(np.sqrt(arr.shape[0])))
+                        )
                     elif len(arr.shape) == 2:
                         pass
                     elif len(arr.shape) == 3:
@@ -278,26 +326,26 @@ class SupervisedTrainer(BaseTrainer):
                             continue
                     else:
                         continue
-                    
+
                     arr = arr - arr.min()
                     arr = arr / (arr.max() + 1e-8)
                     arr = (arr * 255).astype(np.uint8)
-                    
+
                     if len(arr.shape) == 2:
-                        img = Image.fromarray(arr, mode='L')
+                        img = Image.fromarray(arr, mode="L")
                     elif len(arr.shape) == 3:
-                        img = Image.fromarray(arr, mode='RGB')
+                        img = Image.fromarray(arr, mode="RGB")
                     else:
                         continue
-                    
+
                     img_path = os.path.join(base_dir, f"sample_{i}.png")
                     img.save(img_path)
-                    
+
                     npy_path = os.path.join(base_dir, f"sample_{i}.npy")
                     np.save(npy_path, attr_np[i])
                     metadata = {
                         "method": registry_name,
-                        "epoch": epoch+1,
+                        "epoch": epoch + 1,
                         "sample_index": i,
                         "image_path": img_path,
                         "attribution_path": npy_path,
@@ -308,9 +356,13 @@ class SupervisedTrainer(BaseTrainer):
             except Exception as e:
                 logger = self._get_logger()
                 if logger:
-                    logger.warning(f"[XAI] Failed to run or save explainability for {xai_cls}: {e}")
+                    logger.warning(
+                        f"[XAI] Failed to run or save explainability for {xai_cls}: {e}"
+                    )
                 else:
-                    print(f"[XAI] Failed to run or save explainability for {xai_cls}: {e}")
+                    print(
+                        f"[XAI] Failed to run or save explainability for {xai_cls}: {e}"
+                    )
 
     def train(self, num_epochs: int) -> Dict[str, float]:
         """
@@ -320,6 +372,7 @@ class SupervisedTrainer(BaseTrainer):
             num_epochs (int): Number of epochs to train.
         """
         import time
+
         start_time = time.time()
         best_accuracy = 0.0
         final_loss = 0.0
@@ -328,7 +381,10 @@ class SupervisedTrainer(BaseTrainer):
         # --- Computation graph visualization at start ---
         for viz in self.visualization_hooks:
             try:
-                from refrakt_viz.supervised.computation_graph import ComputationGraphPlot
+                from refrakt_viz.supervised.computation_graph import (
+                    ComputationGraphPlot,
+                )
+
                 if isinstance(viz, ComputationGraphPlot):
                     # Use a sample batch to get input_tensor
                     sample_batch = next(iter(self.train_loader))
@@ -339,11 +395,11 @@ class SupervisedTrainer(BaseTrainer):
                     else:
                         input_tensor = sample_batch.to(self.device)
                     # Try to get model name from self.model or fallback
-                    model_name = getattr(self.model, 'model_name', None)
-                    if model_name is None and hasattr(self, 'model_name'):
-                        model_name = getattr(self, 'model_name', 'model')
+                    model_name = getattr(self.model, "model_name", None)
+                    if model_name is None and hasattr(self, "model_name"):
+                        model_name = getattr(self, "model_name", "model")
                     if model_name is None:
-                        model_name = 'model'
+                        model_name = "model"
                     viz.update(self.model, input_tensor, model_name=model_name)
             except Exception as e:
                 if logger:
@@ -366,36 +422,54 @@ class SupervisedTrainer(BaseTrainer):
                 # --- Per-layer metrics visualization after each batch ---
                 for viz in self.visualization_hooks:
                     try:
-                        from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
+                        from refrakt_viz.supervised.per_layer_metrics import (
+                            PerLayerMetricsPlot,
+                        )
+
                         if isinstance(viz, PerLayerMetricsPlot):
-                            if hasattr(self.model, 'get_layer_metrics'):
+                            if hasattr(self.model, "get_layer_metrics"):
                                 layer_metrics = self.model.get_layer_metrics()
                                 viz.update(layer_metrics)
                     except Exception as e:
                         if logger:
-                            logger.warning(f"[VizHook] per_layer_metrics update failed: {e}")
+                            logger.warning(
+                                f"[VizHook] per_layer_metrics update failed: {e}"
+                            )
                         else:
                             print(f"[VizHook] per_layer_metrics update failed: {e}")
 
             # At end of epoch, show/save visualizations
             for viz in self.visualization_hooks:
                 try:
-                    from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
+                    from refrakt_viz.supervised.per_layer_metrics import (
+                        PerLayerMetricsPlot,
+                    )
+
                     if isinstance(viz, PerLayerMetricsPlot):
-                        model_name = getattr(self.model, 'model_name', getattr(self, 'model_name', 'model'))
-                        viz.save_with_name(model_name, mode='train')
+                        model_name = getattr(
+                            self.model,
+                            "model_name",
+                            getattr(self, "model_name", "model"),
+                        )
+                        viz.save_with_name(model_name, mode="train")
                 except Exception as e:
                     if logger:
-                        logger.warning(f"[VizHook] per_layer_metrics save failed (train): {e}")
+                        logger.warning(
+                            f"[VizHook] per_layer_metrics save failed (train): {e}"
+                        )
                     else:
                         print(f"[VizHook] per_layer_metrics save failed (train): {e}")
             # --- Run XAI hooks at end of epoch ---
             self._run_explainability_hooks(epoch)
             best_accuracy = self._handle_epoch_end(epoch, best_accuracy)
-            
+
             # Update final_loss with the current loss if available
             if self._current_loss_output is not None:
-                final_loss = self._current_loss_output.total.item() if hasattr(self._current_loss_output.total, 'item') else float(self._current_loss_output.total)
+                final_loss = (
+                    self._current_loss_output.total.item()
+                    if hasattr(self._current_loss_output.total, "item")
+                    else float(self._current_loss_output.total)
+                )
 
         if logger:
             logger.log_parameters(self.model, step=self.global_step, prefix="final_")
@@ -405,7 +479,7 @@ class SupervisedTrainer(BaseTrainer):
             "best_accuracy": best_accuracy,
             "final_loss": final_loss,
             "training_time": training_time,
-            "epochs_completed": num_epochs
+            "epochs_completed": num_epochs,
         }
 
     def evaluate(self) -> float:
@@ -455,60 +529,85 @@ class SupervisedTrainer(BaseTrainer):
                 else:
                     output_for_loss = output
                 loss = self.loss_fn(output_for_loss, targets)
-                if hasattr(loss, 'total'):
-                    batch_loss = loss.total.item() if hasattr(loss.total, 'item') else float(loss.total)
+                if hasattr(loss, "total"):
+                    batch_loss = (
+                        loss.total.item()
+                        if hasattr(loss.total, "item")
+                        else float(loss.total)
+                    )
                 else:
-                    batch_loss = loss.item() if hasattr(loss, 'item') else float(loss)
+                    batch_loss = loss.item() if hasattr(loss, "item") else float(loss)
                 total_loss += batch_loss
 
-                loop.set_postfix({"acc": f"{(correct / total * 100):.2f}%", "loss": f"{batch_loss:.4f}"})
+                loop.set_postfix(
+                    {
+                        "acc": f"{(correct / total * 100):.2f}%",
+                        "loss": f"{batch_loss:.4f}",
+                    }
+                )
 
                 # --- Per-layer metrics visualization after each batch (test split) ---
                 from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
+
                 for viz in self.visualization_hooks:
                     try:
                         if isinstance(viz, PerLayerMetricsPlot):
-                            if hasattr(self.model, 'get_layer_metrics'):
+                            if hasattr(self.model, "get_layer_metrics"):
                                 layer_metrics = self.model.get_layer_metrics()
                                 viz.update(layer_metrics, split="test")
                     except Exception as e:
                         if logger:
-                            logger.warning(f"[VizHook] per_layer_metrics update failed (test): {e}")
+                            logger.warning(
+                                f"[VizHook] per_layer_metrics update failed (test): {e}"
+                            )
                         else:
-                            print(f"[VizHook] per_layer_metrics update failed (test): {e}")
+                            print(
+                                f"[VizHook] per_layer_metrics update failed (test): {e}"
+                            )
 
         avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
         acc = correct / total if total > 0 else 0.0
-        
+
         # Get logger from artifact dumper or extra params
         logger = self._get_logger()
         if logger:
-            logger.info(f"Validation Accuracy: {acc * 100:.2f}% | Avg Loss: {avg_loss:.4f}")
+            logger.info(
+                f"Validation Accuracy: {acc * 100:.2f}% | Avg Loss: {avg_loss:.4f}"
+            )
         else:
             print(f"\nValidation Accuracy: {acc * 100:.2f}% | Avg Loss: {avg_loss:.4f}")
 
         if self.artifact_dumper:
             self.artifact_dumper.log_scalar_dict(
-                {"accuracy": acc, "val_loss": avg_loss}, step=self.global_step, prefix="val"
+                {"accuracy": acc, "val_loss": avg_loss},
+                step=self.global_step,
+                prefix="val",
             )
 
         # Optionally update/show/save visualizations after evaluation
         for viz in self.visualization_hooks:
             try:
-                from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
-                from refrakt_viz.supervised.loss_accuracy import LossAccuracyPlot
                 from refrakt_viz.supervised.confusion_matrix import ConfusionMatrixPlot
+                from refrakt_viz.supervised.loss_accuracy import LossAccuracyPlot
+                from refrakt_viz.supervised.per_layer_metrics import PerLayerMetricsPlot
+
                 if isinstance(viz, PerLayerMetricsPlot):
-                    model_name = getattr(self.model, 'model_name', getattr(self, 'model_name', 'model'))
-                    viz.save_with_name(model_name, mode='test')
+                    model_name = getattr(
+                        self.model, "model_name", getattr(self, "model_name", "model")
+                    )
+                    viz.save_with_name(model_name, mode="test")
                 elif isinstance(viz, LossAccuracyPlot):
-                    model_name = getattr(self.model, 'model_name', getattr(self, 'model_name', 'model'))
+                    model_name = getattr(
+                        self.model, "model_name", getattr(self, "model_name", "model")
+                    )
                     # Update with zeros for train, real values for val
                     viz.update(0.0, avg_loss, 0.0, acc)
-                    viz.save_with_name(model_name, mode='test')
+                    viz.save_with_name(model_name, mode="test")
                 elif isinstance(viz, ConfusionMatrixPlot):
-                    model_name = getattr(self.model, 'model_name', getattr(self, 'model_name', 'model'))
-                    viz.save_with_name(model_name, mode='test')
+                    model_name = getattr(
+                        self.model, "model_name", getattr(self, "model_name", "model")
+                    )
+                    viz.save_with_name(model_name, mode="test")
                 # Do not save SamplePredictionsPlot here
             except Exception as e:
                 if logger:

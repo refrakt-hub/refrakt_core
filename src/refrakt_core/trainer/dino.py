@@ -14,6 +14,7 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
+from refrakt_core.error_handling import XAINotSupportedError
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
 from refrakt_core.trainer.base import BaseTrainer
@@ -22,7 +23,7 @@ from refrakt_core.trainer.utils.dino_utils import (
     handle_dino_training_step,
 )
 from refrakt_core.utils.methods import unpack_views_from_batch
-from refrakt_core.error_handling import XAINotSupportedError
+
 
 @register_trainer("dino")
 class DINOTrainer(BaseTrainer):
@@ -124,10 +125,10 @@ class DINOTrainer(BaseTrainer):
     def _run_explainability_hooks(self, epoch: int, inference: bool = False) -> None:
         """
         Run explainability hooks for DINO models.
-        
-        Note: XAI components are currently not supported for contrastive family models 
+
+        Note: XAI components are currently not supported for contrastive family models
         (SimCLR, DINO, MSN) in refrakt v1. This method simply warns about this limitation.
-        
+
         Args:
             epoch (int): Current training epoch.
             inference (bool): Whether this is being called during inference.

@@ -249,6 +249,7 @@ def get_global_logger() -> logging.Logger:
     else:
         # Return a dummy logger that does nothing to avoid creating default log files
         import logging
+
         dummy_logger = logging.getLogger("dummy")
         dummy_logger.addHandler(logging.NullHandler())
         return dummy_logger

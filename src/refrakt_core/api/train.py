@@ -44,9 +44,9 @@ __all__ = ["train", "_load_and_validate_config"]
 
 
 def train(
-    cfg: Union[str, DictConfig], 
+    cfg: Union[str, DictConfig],
     logger: Optional[RefraktLogger] = None,
-    experiment_id: Optional[str] = None
+    experiment_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Orchestrate the training pipeline for Refrakt.
@@ -103,7 +103,9 @@ def train(
         optimizer, scheduler = _setup_optimizer_and_scheduler(config, model, logger)
 
         # Setup artifact dumper
-        artifact_dumper = setup_artifact_dumper(config, resolved_model_name, logger, experiment_id)
+        artifact_dumper = setup_artifact_dumper(
+            config, resolved_model_name, logger, experiment_id
+        )
 
         # Setup trainer
         trainer, num_epochs, final_device = _setup_trainer(

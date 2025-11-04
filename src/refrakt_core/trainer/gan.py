@@ -6,12 +6,12 @@ of GAN models (e.g., SRGAN, StyleGAN, etc.). It supports logging, artifact dumpi
 and checkpointing for both generator and discriminator components.
 """
 
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
 import os
 import time
-import numpy as np
 from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 import torch
 from torch.amp.grad_scaler import GradScaler
 from torch.nn import Module
@@ -96,7 +96,7 @@ class GANTrainer(BaseTrainer):
                 # Check if we have optimizer instances or classes
                 first_key = next(iter(optimizer_cls.keys()))
                 first_optimizer = optimizer_cls[first_key]
-                
+
                 if isinstance(first_optimizer, Optimizer):
                     # We already have optimizer instances, use them directly
                     self.optimizer: Optional[Union[Optimizer, Dict[str, Optimizer]]] = optimizer_cls  # type: ignore
@@ -126,9 +126,9 @@ class GANTrainer(BaseTrainer):
         """Run explainability hooks at the end of an epoch."""
         if not self.explainability_hooks:
             return
-        if not hasattr(self, 'val_loader') or self.val_loader is None:
+        if not hasattr(self, "val_loader") or self.val_loader is None:
             return
-        
+
         try:
             # Get a sample from validation loader for XAI analysis
             sample_batch = next(iter(self.val_loader))
@@ -136,59 +136,80 @@ class GANTrainer(BaseTrainer):
                 # For SRGAN, inputs are typically {"lr": low_res, "hr": high_res}
                 input_tensor = sample_batch.get("lr", sample_batch.get("input"))
                 if input_tensor is None:
-                    raise ValueError("Batch dict does not contain a valid 'lr' or 'input' tensor for XAI.")
+                    raise ValueError(
+                        "Batch dict does not contain a valid 'lr' or 'input' tensor for XAI."
+                    )
             elif isinstance(sample_batch, (list, tuple)):
                 input_tensor = sample_batch[0]  # First element is typically input
             else:
                 input_tensor = sample_batch
-            
+
             input_tensor = input_tensor.to(self.device)
         except Exception as e:
             logger = self._get_logger()
             if logger:
-                logger.warning(f"[XAI] Could not get validation batch for explainability: {e}")
+                logger.warning(
+                    f"[XAI] Could not get validation batch for explainability: {e}"
+                )
             else:
                 print(f"[XAI] Could not get validation batch for explainability: {e}")
             return
-            
+
         for xai_cls, params in self.explainability_hooks:
             try:
                 # Instantiate XAI method like other trainers
                 if xai_cls.__name__ == "ConceptSaliencyXAI":
-                    xai_method = xai_cls(self.model, dataloader=self.val_loader, device=self.device, **params)
+                    xai_method = xai_cls(
+                        self.model,
+                        dataloader=self.val_loader,
+                        device=self.device,
+                        **params,
+                    )
                 else:
                     xai_method = xai_cls(self.model, **params)
-                
+
                 # Save runtime XAI info for metadata collection
                 try:
                     from refrakt_cli.helpers.shared_core import save_runtime_xai_info
+
                     # Determine base directory for saving runtime info
-                    model_name = getattr(self.model, 'model_name', None) or getattr(self, 'model_name', 'srgan')
-                    experiment_id = getattr(self, 'experiment_id', None)
+                    model_name = getattr(self.model, "model_name", None) or getattr(
+                        self, "model_name", "srgan"
+                    )
+                    experiment_id = getattr(self, "experiment_id", None)
                     if not experiment_id:
-                        experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    
+                        experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
                     # Use checkpoints directory structure
                     checkpoints_base_dir = f"./checkpoints/{model_name}_{experiment_id}"
-                    save_runtime_xai_info(xai_method, xai_cls.__name__, params, checkpoints_base_dir, self._get_logger())
+                    save_runtime_xai_info(
+                        xai_method,
+                        xai_cls.__name__,
+                        params,
+                        checkpoints_base_dir,
+                        self._get_logger(),
+                    )
                 except Exception as e:
                     logger = self._get_logger()
                     if logger:
                         logger.warning(f"Failed to save runtime XAI info: {e}")
-                
+
                 # Generate explanations using the standard interface
                 attributions = xai_method.explain(input_tensor)
-                
+
                 # Save attributions like the other trainers
                 # Use registry_name from params if present, else method name, always lowercased with underscores, no 'xai' suffix
-                registry_name = params.get("registry_name", params.get("method", xai_cls.__name__)).replace(" ", "_")
+                registry_name = params.get(
+                    "registry_name", params.get("method", xai_cls.__name__)
+                ).replace(" ", "_")
                 if registry_name.lower().endswith("xai"):
                     registry_name = registry_name[:-3]
-                
+
                 # Use to_snake_case for consistent naming with other trainers
                 def to_snake_case(name):
                     """Convert camelCase or PascalCase to snake_case."""
                     import re
+
                     # Handle special cases
                     if name == "LayerGradCAM":
                         return "layer_gradcam"
@@ -196,40 +217,48 @@ class GANTrainer(BaseTrainer):
                         return "gradcam"
                     elif name == "IntegratedGradients":
                         return "integrated_gradients"
-                    
+
                     # General conversion
-                    name = re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
-                    name = name.replace('__', '_')
-                    return name.strip('_')
-                
+                    name = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+                    name = name.replace("__", "_")
+                    return name.strip("_")
+
                 registry_name = to_snake_case(registry_name)
-                
+
                 # Get model name and datetime for unique output dir
-                model_name = getattr(self.model, 'model_name', None) or getattr(self, 'model_name', 'srgan')
+                model_name = getattr(self.model, "model_name", None) or getattr(
+                    self, "model_name", "srgan"
+                )
                 # Use experiment_id if available, otherwise generate timestamp
-                dt_str = getattr(self, 'experiment_id', None)
+                dt_str = getattr(self, "experiment_id", None)
                 if not dt_str:
-                    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-                
+                    dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+
                 # Use explanations directory structure for training
                 phase = "inference" if inference else "train"
-                base_dir = os.path.join("./explanations", f"{model_name}_{dt_str}", phase, registry_name)
+                base_dir = os.path.join(
+                    "./explanations", f"{model_name}_{dt_str}", phase, registry_name
+                )
                 os.makedirs(base_dir, exist_ok=True)
-                
+
                 # Convert attributions to numpy and save each sample
                 attr_np = attributions.detach().cpu().numpy()
-                
+
                 for i in range(min(attr_np.shape[0], 8)):
                     arr = attr_np[i]
-                    
+
                     # Handle different attribution shapes
                     if len(arr.shape) == 0:  # Scalar
                         continue
-                    elif len(arr.shape) == 1 and arr.shape[0] == 1:  # [1] - class-specific attribution
+                    elif (
+                        len(arr.shape) == 1 and arr.shape[0] == 1
+                    ):  # [1] - class-specific attribution
                         continue
                     elif len(arr.shape) == 1:  # 1D array
                         # Reshape to 2D for visualization
-                        arr = arr.reshape((int(np.sqrt(arr.shape[0])), int(np.sqrt(arr.shape[0]))))
+                        arr = arr.reshape(
+                            (int(np.sqrt(arr.shape[0])), int(np.sqrt(arr.shape[0])))
+                        )
                     elif len(arr.shape) == 2:  # 2D array (spatial heatmap)
                         pass  # Keep as is
                     elif len(arr.shape) == 3:  # 3D array
@@ -241,33 +270,36 @@ class GANTrainer(BaseTrainer):
                             continue
                     else:
                         continue
-                    
+
                     # Normalize and convert to image
                     arr = arr - arr.min()
                     arr = arr / (arr.max() + 1e-8)
                     arr = (arr * 255).astype(np.uint8)
-                    
+
                     # Convert to PIL Image
                     if len(arr.shape) == 2:  # Grayscale
                         from PIL import Image
-                        img = Image.fromarray(arr, mode='L')
+
+                        img = Image.fromarray(arr, mode="L")
                     elif len(arr.shape) == 3:  # RGB
                         from PIL import Image
-                        img = Image.fromarray(arr, mode='RGB')
+
+                        img = Image.fromarray(arr, mode="RGB")
                     else:
                         continue
-                    
+
                     img_path = os.path.join(base_dir, f"sample_{i}.png")
                     img.save(img_path)
-                    
+
                     # Save raw attribution as .npy
                     npy_path = os.path.join(base_dir, f"sample_{i}.npy")
                     np.save(npy_path, attr_np[i])
-                    
+
                     import json
+
                     metadata = {
                         "method": registry_name,
-                        "epoch": epoch+1,
+                        "epoch": epoch + 1,
                         "sample_index": i,
                         "image_path": img_path,
                         "attribution_path": npy_path,
@@ -275,13 +307,17 @@ class GANTrainer(BaseTrainer):
                     meta_path = os.path.join(base_dir, f"sample_{i}_metadata.json")
                     with open(meta_path, "w") as f:
                         json.dump(metadata, f)
-                        
+
             except Exception as e:
                 logger = self._get_logger()
                 if logger:
-                    logger.warning(f"[XAI] Failed to run or save explainability for {xai_cls}: {e}")
+                    logger.warning(
+                        f"[XAI] Failed to run or save explainability for {xai_cls}: {e}"
+                    )
                 else:
-                    print(f"[XAI] Failed to run or save explainability for {xai_cls}: {e}")
+                    print(
+                        f"[XAI] Failed to run or save explainability for {xai_cls}: {e}"
+                    )
 
     def train(self, num_epochs: int) -> Dict[str, float]:
         """
@@ -291,15 +327,18 @@ class GANTrainer(BaseTrainer):
             num_epochs (int): Number of epochs to train.
         """
         import time
+
         start_time = time.time()
         best_psnr = float("-inf")
         final_avg_g_loss = 0.0
         final_avg_d_loss = 0.0
 
         for epoch in range(num_epochs):
-            
+
             # Create progress bar but don't consume the iterator
-            progress_bar = tqdm(self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}")
+            progress_bar = tqdm(
+                self.train_loader, desc=f"Epoch {epoch + 1}/{num_epochs}"
+            )
 
             # Train for one epoch
             total_g_loss, total_d_loss = handle_gan_epoch_training(
@@ -341,10 +380,14 @@ class GANTrainer(BaseTrainer):
             )
 
             # --- Visualization hooks: save at end of epoch ---
-            model_name = getattr(self.model, "model_name", getattr(self, "model_name", "model"))
+            model_name = getattr(
+                self.model, "model_name", getattr(self, "model_name", "model")
+            )
             for viz in self.visualization_hooks:
                 try:
-                    registry_name = getattr(viz, "registry_name", viz.__class__.__name__)
+                    registry_name = getattr(
+                        viz, "registry_name", viz.__class__.__name__
+                    )
                     out_dir = f"visualizations/{model_name}/{registry_name}"
                     os.makedirs(out_dir, exist_ok=True)
                     out_path = f"{out_dir}/epoch_{epoch+1}.png"
@@ -363,7 +406,7 @@ class GANTrainer(BaseTrainer):
             "best_psnr": best_psnr,
             "best_accuracy": best_psnr,  # Use PSNR as accuracy proxy for compatibility
             "training_time": training_time,
-            "epochs_completed": num_epochs
+            "epochs_completed": num_epochs,
         }
 
     def evaluate(self) -> float:

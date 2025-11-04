@@ -42,7 +42,7 @@ def handle_gan_epoch_training(
     Returns:
         Tuple of (total_g_loss, total_d_loss)
     """
-    
+
     model.train()
     total_g_loss = 0.0
     total_d_loss = 0.0
@@ -211,25 +211,25 @@ def handle_gan_discriminator_step(
     """
     try:
         # Use the model wrapper's training_step method for discriminator
-        if hasattr(model, 'training_step'):
+        if hasattr(model, "training_step"):
             batch = {"lr": lr, "hr": hr}
             result = model.training_step(
                 batch=batch,
                 optimizer=optimizer,
                 loss_fn=loss_fns,
                 device=str(device),
-                phase="discriminator"
+                phase="discriminator",
             )
-            
+
             if "d_loss" in result:
                 d_loss_output = result["d_loss"]
-                
+
                 # Perform actual optimizer step
                 if optimizer and "discriminator" in optimizer:
                     optimizer["discriminator"].zero_grad()
                     d_loss_output.total.backward()
                     optimizer["discriminator"].step()
-                
+
                 return d_loss_output, d_loss_output.total.item()
             else:
                 return None, 0.0
@@ -265,25 +265,25 @@ def handle_gan_generator_step(
     """
     try:
         # Use the model wrapper's training_step method for generator
-        if hasattr(model, 'training_step'):
+        if hasattr(model, "training_step"):
             batch = {"lr": lr, "hr": hr}
             result = model.training_step(
                 batch=batch,
                 optimizer=optimizer,
                 loss_fn=loss_fns,
                 device=str(device),
-                phase="generator"
+                phase="generator",
             )
-            
+
             if "g_loss" in result:
                 g_loss_output = result["g_loss"]
-                
+
                 # Perform actual optimizer step
                 if optimizer and "generator" in optimizer:
                     optimizer["generator"].zero_grad()
                     g_loss_output.total.backward()
                     optimizer["generator"].step()
-                
+
                 return g_loss_output, g_loss_output.total.item()
             else:
                 return None, 0.0
@@ -302,37 +302,45 @@ def _log_gan_loss_metrics(
     """Log GAN loss metrics to artifact dumper."""
     if not artifact_dumper:
         return
-    
+
     loss_summary = {}
-    
+
     # Generator loss metrics
-    if g_loss_out and hasattr(g_loss_out, 'summary'):
+    if g_loss_out and hasattr(g_loss_out, "summary"):
         g_summary = g_loss_out.summary()
         if isinstance(g_summary, dict):
             # Prefix generator losses
             for key, value in g_summary.items():
                 loss_summary[f"generator/{key}"] = value
-    
+
     # Discriminator loss metrics
-    if d_loss_out and hasattr(d_loss_out, 'summary'):
+    if d_loss_out and hasattr(d_loss_out, "summary"):
         d_summary = d_loss_out.summary()
         if isinstance(d_summary, dict):
             # Prefix discriminator losses
             for key, value in d_summary.items():
                 loss_summary[f"discriminator/{key}"] = value
-    
+
     # Add combined metrics if both losses exist
     if g_loss_out and d_loss_out:
-        if hasattr(g_loss_out, 'total') and hasattr(d_loss_out, 'total'):
-            g_total = g_loss_out.total.item() if torch.is_tensor(g_loss_out.total) else g_loss_out.total
-            d_total = d_loss_out.total.item() if torch.is_tensor(d_loss_out.total) else d_loss_out.total
+        if hasattr(g_loss_out, "total") and hasattr(d_loss_out, "total"):
+            g_total = (
+                g_loss_out.total.item()
+                if torch.is_tensor(g_loss_out.total)
+                else g_loss_out.total
+            )
+            d_total = (
+                d_loss_out.total.item()
+                if torch.is_tensor(d_loss_out.total)
+                else d_loss_out.total
+            )
             loss_summary["combined/total_loss"] = g_total + d_total
-            loss_summary["combined/g_d_ratio"] = g_total / (d_total + 1e-8)  # Avoid division by zero
-    
+            loss_summary["combined/g_d_ratio"] = g_total / (
+                d_total + 1e-8
+            )  # Avoid division by zero
+
     if loss_summary:
-        artifact_dumper.log_scalar_dict(
-            loss_summary, step=global_step, prefix="train"
-        )
+        artifact_dumper.log_scalar_dict(loss_summary, step=global_step, prefix="train")
 
 
 def _log_gan_gradients_and_parameters(
@@ -346,27 +354,31 @@ def _log_gan_gradients_and_parameters(
     """Log gradients and parameters for GAN model."""
     if not logger:
         return
-    
+
     # Log gradients at specified intervals
     if global_step % grad_log_interval == 0:
-        logger.log_gradients(
-            model, step=global_step, prefix="gan"
-        )
-    
+        logger.log_gradients(model, step=global_step, prefix="gan")
+
     # Log parameters at specified intervals
     if global_step % param_log_interval == 0:
-        logger.log_parameters(
-            model, step=global_step, prefix="gan"
-        )
-        
+        logger.log_parameters(model, step=global_step, prefix="gan")
+
         # Log learning rates for both optimizers
         if optimizer and isinstance(optimizer, dict):
             lr_metrics = {}
-            if "generator" in optimizer and hasattr(optimizer["generator"], "param_groups"):
-                lr_metrics["generator_lr"] = optimizer["generator"].param_groups[0]["lr"]
-            if "discriminator" in optimizer and hasattr(optimizer["discriminator"], "param_groups"):
-                lr_metrics["discriminator_lr"] = optimizer["discriminator"].param_groups[0]["lr"]
-            
+            if "generator" in optimizer and hasattr(
+                optimizer["generator"], "param_groups"
+            ):
+                lr_metrics["generator_lr"] = optimizer["generator"].param_groups[0][
+                    "lr"
+                ]
+            if "discriminator" in optimizer and hasattr(
+                optimizer["discriminator"], "param_groups"
+            ):
+                lr_metrics["discriminator_lr"] = optimizer[
+                    "discriminator"
+                ].param_groups[0]["lr"]
+
             if lr_metrics:
                 logger.log_metrics(lr_metrics, step=global_step)
 
@@ -384,35 +396,37 @@ def _log_gan_artifacts(
     """Log full GAN artifacts including images and outputs."""
     if not artifact_dumper or not artifact_dumper.should_log_step(global_step):
         return
-    
+
     # Create ModelOutput for generated images
     if generated_output is not None:
         # For SRGAN, the generated output should be the super-resolved image
         gan_output = ModelOutput(
             image=generated_output,  # Generated high-res image
-            targets=hr,              # Ground truth high-res image
+            targets=hr,  # Ground truth high-res image
             extra={
                 "low_res_input": lr,  # Original low-res input
                 "model_type": "srgan",
                 "global_step": global_step,
-            }
+            },
         )
-        
+
         # Combine losses for logging
         combined_loss = None
         if g_loss_out and d_loss_out:
             # Create a combined loss output
             combined_loss = g_loss_out  # Use generator loss as primary
-            if hasattr(combined_loss, 'components') and hasattr(d_loss_out, 'components'):
+            if hasattr(combined_loss, "components") and hasattr(
+                d_loss_out, "components"
+            ):
                 # Add discriminator loss components
-                combined_loss.components.update({
-                    f"discriminator_{k}": v for k, v in d_loss_out.components.items()
-                })
+                combined_loss.components.update(
+                    {f"discriminator_{k}": v for k, v in d_loss_out.components.items()}
+                )
         elif g_loss_out:
             combined_loss = g_loss_out
         elif d_loss_out:
             combined_loss = d_loss_out
-        
+
         # Log the full output
         artifact_dumper.log_full_output(
             output=gan_output,
@@ -464,7 +478,7 @@ def handle_gan_logging(
         artifact_dumper=artifact_dumper,
         global_step=global_step,
     )
-    
+
     # 2. Log gradients and parameters for the model
     _log_gan_gradients_and_parameters(
         model=model,
@@ -474,15 +488,15 @@ def handle_gan_logging(
         param_log_interval=param_log_interval,
         optimizer=optimizer,
     )
-    
+
     # 3. Log full artifacts with images (if we have generated output)
     # For SRGAN, we need to get the generated image from the model
     generated_output: Optional[torch.Tensor] = None
-    if hasattr(model, 'generator') and lr is not None:
+    if hasattr(model, "generator") and lr is not None:
         try:
             # Generate super-resolved image for logging
             with torch.no_grad():
-                if hasattr(model.generator, 'forward'):
+                if hasattr(model.generator, "forward"):
                     result = model.generator(lr)
                     if isinstance(result, torch.Tensor):
                         generated_output = result
@@ -493,7 +507,7 @@ def handle_gan_logging(
         except Exception:
             # If generation fails, skip artifact logging
             generated_output = None
-    
+
     _log_gan_artifacts(
         lr=lr,
         hr=hr,
@@ -504,7 +518,7 @@ def handle_gan_logging(
         global_step=global_step,
         batch_id=batch_id,
     )
-    
+
     # 4. Update visualization hooks with GAN-specific data
     if visualization_hooks:
         for viz in visualization_hooks:
@@ -517,16 +531,16 @@ def handle_gan_logging(
                         lr_np = lr.detach().cpu().numpy()
                         generated_np = generated_output.detach().cpu().numpy()
                         viz.update(inputs=lr_np, recons=generated_np)
-                
+
                 elif viz_name == "sample_generation":
                     # Update SampleGeneration with generated HR images
                     if generated_output is not None:
                         generated_np = generated_output.detach().cpu().numpy()
                         viz.update(samples=generated_np)
-                
+
                 # Note: Other viz components (feature_attribution, etc.) would need
                 # custom implementations for SRGAN compatibility
-                
+
             except Exception as e:
                 if logger:
                     logger.warning(f"[VizHook] Failed to update {viz_name}: {e}")

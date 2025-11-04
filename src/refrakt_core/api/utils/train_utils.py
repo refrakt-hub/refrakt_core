@@ -1,10 +1,10 @@
 import glob
 import os
+from datetime import datetime
 from typing import Any, Dict, Optional, Tuple, Union, cast
 
 import torch
 import yaml
-from datetime import datetime
 from omegaconf import DictConfig, OmegaConf
 from PIL import Image
 from torch.utils.data import Dataset
@@ -161,7 +161,9 @@ def analyze_and_resize_dataset_images(
 
         return True, resized_dataset
     else:
-        logger.debug("✅ All images are within acceptable size range (28x28 to 448x448)")
+        logger.debug(
+            "✅ All images are within acceptable size range (28x28 to 448x448)"
+        )
         return False, dataset
 
 
@@ -254,7 +256,9 @@ def build_model_and_log_graph(
     return model
 
 
-def build_optimizer_and_scheduler(cfg: DictConfig, model: Any, logger: Optional[RefraktLogger] = None) -> Tuple[Any, Any]:
+def build_optimizer_and_scheduler(
+    cfg: DictConfig, model: Any, logger: Optional[RefraktLogger] = None
+) -> Tuple[Any, Any]:
     """
     Build optimizer and scheduler from config and model.
     """
@@ -269,10 +273,15 @@ def build_optimizer_and_scheduler(cfg: DictConfig, model: Any, logger: Optional[
     return optimizer, scheduler
 
 
-def setup_artifact_dumper(config: DictConfig, resolved_model_name: str, logger=None, experiment_id: Optional[str] = None) -> Any:
+def setup_artifact_dumper(
+    config: DictConfig,
+    resolved_model_name: str,
+    logger=None,
+    experiment_id: Optional[str] = None,
+) -> Any:
     """
     Setup artifact dumper for saving experiment artifacts in the new directory structure.
-    
+
     Args:
         config: Configuration object
         resolved_model_name: Name of the model
@@ -280,49 +289,51 @@ def setup_artifact_dumper(config: DictConfig, resolved_model_name: str, logger=N
         experiment_id: Optional experiment ID. If None, generates a new one.
     """
     from refrakt_core.schema.artifact import ArtifactDumper
-    
+
     # Create experiment-specific directory structure
     if experiment_id is None:
-        experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+        experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         if logger:
-            logger.warning(f"No experiment_id provided, generated new one: {experiment_id}")
+            logger.warning(
+                f"No experiment_id provided, generated new one: {experiment_id}"
+            )
     exp_dir_name = f"{resolved_model_name}_{experiment_id}"
-    
+
     # Create main experiment directory
     exp_dir = os.path.join("./checkpoints", exp_dir_name)
     os.makedirs(exp_dir, exist_ok=True)
-    
+
     # Create subdirectories
     weights_dir = os.path.join(exp_dir, "weights")
     explanations_dir = os.path.join(exp_dir, "explanations")
     os.makedirs(weights_dir, exist_ok=True)
     os.makedirs(explanations_dir, exist_ok=True)
-    
+
     # Save config to experiment directory
     config_path = os.path.join(exp_dir, f"{resolved_model_name}.yaml")
-    with open(config_path, 'w') as f:
+    with open(config_path, "w") as f:
         # Convert DictConfig to regular dict for serialization
         config_dict = OmegaConf.to_container(config, resolve=True)
         yaml.dump(config_dict, f, default_flow_style=False)
-    
+
     if logger:
         logger.debug(f"Created experiment directory: {exp_dir}")
         logger.debug(f"  - Weights: {weights_dir}")
         logger.debug(f"  - Explanations: {explanations_dir}")
         logger.debug(f"  - Config: {config_path}")
-    
+
     # Update save_dir in config to point to weights directory
     config.trainer.params.save_dir = weights_dir
-    
+
     # Create and return ArtifactDumper object
     artifact_dumper = ArtifactDumper(
         enabled=True,
         model_name=resolved_model_name,
         base_path=exp_dir,
         logger=logger,
-        metadata={"experiment_id": experiment_id}
+        metadata={"experiment_id": experiment_id},
     )
-    
+
     return artifact_dumper
 
 
@@ -687,13 +698,13 @@ def _handle_fusion_training(
         val_loader=val_loader,
         device=device,
         artifact_dumper=artifact_dumper,
-        model_name=getattr(trainer, 'model_name', 'model'),
+        model_name=getattr(trainer, "model_name", "model"),
     )
     fusion_metrics = fusion_trainer.train()
-    
+
     # Use trainer's save_dir for consistency
-    trainer_save_dir = getattr(trainer, 'save_dir', cfg.trainer.params.save_dir)
-    resolved_model_name = getattr(trainer, 'model_name', cfg.model.name)
+    trainer_save_dir = getattr(trainer, "save_dir", cfg.trainer.params.save_dir)
+    resolved_model_name = getattr(trainer, "model_name", cfg.model.name)
     fusion_save_path = os.path.join(
         trainer_save_dir,
         f"{resolved_model_name}_fusion.joblib",
@@ -704,7 +715,7 @@ def _handle_fusion_training(
         logger.info(f"[FUSION] Fusion head saved to {fusion_save_path}")
     if logger:
         logger.log_metrics(fusion_metrics, step=trainer.global_step, prefix="fusion")
-    
+
     return fusion_metrics
 
 

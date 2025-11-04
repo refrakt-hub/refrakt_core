@@ -23,7 +23,9 @@ import torch
 from omegaconf import OmegaConf
 
 
-def build_scheduler(cfg: OmegaConf, optimizer: Any, logger: Optional[Any] = None) -> Optional[Any]:
+def build_scheduler(
+    cfg: OmegaConf, optimizer: Any, logger: Optional[Any] = None
+) -> Optional[Any]:
     """
     Build a learning rate scheduler from configuration for a given optimizer.
 

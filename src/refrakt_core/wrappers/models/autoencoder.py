@@ -65,7 +65,9 @@ class AutoencoderWrapper(nn.Module):
             labels = None
 
         if x is None:
-            raise ValueError("Input tensor 'x' not found in batch for get_latents_and_labels.")
+            raise ValueError(
+                "Input tensor 'x' not found in batch for get_latents_and_labels."
+            )
         if not isinstance(x, torch.Tensor):
             x = torch.as_tensor(x)
 
@@ -73,7 +75,11 @@ class AutoencoderWrapper(nn.Module):
         with torch.no_grad():
             latents = self.backbone.get_latent(x.to(next(self.parameters()).device))
         latents_np = latents.detach().cpu().numpy()
-        labels_np = labels.detach().cpu().numpy() if labels is not None and hasattr(labels, "detach") else labels
+        labels_np = (
+            labels.detach().cpu().numpy()
+            if labels is not None and hasattr(labels, "detach")
+            else labels
+        )
         return latents_np, labels_np
 
     def get_disentanglement_latent(self, batch):
@@ -86,7 +92,9 @@ class AutoencoderWrapper(nn.Module):
             x = batch
 
         if x is None:
-            raise ValueError("Input tensor 'x' not found in batch for get_disentanglement_latent.")
+            raise ValueError(
+                "Input tensor 'x' not found in batch for get_disentanglement_latent."
+            )
         if not isinstance(x, torch.Tensor):
             x = torch.as_tensor(x)
 
@@ -96,7 +104,9 @@ class AutoencoderWrapper(nn.Module):
         was_training = self.backbone.training
         self.backbone.eval()
         with torch.no_grad():
-            latent = self.backbone.get_latent(x_single.to(next(self.parameters()).device))
+            latent = self.backbone.get_latent(
+                x_single.to(next(self.parameters()).device)
+            )
         if was_training:
             self.backbone.train()
         # If latent is a tuple (e.g., (mu, sigma)), use mu
@@ -116,7 +126,9 @@ class AutoencoderWrapper(nn.Module):
         else:
             x = batch
         if x is None:
-            raise ValueError("Input tensor 'x' not found in batch for get_saliency_input.")
+            raise ValueError(
+                "Input tensor 'x' not found in batch for get_saliency_input."
+            )
         if not isinstance(x, torch.Tensor):
             x = torch.as_tensor(x)
         return x
@@ -130,7 +142,9 @@ class AutoencoderWrapper(nn.Module):
         else:
             x = batch
         if x is None:
-            raise ValueError("Input tensor 'x' not found in batch for get_inputs_and_recons.")
+            raise ValueError(
+                "Input tensor 'x' not found in batch for get_inputs_and_recons."
+            )
         if not isinstance(x, torch.Tensor):
             x = torch.as_tensor(x)
         x = x.to(next(self.parameters()).device)
@@ -139,12 +153,15 @@ class AutoencoderWrapper(nn.Module):
             output = self.forward(x)
             recon = output.reconstruction
             if recon is None:
-                raise ValueError("Model output does not contain a reconstruction for get_inputs_and_recons.")
+                raise ValueError(
+                    "Model output does not contain a reconstruction for get_inputs_and_recons."
+                )
         return x.detach().cpu().numpy(), recon.detach().cpu().numpy()
 
     def generate_samples(self, batch):
         # Generate random samples from the latent space and decode
         import torch
+
         batch_size = None
         if isinstance(batch, dict):
             x = batch.get("input", None)
@@ -152,13 +169,13 @@ class AutoencoderWrapper(nn.Module):
             x = batch[0]
         else:
             x = batch
-        if x is not None and hasattr(x, 'shape'):
+        if x is not None and hasattr(x, "shape"):
             batch_size = x.shape[0]
         else:
             batch_size = 8  # fallback
         # Get latent dim
-        hidden_dim = getattr(self, 'hidden_dim', None)
-        if hidden_dim is None and hasattr(self.backbone, 'hidden_dim'):
+        hidden_dim = getattr(self, "hidden_dim", None)
+        if hidden_dim is None and hasattr(self.backbone, "hidden_dim"):
             hidden_dim = self.backbone.hidden_dim
         if isinstance(hidden_dim, torch.Tensor):
             hidden_dim = int(hidden_dim.item())

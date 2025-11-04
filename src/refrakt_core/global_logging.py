@@ -10,8 +10,8 @@ import logging
 from refrakt_core.logging_config import get_logger
 from refrakt_core.logging_config import reset_global_logger as _reset_global_logger
 from refrakt_core.logging_config import (
-    set_global_logger as _set_global_logger,
-)  # <-- alias to avoid recursion
+    set_global_logger as _set_global_logger,  # <-- alias to avoid recursion
+)
 
 
 def get_global_logger() -> logging.Logger:
@@ -21,6 +21,7 @@ def get_global_logger() -> logging.Logger:
     # Only return the default logger if it already exists, don't create it automatically
     try:
         from refrakt_core.logging_config import _logging_manager
+
         if "default" in _logging_manager._loggers:
             return _logging_manager._loggers["default"]
         else:

@@ -5,20 +5,20 @@ This module defines the AETrainer class, which handles training and evaluation
 of autoencoder models. It supports logging, artifact dumping, and checkpointing.
 """
 
+import os
+import random
+import re
+import time
+from datetime import datetime
 from typing import Any, Callable, Dict, Optional, TypeVar, Union, cast
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import os
-import random
-import time
-import numpy as np
-import matplotlib.pyplot as plt
-import re
-from datetime import datetime
 
 from refrakt_core.registry.trainer_registry import register_trainer
 from refrakt_core.schema.loss_output import LossOutput
@@ -32,6 +32,7 @@ from refrakt_core.trainer.utils.autoencoder_utils import (
 from refrakt_core.trainer.utils.string_utils import to_snake_case
 
 T = TypeVar("T", bound=torch.Tensor)
+
 
 @register_trainer("autoencoder")
 class AETrainer(BaseTrainer):
@@ -76,7 +77,7 @@ class AETrainer(BaseTrainer):
             # Fallback to the old behavior if model_name is not provided
             variant = kwargs.pop("model_variant", "simple")
             kwargs["model_name"] = f"autoencoder_{variant}"
-        
+
         super().__init__(
             model,
             train_loader,
@@ -94,7 +95,7 @@ class AETrainer(BaseTrainer):
         self.global_step = 0
         self.visualization_hooks = visualization_hooks or []
         self.explainability_hooks = explainability_hooks or []  # NEW: XAI hooks
-        self.experiment_id = kwargs.get('experiment_id', None)
+        self.experiment_id = kwargs.get("experiment_id", None)
 
         if optimizer_args is None:
             optimizer_args = {"lr": 1e-3}
@@ -152,15 +153,29 @@ class AETrainer(BaseTrainer):
             self.save(suffix="latest")
 
             # --- Visualization hooks: save at end of epoch ---
-            model_name = getattr(self.model, "model_name", getattr(self, "model_name", "model"))
+            model_name = getattr(
+                self.model, "model_name", getattr(self, "model_name", "model")
+            )
             for viz in self.visualization_hooks:
                 registry_name = None
                 try:
-                    registry_name = getattr(viz, "registry_name", viz.__class__.__name__)
+                    registry_name = getattr(
+                        viz, "registry_name", viz.__class__.__name__
+                    )
                     print(f"[VizHook] Preparing to save: {registry_name}")
                     # Compose model_name and variant for directory, avoid duplicate variant
-                    variant = getattr(self.model, "variant", getattr(self.model, "backbone", None) and getattr(self.model.backbone, "variant", "simple") or "simple")
-                    model_name = getattr(self.model, "model_name", getattr(self, "model_name", "autoencoder"))
+                    variant = getattr(
+                        self.model,
+                        "variant",
+                        getattr(self.model, "backbone", None)
+                        and getattr(self.model.backbone, "variant", "simple")
+                        or "simple",
+                    )
+                    model_name = getattr(
+                        self.model,
+                        "model_name",
+                        getattr(self, "model_name", "autoencoder"),
+                    )
                     if model_name.endswith(f"_{variant}"):
                         model_variant_dir = model_name
                     else:
@@ -169,13 +184,22 @@ class AETrainer(BaseTrainer):
                         out_dir = f"visualizations/{model_variant_dir}"
                         os.makedirs(out_dir, exist_ok=True)
                         out_path = f"{out_dir}/{registry_name}.png"
-                        print(f"[VizHook] Calling save for {registry_name} with path {out_path} (with epoch)")
-                        viz.save(out_path, epoch=epoch+1)
-                    elif registry_name in ["disentanglement_analysis", "feature_attribution", "reconstruction_viz", "sample_generation"]:
+                        print(
+                            f"[VizHook] Calling save for {registry_name} with path {out_path} (with epoch)"
+                        )
+                        viz.save(out_path, epoch=epoch + 1)
+                    elif registry_name in [
+                        "disentanglement_analysis",
+                        "feature_attribution",
+                        "reconstruction_viz",
+                        "sample_generation",
+                    ]:
                         out_dir = f"visualizations/{model_variant_dir}"
                         os.makedirs(out_dir, exist_ok=True)
                         out_path = f"{out_dir}/{registry_name}.png"
-                        print(f"[VizHook] Calling save for {registry_name} with path {out_path}")
+                        print(
+                            f"[VizHook] Calling save for {registry_name} with path {out_path}"
+                        )
                         viz.save(out_path)
                 except Exception as e:
                     if registry_name is not None:
@@ -188,10 +212,10 @@ class AETrainer(BaseTrainer):
 
         training_time = time.time() - start_time
         return {
-            "final_loss": best_loss, 
+            "final_loss": best_loss,
             "best_loss": best_loss,
             "training_time": training_time,
-            "epochs_completed": num_epochs
+            "epochs_completed": num_epochs,
         }
 
     def evaluate(self) -> float:
@@ -239,7 +263,7 @@ class AETrainer(BaseTrainer):
         """
         if not self.explainability_hooks:
             return
-        if not hasattr(self, 'val_loader') or self.val_loader is None:
+        if not hasattr(self, "val_loader") or self.val_loader is None:
             return
         try:
             sample_batch = next(iter(self.val_loader))
@@ -248,7 +272,9 @@ class AETrainer(BaseTrainer):
             elif isinstance(sample_batch, dict):
                 input_tensor = sample_batch.get("image") or sample_batch.get("input")
                 if input_tensor is None:
-                    raise ValueError("Batch dict does not contain a valid 'image' or 'input' tensor for XAI.")
+                    raise ValueError(
+                        "Batch dict does not contain a valid 'image' or 'input' tensor for XAI."
+                    )
             else:
                 input_tensor = sample_batch
             input_tensor = input_tensor.to(self.device)
@@ -258,48 +284,70 @@ class AETrainer(BaseTrainer):
         for xai_cls, params in self.explainability_hooks:
             try:
                 if xai_cls.__name__ == "ConceptSaliencyXAI":
-                    xai_method = xai_cls(self.model, dataloader=self.val_loader, device=self.device, **params)
+                    xai_method = xai_cls(
+                        self.model,
+                        dataloader=self.val_loader,
+                        device=self.device,
+                        **params,
+                    )
                 else:
                     xai_method = xai_cls(self.model, **params)
-                
+
                 # Save runtime XAI info for metadata collection
                 try:
                     from refrakt_cli.helpers.shared_core import save_runtime_xai_info
+
                     # Determine base directory for saving runtime info
-                    model_name = getattr(self.model, 'model_name', None) or getattr(self, 'model_name', 'autoencoder')
-                    if hasattr(self, 'experiment_id') and self.experiment_id:
+                    model_name = getattr(self.model, "model_name", None) or getattr(
+                        self, "model_name", "autoencoder"
+                    )
+                    if hasattr(self, "experiment_id") and self.experiment_id:
                         experiment_id = self.experiment_id
                     else:
-                        experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    
+                        experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
                     # Use checkpoints directory structure
                     checkpoints_base_dir = f"./checkpoints/{model_name}_{experiment_id}"
-                    save_runtime_xai_info(xai_method, xai_cls.__name__, params, checkpoints_base_dir, logger=None)
+                    save_runtime_xai_info(
+                        xai_method,
+                        xai_cls.__name__,
+                        params,
+                        checkpoints_base_dir,
+                        logger=None,
+                    )
                 except Exception as e:
                     pass  # Silently ignore to avoid breaking XAI execution
-                
+
                 attributions = xai_method.explain(input_tensor)
                 # Save attribution as image (if 2D/3D) or numpy array
                 import os
-                import numpy as np
+
                 import matplotlib.pyplot as plt
+                import numpy as np
+
                 # Use registry_name from params if present, else method name, always lowercased with underscores, no 'xai' suffix
-                registry_name = params.get("registry_name", params.get("method", xai_cls.__name__)).replace(" ", "_")
+                registry_name = params.get(
+                    "registry_name", params.get("method", xai_cls.__name__)
+                ).replace(" ", "_")
                 if registry_name.lower().endswith("xai"):
                     registry_name = registry_name[:-3]
                 registry_name = to_snake_case(registry_name)
-                
+
                 # Get model name and datetime for unique output dir (same as supervised trainer)
-                model_name = getattr(self.model, 'model_name', None) or getattr(self, 'model_name', 'autoencoder')
+                model_name = getattr(self.model, "model_name", None) or getattr(
+                    self, "model_name", "autoencoder"
+                )
                 # Use experiment_id if available, otherwise generate timestamp
-                if hasattr(self, 'experiment_id') and self.experiment_id:
+                if hasattr(self, "experiment_id") and self.experiment_id:
                     dt_str = self.experiment_id
                 else:
-                    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                 # Use unified explanations directory structure
-                base_dir = os.path.join("./explanations", f"{model_name}_{dt_str}", "train", registry_name)
+                base_dir = os.path.join(
+                    "./explanations", f"{model_name}_{dt_str}", "train", registry_name
+                )
                 os.makedirs(base_dir, exist_ok=True)
-                
+
                 arr = attributions.detach().cpu().numpy()
                 # For explanations_inference, only save a single random sample (regardless of shape)
                 if inference and arr.shape[0] > 1:
@@ -312,12 +360,14 @@ class AETrainer(BaseTrainer):
                 # Always save NPY file for numerical analysis
                 npy_fname = f"{base_dir}/{registry_name}.npy"
                 np.save(npy_fname, arr)
-                
+
                 if arr.ndim in [2, 3]:
                     plt.figure()
                     if arr.ndim == 3 and arr.shape[0] in [1, 3]:  # e.g., (C, H, W)
                         # If single-channel or RGB, show as image
-                        arr_disp = arr.transpose(1, 2, 0) if arr.shape[0] == 3 else arr[0]
+                        arr_disp = (
+                            arr.transpose(1, 2, 0) if arr.shape[0] == 3 else arr[0]
+                        )
                         plt.imshow(arr_disp, cmap="hot")
                     else:
                         plt.imshow(arr, cmap="hot")
@@ -338,7 +388,7 @@ class AETrainer(BaseTrainer):
         """
         if not self.explainability_hooks:
             return
-        if not hasattr(self, 'val_loader') or self.val_loader is None:
+        if not hasattr(self, "val_loader") or self.val_loader is None:
             return
         try:
             sample_batch = next(iter(self.val_loader))
@@ -347,7 +397,9 @@ class AETrainer(BaseTrainer):
             elif isinstance(sample_batch, dict):
                 input_tensor = sample_batch.get("image") or sample_batch.get("input")
                 if input_tensor is None:
-                    raise ValueError("Batch dict does not contain a valid 'image' or 'input' tensor for XAI.")
+                    raise ValueError(
+                        "Batch dict does not contain a valid 'image' or 'input' tensor for XAI."
+                    )
             else:
                 input_tensor = sample_batch
             input_tensor = input_tensor.to(self.device)
@@ -357,7 +409,12 @@ class AETrainer(BaseTrainer):
         for xai_cls, params in self.explainability_hooks:
             try:
                 if xai_cls.__name__ == "ConceptSaliencyXAI":
-                    xai_method = xai_cls(self.model, dataloader=self.val_loader, device=self.device, **params)
+                    xai_method = xai_cls(
+                        self.model,
+                        dataloader=self.val_loader,
+                        device=self.device,
+                        **params,
+                    )
                 else:
                     xai_method = xai_cls(self.model, **params)
                 attributions = xai_method.explain(input_tensor)
@@ -369,27 +426,36 @@ class AETrainer(BaseTrainer):
                 # If arr is still 4D (C, H, W, ...), reduce to 2D or 3D for visualization
                 if arr.ndim == 4:
                     arr = arr[0]
-                model_name = getattr(self.model, "model_name", getattr(self, "model_name", "autoencoder"))
-                registry_name = params.get("registry_name", params.get("method", xai_cls.__name__)).replace(" ", "_")
+                model_name = getattr(
+                    self.model, "model_name", getattr(self, "model_name", "autoencoder")
+                )
+                registry_name = params.get(
+                    "registry_name", params.get("method", xai_cls.__name__)
+                ).replace(" ", "_")
                 if registry_name.lower().endswith("xai"):
                     registry_name = registry_name[:-3]
                 registry_name = to_snake_case(registry_name)
-                
+
                 # Get model name and datetime for unique output dir (same as supervised trainer)
                 # Use experiment_id if available, otherwise generate timestamp
-                if hasattr(self, 'experiment_id') and self.experiment_id:
+                if hasattr(self, "experiment_id") and self.experiment_id:
                     dt_str = self.experiment_id
                 else:
-                    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                 # Use unified explanations directory structure
-                base_dir = os.path.join("./explanations", f"{model_name}_{dt_str}", "inference", registry_name)
+                base_dir = os.path.join(
+                    "./explanations",
+                    f"{model_name}_{dt_str}",
+                    "inference",
+                    registry_name,
+                )
                 os.makedirs(base_dir, exist_ok=True)
-                
+
                 fname = f"{base_dir}/{registry_name}.png"
                 # Always save NPY file for numerical analysis
                 npy_fname = f"{base_dir}/{registry_name}.npy"
                 np.save(npy_fname, arr)
-                
+
                 # Save as image
                 plt.figure()
                 if arr.ndim == 3 and arr.shape[0] in [1, 3]:

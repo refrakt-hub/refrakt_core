@@ -62,9 +62,9 @@ def get_transform(name: str, *args: Any, **kwargs: Any) -> Any:
     if name not in TRANSFORM_REGISTRY:
         # Try to find in torchvision transforms as fallback
         try:
-            from torchvision import (
+            from torchvision import (  # type: ignore  # pylint: disable=import-outside-toplevel
                 transforms,
-            )  # type: ignore  # pylint: disable=import-outside-toplevel
+            )
 
             if hasattr(transforms, name):
                 return getattr(transforms, name)(*args, **kwargs)

@@ -27,29 +27,28 @@ def run_command(cmd: list[str], description: str) -> bool:
 def main():
     """Main setup function."""
     print("🚀 Setting up refrakt_core development environment...")
-    
+
     # Check if we're in the right directory
     if not Path("pyproject.toml").exists():
-        print("❌ Error: pyproject.toml not found. Please run this script from the project root.")
+        print(
+            "❌ Error: pyproject.toml not found. Please run this script from the project root."
+        )
         sys.exit(1)
-    
+
     # Install dev dependencies
     if not run_command(
         [sys.executable, "-m", "pip", "install", "-e", ".[dev]"],
-        "Installing development dependencies"
+        "Installing development dependencies",
     ):
         sys.exit(1)
-    
+
     # Install pre-commit hooks
-    if not run_command(
-        ["pre-commit", "install"],
-        "Installing pre-commit hooks"
-    ):
+    if not run_command(["pre-commit", "install"], "Installing pre-commit hooks"):
         print("⚠️  Pre-commit installation failed, but continuing...")
-    
+
     # Verify installation
     print("\n🔍 Verifying installation...")
-    
+
     tools = [
         ("pytest", "Testing framework"),
         ("black", "Code formatter"),
@@ -58,7 +57,7 @@ def main():
         ("mypy", "Type checker"),
         ("pre-commit", "Git hooks"),
     ]
-    
+
     all_good = True
     for tool, description in tools:
         try:
@@ -67,7 +66,7 @@ def main():
         except (subprocess.CalledProcessError, FileNotFoundError):
             print(f"❌ {tool} ({description}) - not found")
             all_good = False
-    
+
     if all_good:
         print("\n🎉 Development environment setup complete!")
         print("\n📋 Available commands:")
@@ -83,4 +82,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

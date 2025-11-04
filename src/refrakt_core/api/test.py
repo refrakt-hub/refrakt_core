@@ -105,7 +105,9 @@ def test(
         # Setup artifact dumper
         from refrakt_core.api.utils.train_utils import setup_artifact_dumper
 
-        artifact_dumper = setup_artifact_dumper(config, resolved_model_name, logger, experiment_id)
+        artifact_dumper = setup_artifact_dumper(
+            config, resolved_model_name, logger, experiment_id
+        )
 
         # Setup trainer for testing
         trainer = _setup_trainer_for_testing(
@@ -135,7 +137,15 @@ def test(
 
         # --- Save summary_metrics.json with config_path if needed ---
         from refrakt_core.api.helpers.train_helpers import _save_test_summary_metrics
-        _save_test_summary_metrics(trainer, eval_results, resolved_model_name, logger, experiment_id, [config_path] if config_path else [])
+
+        _save_test_summary_metrics(
+            trainer,
+            eval_results,
+            resolved_model_name,
+            logger,
+            experiment_id,
+            [config_path] if config_path else [],
+        )
 
         logger.info("\n✅ Testing completed successfully!")
         logger.info(f"Evaluation Results: {eval_results}")

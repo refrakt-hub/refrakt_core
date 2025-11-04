@@ -7,11 +7,11 @@ It supports logging, artifact dumping, and checkpointing.
 """
 
 import os
-import numpy as np
-import matplotlib.pyplot as plt
 import random
 from typing import Any, Callable, Dict, Optional, Tuple
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from torch.amp.grad_scaler import GradScaler
 from torch.nn import Module
@@ -26,9 +26,8 @@ from refrakt_core.trainer.utils.contrastive_utils import (
     handle_contrastive_evaluation_step,
     handle_contrastive_training_step,
 )
-from refrakt_core.utils.methods import unpack_views_from_batch
 from refrakt_core.trainer.utils.string_utils import to_snake_case
-
+from refrakt_core.utils.methods import unpack_views_from_batch
 
 
 @register_trainer("contrastive")
@@ -134,11 +133,11 @@ class ContrastiveTrainer(BaseTrainer):
     def _run_explainability_hooks(self, epoch: int, inference: bool = False) -> None:
         """
         Run explainability hooks for contrastive models.
-        
-        Note: XAI components are currently not supported for contrastive family models 
+
+        Note: XAI components are currently not supported for contrastive family models
         (SimCLR, DINO, MSN) in refrakt v1. This method handles the case gracefully
         by logging a warning instead of raising an exception.
-        
+
         Args:
             epoch (int): Current training epoch.
             inference (bool): Whether this is being called during inference.
@@ -207,17 +206,35 @@ class ContrastiveTrainer(BaseTrainer):
                                 # Example: use first 8 samples as anchors, rest as candidates
                                 with torch.no_grad():
                                     # Get embeddings for all samples in view1
-                                    embeddings = self.model.encode(view1.to(self.device)).cpu().numpy()
+                                    embeddings = (
+                                        self.model.encode(view1.to(self.device))
+                                        .cpu()
+                                        .numpy()
+                                    )
                                     anchor_imgs = view1[:8].cpu().numpy()
                                     anchors = embeddings[:8]
                                     candidate_imgs = view1[8:24].cpu().numpy()
                                     candidates = embeddings[8:24]
-                                viz.update(anchors, list(anchor_imgs), candidates, list(candidate_imgs))
+                                viz.update(
+                                    anchors,
+                                    list(anchor_imgs),
+                                    candidates,
+                                    list(candidate_imgs),
+                                )
                             elif name == "EmbeddingSpacePlot":
                                 with torch.no_grad():
-                                    embeddings = self.model.encode(view1.to(self.device)).cpu().numpy()
+                                    embeddings = (
+                                        self.model.encode(view1.to(self.device))
+                                        .cpu()
+                                        .numpy()
+                                    )
                                 # Extract labels from contrastive batch structure [view1, view2, labels]
-                                labels = batch[2] if isinstance(batch, (tuple, list)) and len(batch) > 2 else None
+                                labels = (
+                                    batch[2]
+                                    if isinstance(batch, (tuple, list))
+                                    and len(batch) > 2
+                                    else None
+                                )
                                 if labels is not None and hasattr(labels, "cpu"):
                                     labels = labels.cpu().numpy()
                                 elif labels is not None and hasattr(labels, "numpy"):
@@ -242,13 +259,25 @@ class ContrastiveTrainer(BaseTrainer):
                             elif name == "ClusterAssignmentPlot":
                                 # Example: run k-means on embeddings
                                 from sklearn.cluster import KMeans
+
                                 with torch.no_grad():
-                                    embeddings = self.model.encode(view1.to(self.device)).cpu().numpy()
+                                    embeddings = (
+                                        self.model.encode(view1.to(self.device))
+                                        .cpu()
+                                        .numpy()
+                                    )
                                 n_clusters = 10
-                                kmeans = KMeans(n_clusters=n_clusters, n_init=1, random_state=0)
+                                kmeans = KMeans(
+                                    n_clusters=n_clusters, n_init=1, random_state=0
+                                )
                                 assignments = kmeans.fit_predict(embeddings)
                                 # Extract labels from contrastive batch structure [view1, view2, labels]
-                                labels = batch[2] if isinstance(batch, (tuple, list)) and len(batch) > 2 else None
+                                labels = (
+                                    batch[2]
+                                    if isinstance(batch, (tuple, list))
+                                    and len(batch) > 2
+                                    else None
+                                )
                                 if labels is not None and hasattr(labels, "cpu"):
                                     labels = labels.cpu().numpy()
                                 elif labels is not None and hasattr(labels, "numpy"):
@@ -280,14 +309,18 @@ class ContrastiveTrainer(BaseTrainer):
             print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {avg_loss:.4f}")
 
             # --- Visualization hooks: save at end of epoch ---
-            model_name = getattr(self.model, "model_name", getattr(self, "model_name", "model"))
+            model_name = getattr(
+                self.model, "model_name", getattr(self, "model_name", "model")
+            )
             for viz in getattr(self, "visualization_hooks", []):
                 try:
                     if hasattr(viz, "save_with_name"):
                         viz.save_with_name(model_name)
                     else:
                         # fallback to old save method if needed
-                        viz.save(f"visualizations/{model_name}/viz_{viz.__class__.__name__}_epoch{epoch+1}.png")
+                        viz.save(
+                            f"visualizations/{model_name}/viz_{viz.__class__.__name__}_epoch{epoch+1}.png"
+                        )
                 except Exception as e:
                     print(f"[VizHook] save() failed: {e}")
             # --- XAI hooks: run at end of epoch ---

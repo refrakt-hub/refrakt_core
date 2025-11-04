@@ -233,7 +233,7 @@ def _setup_fusion_evaluation(
 
     fusion_type = fusion_cfg.type
     fusion_model_key = fusion_cfg.model
-    
+
     # Determine the correct fusion model path
     if model_path and os.path.exists(model_path):
         # Use the directory of the actual model path for fusion model
@@ -242,10 +242,20 @@ def _setup_fusion_evaluation(
         fusion_model_path = os.path.join(model_dir, f"{model_name}_fusion.joblib")
     else:
         # Fallback to config-based path
-        trainer_save_dir = getattr(config, 'trainer', {}).get('params', {}).get('save_dir', './checkpoints')
-        if hasattr(config, 'trainer') and hasattr(config.trainer, 'params') and hasattr(config.trainer.params, 'save_dir'):
+        trainer_save_dir = (
+            getattr(config, "trainer", {})
+            .get("params", {})
+            .get("save_dir", "./checkpoints")
+        )
+        if (
+            hasattr(config, "trainer")
+            and hasattr(config.trainer, "params")
+            and hasattr(config.trainer.params, "save_dir")
+        ):
             trainer_save_dir = config.trainer.params.save_dir
-        fusion_model_path = os.path.join(trainer_save_dir, f"{config.model.name}_fusion.joblib")
+        fusion_model_path = os.path.join(
+            trainer_save_dir, f"{config.model.name}_fusion.joblib"
+        )
 
     if not os.path.exists(fusion_model_path):
         logger.warning(f"[FUSION] No fusion model found at: {fusion_model_path}")

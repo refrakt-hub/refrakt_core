@@ -30,7 +30,7 @@ from refrakt_core.wrappers.schema.default_loss import DefaultLossWrapper
 
 
 def _create_wrapped_loss(
-    name: str, params: Dict[str, Any], modules: Dict[str, Any], device: str, logger = None
+    name: str, params: Dict[str, Any], modules: Dict[str, Any], device: str, logger=None
 ) -> nn.Module:
     """
     Create a wrapped loss function with proper device placement.
@@ -95,7 +95,10 @@ def _validate_loss_config(cfg: OmegaConf) -> Dict[str, Any]:
 
 
 def _build_gan_style_loss(
-    loss_cfg: Dict[str, Any], modules: Dict[str, Any], device: str, logger: Optional[Any] = None
+    loss_cfg: Dict[str, Any],
+    modules: Dict[str, Any],
+    device: str,
+    logger: Optional[Any] = None,
 ) -> Dict[str, nn.Module]:
     """
     Build GAN-style losses for generator and discriminator components.
@@ -132,14 +135,21 @@ def _build_gan_style_loss(
                 loss_name, loss_params, modules, device
             )
             if logger:
-                logger.debug(f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}")
+                logger.debug(
+                    f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}"
+                )
             else:
-                print(f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}")
+                print(
+                    f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}"
+                )
     return loss_fn
 
 
 def _build_multi_component_loss(
-    loss_cfg: Dict[str, Any], modules: Dict[str, Any], device: str, logger: Optional[Any] = None
+    loss_cfg: Dict[str, Any],
+    modules: Dict[str, Any],
+    device: str,
+    logger: Optional[Any] = None,
 ) -> Dict[str, nn.Module]:
     """
     Build multi-component losses for complex training scenarios.
@@ -176,14 +186,19 @@ def _build_multi_component_loss(
             loss_name, loss_params, modules, device
         )
         if logger:
-            logger.debug(f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}")
+            logger.debug(
+                f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}"
+            )
         else:
             print(f"[INFO] Loss ({comp_name}): {loss_name} with params: {loss_params}")
     return loss_fn
 
 
 def _build_single_loss(
-    loss_cfg: Dict[str, Any], modules: Dict[str, Any], device: str, logger: Optional[Any] = None
+    loss_cfg: Dict[str, Any],
+    modules: Dict[str, Any],
+    device: str,
+    logger: Optional[Any] = None,
 ) -> nn.Module:
     """
     Build a single loss function for standard training scenarios.

@@ -8,7 +8,7 @@ Available transforms are:
 """
 
 import random
-from typing import Any, Tuple, Optional
+from typing import Any, Optional, Tuple
 
 import torch
 import torchvision.transforms as T
@@ -17,6 +17,7 @@ from torch import Tensor
 
 from refrakt_core.registry.transform_registry import register_transform
 
+
 @register_transform("paired")
 class PairedTransform:
     """
@@ -24,23 +25,35 @@ class PairedTransform:
     Can optionally resize images before applying other transforms.
     """
 
-    def __init__(self, crop_size: int = 96, resize_lr: Optional[Tuple[int, int]] = None, resize_hr: Optional[Tuple[int, int]] = None, scale_factor: int = 4) -> None:
+    def __init__(
+        self,
+        crop_size: int = 96,
+        resize_lr: Optional[Tuple[int, int]] = None,
+        resize_hr: Optional[Tuple[int, int]] = None,
+        scale_factor: int = 4,
+    ) -> None:
         self.crop_size = crop_size
         self.scale_factor = scale_factor
-        
+
         # Set up resize transforms if specified
         self.lr_resize = None
         self.hr_resize = None
-        
+
         if resize_lr is not None:
-            self.lr_resize = T.Resize(resize_lr, interpolation=T.InterpolationMode.BICUBIC)
-            
+            self.lr_resize = T.Resize(
+                resize_lr, interpolation=T.InterpolationMode.BICUBIC
+            )
+
         if resize_hr is not None:
-            self.hr_resize = T.Resize(resize_hr, interpolation=T.InterpolationMode.BICUBIC)
+            self.hr_resize = T.Resize(
+                resize_hr, interpolation=T.InterpolationMode.BICUBIC
+            )
         elif resize_lr is not None:
             # If only LR resize is specified, calculate HR size using scale factor
             hr_size = (resize_lr[0] * scale_factor, resize_lr[1] * scale_factor)
-            self.hr_resize = T.Resize(hr_size, interpolation=T.InterpolationMode.BICUBIC)
+            self.hr_resize = T.Resize(
+                hr_size, interpolation=T.InterpolationMode.BICUBIC
+            )
 
     def __call__(self, lr: Any, hr: Any) -> Tuple[Tensor, Tensor]:
         # Apply resize if specified
@@ -48,7 +61,7 @@ class PairedTransform:
             lr = self.lr_resize(lr)
         if self.hr_resize is not None:
             hr = self.hr_resize(hr)
-            
+
         # Apply cropping
         i, j, h, w = T.RandomCrop.get_params(
             hr, output_size=(self.crop_size * 4, self.crop_size * 4)

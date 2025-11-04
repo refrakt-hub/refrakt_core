@@ -23,6 +23,7 @@ import inspect
 from typing import Any, Dict, List, Optional
 
 from omegaconf import OmegaConf
+
 from refrakt_core.wrappers.schema.default_model import DefaultModelWrapper
 
 
@@ -63,6 +64,7 @@ def validate_model_config(cfg_dict: Any) -> tuple[str, Dict[str, Any], Optional[
         raise TypeError(f"wrapper_name must be a str or None, got {type(wrapper_name)}")
 
     return model_name, model_params, wrapper_name
+
 
 def instantiate_base_model(
     model_name: str, model_params: Dict[str, Any], modules: Dict[str, Any], device: str
@@ -136,7 +138,7 @@ def wrap_model(
     get_wrapper_fn = modules.get("get_wrapper")
     if get_wrapper_fn is None:
         raise ValueError("[ERROR] get_wrapper function not found in modules registry.")
-    
+
     wrapper_cls = get_wrapper_fn(wrapper_name)
     if wrapper_cls is None:
         raise ValueError(f"[ERROR] Wrapper class for '{wrapper_name}' not found.")
@@ -161,7 +163,7 @@ def wrap_model(
         model = wrapper_cls(model=model_params, **wrapper_args).to(device)
     else:
         model = wrapper_cls(model=raw_model, **wrapper_args).to(device)
-    
+
     if logger:
         logger.debug(f"[SUCCESS] Wrapped model with '{wrapper_name}'")
     else:
@@ -170,7 +172,11 @@ def wrap_model(
 
 
 def create_default_wrapper(
-    model_name: str, model_params: Dict[str, Any], modules: Dict[str, Any], device: str, logger: Optional[Any] = None
+    model_name: str,
+    model_params: Dict[str, Any],
+    modules: Dict[str, Any],
+    device: str,
+    logger: Optional[Any] = None,
 ) -> Any:
     """
     Create a default model wrapper as a fallback mechanism.
@@ -194,16 +200,22 @@ def create_default_wrapper(
         a custom wrapper, ensuring all models have a consistent interface.
     """
     if logger:
-        logger.debug(f"[INFO] No wrapper specified. Using DefaultModelWrapper for model '{model_name}'")
+        logger.debug(
+            f"[INFO] No wrapper specified. Using DefaultModelWrapper for model '{model_name}'"
+        )
     else:
-        print(f"[INFO] No wrapper specified. Using DefaultModelWrapper for model '{model_name}'")
+        print(
+            f"[INFO] No wrapper specified. Using DefaultModelWrapper for model '{model_name}'"
+        )
     model = DefaultModelWrapper(
         model_name=model_name, model_params=model_params, modules=modules
     ).to(device)
     return model
 
 
-def add_fusion_block(model: Any, model_cfg: Any, device: str, logger: Optional[Any] = None) -> Any:
+def add_fusion_block(
+    model: Any, model_cfg: Any, device: str, logger: Optional[Any] = None
+) -> Any:
     """
     Add a fusion block to the model if specified in configuration.
 
@@ -230,10 +242,14 @@ def add_fusion_block(model: Any, model_cfg: Any, device: str, logger: Optional[A
         from refrakt_core.integrations.fusion.block import FusionBlock
 
         if logger:
-            logger.debug(f"[INFO] Wrapping model with FusionBlock using fusion config: {fusion_cfg}")
+            logger.debug(
+                f"[INFO] Wrapping model with FusionBlock using fusion config: {fusion_cfg}"
+            )
             logger.debug("[SUCCESS] Model wrapped with FusionBlock.")
         else:
-            print(f"[INFO] Wrapping model with FusionBlock using fusion config: {fusion_cfg}")
+            print(
+                f"[INFO] Wrapping model with FusionBlock using fusion config: {fusion_cfg}"
+            )
             print("[SUCCESS] Model wrapped with FusionBlock.")
         model = FusionBlock(backbone=model, fusion_cfg=fusion_cfg).to(device)
 

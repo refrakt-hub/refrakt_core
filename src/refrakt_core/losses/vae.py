@@ -27,7 +27,12 @@ class VAELoss(nn.Module):
         normalization_factor (float): Factor to divide loss by for better training visualization.
     """
 
-    def __init__(self, recon_loss_type: str = "mse", kld_weight: float = 1.0, normalization_factor: float = 100.0) -> None:
+    def __init__(
+        self,
+        recon_loss_type: str = "mse",
+        kld_weight: float = 1.0,
+        normalization_factor: float = 100.0,
+    ) -> None:
         super().__init__()
         self.recon_loss_type = recon_loss_type
         self.kld_weight = kld_weight

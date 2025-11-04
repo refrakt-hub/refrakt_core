@@ -83,7 +83,7 @@ class ConvNeXt(BaseClassifier):
             ConvNeXtBlock(96, 192),
             ConvNeXtBlock(192, 384),
             ConvNeXtBlock(384, 768),
-            nn.AdaptiveAvgPool2d(1)
+            nn.AdaptiveAvgPool2d(1),
         )
         self.fc: nn.Linear = nn.Linear(768, num_classes)
 

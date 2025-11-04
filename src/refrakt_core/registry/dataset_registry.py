@@ -62,9 +62,9 @@ def get_dataset(name: str, *args: Any, **kwargs: Any) -> Any:
     if name not in DATASET_REGISTRY:
         # Try to find in torchvision datasets as fallback
         try:
-            from torchvision import (
+            from torchvision import (  # type: ignore  # pylint: disable=import-outside-toplevel
                 datasets,
-            )  # type: ignore  # pylint: disable=import-outside-toplevel
+            )
 
             if hasattr(datasets, name):
                 return getattr(datasets, name)(*args, **kwargs)

@@ -24,4 +24,4 @@ class MSELossWrapper(nn.Module):
         effective_target = target if target is not None else recon
 
         loss = self.loss_fn(recon, effective_target)
-        return LossOutput(total=loss, components={"mse": loss}) 
+        return LossOutput(total=loss, components={"mse": loss})

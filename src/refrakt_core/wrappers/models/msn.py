@@ -24,14 +24,14 @@ class MSNWrapper(nn.Module):
 
     def __init__(self, model: Any, **kwargs: Any) -> None:
         super().__init__()
-        
+
         if isinstance(model, (dict, DictConfig)):
             # Extract MSN model parameters from config
             encoder_name = model.get("encoder_name", "resnet18")
             projector_dim = model.get("projector_dim", 256)
             num_prototypes = model.get("num_prototypes", 1024)
             pretrained = model.get("pretrained", True)
-            
+
             self.msn_model = MSNModel(
                 encoder_name=encoder_name,
                 projector_dim=projector_dim,
@@ -45,11 +45,19 @@ class MSNWrapper(nn.Module):
 
         # Store wrapper config, filtering out model initialization parameters
         filtered_kwargs = {
-            k: v for k, v in kwargs.items() 
-            if k not in {"encoder_name", "projector_dim", "num_prototypes", "pretrained", "model"}
+            k: v
+            for k, v in kwargs.items()
+            if k
+            not in {
+                "encoder_name",
+                "projector_dim",
+                "num_prototypes",
+                "pretrained",
+                "model",
+            }
         }
         self.wrapper_config = {"wrapper_type": "msn", **filtered_kwargs}
-        
+
         # Set model attributes for XAI detection
         self.model_name = "msn"
         self.model_type = "contrastive"

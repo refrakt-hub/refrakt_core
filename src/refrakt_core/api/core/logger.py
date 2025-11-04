@@ -91,7 +91,9 @@ class RefraktLogger:
         if self.console:
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setFormatter(logging.Formatter("%(message)s"))
-            console_handler.setLevel(logging.INFO)  # Only show INFO and above in console
+            console_handler.setLevel(
+                logging.INFO
+            )  # Only show INFO and above in console
             logger.addHandler(console_handler)
 
         return logger

@@ -9,7 +9,9 @@ from refrakt_core.schema.model_output import ModelOutput
 
 @register_loss("gan_wrapped", mode="logits")
 class GANLossWrapper(BaseLoss):
-    def __init__(self, use_lsgan: bool = False, device: str = "cuda", **kwargs: Any) -> None:
+    def __init__(
+        self, use_lsgan: bool = False, device: str = "cuda", **kwargs: Any
+    ) -> None:
         super().__init__()
         self.loss_fn = GANLoss(use_lsgan=use_lsgan, device=device)
         self.required_fields = ["logits", "target_is_real"]

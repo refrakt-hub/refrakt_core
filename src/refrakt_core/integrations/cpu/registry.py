@@ -34,8 +34,10 @@ def load_sklearn_registry() -> Dict[str, str]:
         >>> registry["svc"]
         'sklearn.svm.SVC'
     """
-    with pkg_resources.files("refrakt_core.integrations.registry").joinpath(
-        "sklearn_registry.yaml"
-    ).open("r") as f:
+    with (
+        pkg_resources.files("refrakt_core.integrations.registry")
+        .joinpath("sklearn_registry.yaml")
+        .open("r") as f
+    ):
         content = cast(Dict[str, str], yaml.safe_load(f))
     return content

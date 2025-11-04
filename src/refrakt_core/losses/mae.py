@@ -24,7 +24,12 @@ class MAELoss(BaseLoss):
         normalization_factor (float): Factor to divide loss by for better training visualization.
     """
 
-    def __init__(self, normalize_target: bool = False, patch_size: int = 16, normalization_factor: float = 100.0) -> None:
+    def __init__(
+        self,
+        normalize_target: bool = False,
+        patch_size: int = 16,
+        normalization_factor: float = 100.0,
+    ) -> None:
         super().__init__(name="MAELoss")
         self.normalize_target: bool = normalize_target
         self.patch_size = patch_size
@@ -79,7 +84,7 @@ class MAELoss(BaseLoss):
 
         loss: Tensor = ((pred_patches - original) ** 2) * mask
         normalized_loss = loss.sum() / mask.sum()
-        
+
         # Apply normalization factor to keep loss in reasonable range
         return normalized_loss / self.normalization_factor
 
@@ -91,10 +96,12 @@ class MAELoss(BaseLoss):
             dict: Dictionary containing loss configuration.
         """
         config = super().get_config()
-        config.update({
-            "normalize_target": self.normalize_target,
-            "normalization_factor": self.normalization_factor
-        })
+        config.update(
+            {
+                "normalize_target": self.normalize_target,
+                "normalization_factor": self.normalization_factor,
+            }
+        )
         return config
 
     def extra_repr(self) -> str:

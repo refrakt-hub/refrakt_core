@@ -17,7 +17,7 @@ Typical usage involves passing a configuration (OmegaConf) and a modules
 registry to build loss functions for training.
 """
 
-from typing import Any, Dict, Union, Optional
+from typing import Any, Dict, Optional, Union
 
 from omegaconf import OmegaConf
 from torch import nn

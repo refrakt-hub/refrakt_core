@@ -74,4 +74,4 @@ Pre-commit hooks will automatically check formatting and linting before each com
 
 ---
 
-Thank you for helping make **refrakt_core** better! 
+Thank you for helping make **refrakt_core** better!

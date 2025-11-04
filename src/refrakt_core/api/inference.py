@@ -17,18 +17,19 @@ The module handles:
 """
 
 import gc
+import json
+import os
+import re
 import sys
 import traceback
 import warnings
-import os
-import numpy as np
-from PIL import Image
-import json
+from datetime import datetime
 from typing import Any, Dict, Optional, Union
 
+import numpy as np
 import torch
 from omegaconf import DictConfig
-from datetime import datetime
+from PIL import Image
 
 from refrakt_core.api.core.logger import RefraktLogger
 from refrakt_core.api.helpers.inference_helpers import (
@@ -39,6 +40,10 @@ from refrakt_core.api.helpers.inference_helpers import (
     _setup_device,
     _setup_logging,
 )
+from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
+    instantiate_explainability_hooks,
+    instantiate_visualization_hooks,
+)
 from refrakt_core.api.utils.inference_utils import (
     handle_pure_ml_inference,
     load_fusion_head_if_provided,
@@ -46,12 +51,7 @@ from refrakt_core.api.utils.inference_utils import (
     run_inference_loop,
 )
 from refrakt_core.api.utils.pipeline_utils import parse_runtime_hooks
-from refrakt_core.api.utils.hooks_orchestrator import (  # type: ignore
-    instantiate_visualization_hooks,
-    instantiate_explainability_hooks,
-)
 from refrakt_core.error_handling import XAINotSupportedError
-import re
 
 warnings.filterwarnings("ignore")
 
@@ -68,11 +68,11 @@ def to_snake_case(name):
         return "gradcam"
     elif name == "IntegratedGradients":
         return "integrated_gradients"
-    
+
     # General conversion
-    name = re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
-    name = name.replace('__', '_')
-    return name.strip('_')
+    name = re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+    name = name.replace("__", "_")
+    return name.strip("_")
 
 
 def _run_inference_explainability_hooks(
@@ -80,7 +80,7 @@ def _run_inference_explainability_hooks(
     model: Any,
     data_loader: Any,
     device: Any,
-    explainability_samples: Union[str, int] = 'all',
+    explainability_samples: Union[str, int] = "all",
     resolved_model_name: Optional[str] = None,
     base_dir: Optional[str] = None,
     experiment_id: Optional[str] = None,
@@ -100,29 +100,33 @@ def _run_inference_explainability_hooks(
     """
     if not xai_hooks:
         return
-    
+
     # Check if this is a contrastive learning model once at the beginning
-    model_name = getattr(model, 'model_name', 'unknown')
-    model_type = getattr(model, 'model_type', 'unknown')
-    wrapper_name = getattr(model, 'wrapper_name', 'unknown')
-    
+    model_name = getattr(model, "model_name", "unknown")
+    model_type = getattr(model, "model_type", "unknown")
+    wrapper_name = getattr(model, "wrapper_name", "unknown")
+
     # Check for contrastive indicators in model name/type/wrapper
-    contrastive_indicators = ['simclr', 'dino', 'msn', 'contrastive']
-    
-    is_contrastive = any(indicator in model_name.lower() or 
-                       indicator in model_type.lower() or 
-                       indicator in wrapper_name.lower()
-                       for indicator in contrastive_indicators)
-    
+    contrastive_indicators = ["simclr", "dino", "msn", "contrastive"]
+
+    is_contrastive = any(
+        indicator in model_name.lower()
+        or indicator in model_type.lower()
+        or indicator in wrapper_name.lower()
+        for indicator in contrastive_indicators
+    )
+
     # If it's a contrastive model, print warning once and skip all XAI hooks
     if is_contrastive:
         if logger:
-            logger.warning("⚠️  XAI components are currently not supported for contrastive family models "
-                          "(SimCLR, DINO, MSN) in refrakt v1. Skipping all XAI hooks during inference.")
+            logger.warning(
+                "⚠️  XAI components are currently not supported for contrastive family models "
+                "(SimCLR, DINO, MSN) in refrakt v1. Skipping all XAI hooks during inference."
+            )
         return
-    
+
     # Prepare sample indices
-    if explainability_samples == 'all':
+    if explainability_samples == "all":
         sample_indices = None  # All samples
     else:
         try:
@@ -130,58 +134,73 @@ def _run_inference_explainability_hooks(
         except Exception:
             N = 8
         sample_indices = set(range(N))
-    
+
     # Create base directory if not provided
     if base_dir is None:
         # Use experiment_id if provided, otherwise create timestamp
         if experiment_id:
             dir_name = f"{resolved_model_name or getattr(model, 'model_name', 'model')}_{experiment_id}"
         else:
-            dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+            dt_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             dir_name = f"{resolved_model_name or getattr(model, 'model_name', 'model')}_{dt_str}"
-        
+
         # Use explanations directory structure for inference
         base_dir = os.path.join("./explanations", dir_name, "inference")
         os.makedirs(base_dir, exist_ok=True)
-    
+
     sample_count = 0
-    
+
     # Process each XAI method
     for xai_cls, params in xai_hooks:
         method = "Unknown"  # Default method name
         try:
             # Create XAI instance
             if xai_cls.__name__ == "ConceptSaliencyXAI":
-                xai_instance = xai_cls(model, dataloader=data_loader, device=device, **params)
+                xai_instance = xai_cls(
+                    model, dataloader=data_loader, device=device, **params
+                )
             else:
                 xai_instance = xai_cls(model, **params)
-            
+
             # Save runtime XAI info for metadata collection
             try:
                 from refrakt_cli.helpers.shared_core import save_runtime_xai_info
+
                 # Use resolved model name for base directory
-                model_name = resolved_model_name or getattr(model, 'model_name', 'model')
+                model_name = resolved_model_name or getattr(
+                    model, "model_name", "model"
+                )
                 if experiment_id:
                     checkpoints_base_dir = f"./checkpoints/{model_name}_{experiment_id}"
-                    save_runtime_xai_info(xai_instance, xai_cls.__name__, params, checkpoints_base_dir, logger)
+                    save_runtime_xai_info(
+                        xai_instance,
+                        xai_cls.__name__,
+                        params,
+                        checkpoints_base_dir,
+                        logger,
+                    )
             except Exception as e:
                 if logger:
                     logger.warning(f"Failed to save runtime XAI info: {e}")
-            
+
             # Determine method name and registry name
             method = xai_cls.__name__
-            registry_name = params.get("registry_name", params.get("method", xai_cls.__name__)).replace(" ", "_")
+            registry_name = params.get(
+                "registry_name", params.get("method", xai_cls.__name__)
+            ).replace(" ", "_")
             if registry_name.lower().endswith("xai"):
                 registry_name = registry_name[:-3]
             registry_name = to_snake_case(registry_name)
-            
+
             # Create method-specific directory
             save_dir = os.path.join(base_dir, registry_name)
             os.makedirs(save_dir, exist_ok=True)
-            
+
             if logger:
-                logger.debug(f"[XAI-Inference] Processing {method} (registry: {registry_name})")
-            
+                logger.debug(
+                    f"[XAI-Inference] Processing {method} (registry: {registry_name})"
+                )
+
             # Process batches
             for batch in data_loader:
                 if isinstance(batch, (tuple, list)):
@@ -191,111 +210,145 @@ def _run_inference_explainability_hooks(
                     input_tensor = batch.get("input") or batch.get("lr")
                     if input_tensor is None:
                         if logger:
-                            logger.error(f"[XAI-Inference] Batch dict does not contain 'input' or 'lr' key. Available keys: {list(batch.keys())}")
+                            logger.error(
+                                f"[XAI-Inference] Batch dict does not contain 'input' or 'lr' key. Available keys: {list(batch.keys())}"
+                            )
                         continue
                     target = batch.get("target") or batch.get("hr")
                 else:
                     input_tensor = batch
                     target = None
-                
+
                 input_tensor = input_tensor.to(device)
                 if target is not None:
                     target = target.to(device)
-                
+
                 batch_size = input_tensor.shape[0]
-                
+
                 # Get attributions for this batch
                 attributions = xai_instance.explain(input_tensor, target=target)
                 attr_np = attributions.detach().cpu().numpy()
-                
+
                 if logger:
-                    logger.debug(f"[XAI-Inference] Batch attributions shape: {attr_np.shape}")
-                
+                    logger.debug(
+                        f"[XAI-Inference] Batch attributions shape: {attr_np.shape}"
+                    )
+
                 # Process each sample in the batch
                 for i in range(batch_size):
-                    if sample_indices is not None and sample_count not in sample_indices:
+                    if (
+                        sample_indices is not None
+                        and sample_count not in sample_indices
+                    ):
                         sample_count += 1
                         continue
-                    
+
                     arr = attr_np[i]
                     if logger:
                         logger.debug(f"[XAI-Inference] Sample {i} shape: {arr.shape}")
-                    
+
                     # Handle different attribution shapes
                     if len(arr.shape) == 0:  # Scalar
                         if logger:
                             logger.debug(f"[XAI-Inference] Skipping scalar attribution")
                         continue
-                    elif len(arr.shape) == 1 and arr.shape[0] == 1:  # [1] - class-specific attribution
+                    elif (
+                        len(arr.shape) == 1 and arr.shape[0] == 1
+                    ):  # [1] - class-specific attribution
                         if logger:
-                            logger.debug(f"[XAI-Inference] Skipping class-specific attribution")
+                            logger.debug(
+                                f"[XAI-Inference] Skipping class-specific attribution"
+                            )
                         continue
                     elif len(arr.shape) == 1:  # 1D array
                         # Reshape to 2D for visualization
-                        arr = arr.reshape((int(np.sqrt(arr.shape[0])), int(np.sqrt(arr.shape[0]))))
+                        arr = arr.reshape(
+                            (int(np.sqrt(arr.shape[0])), int(np.sqrt(arr.shape[0])))
+                        )
                         if logger:
-                            logger.debug(f"[XAI-Inference] Reshaped 1D to 2D: {arr.shape}")
+                            logger.debug(
+                                f"[XAI-Inference] Reshaped 1D to 2D: {arr.shape}"
+                            )
                     elif len(arr.shape) == 2:  # 2D array (spatial heatmap)
                         if logger:
-                            logger.debug(f"[XAI-Inference] Processing 2D heatmap: {arr.shape}")
+                            logger.debug(
+                                f"[XAI-Inference] Processing 2D heatmap: {arr.shape}"
+                            )
                         pass  # Keep as is
                     elif len(arr.shape) == 3:  # 3D array
                         if arr.shape[0] == 1:  # [1, H, W]
                             arr = arr[0]
                             if logger:
-                                logger.debug(f"[XAI-Inference] Extracted single channel: {arr.shape}")
+                                logger.debug(
+                                    f"[XAI-Inference] Extracted single channel: {arr.shape}"
+                                )
                         elif arr.shape[0] == 3:  # [3, H, W] - RGB
                             arr = np.transpose(arr, (1, 2, 0))
                             if logger:
-                                logger.debug(f"[XAI-Inference] Transposed RGB: {arr.shape}")
+                                logger.debug(
+                                    f"[XAI-Inference] Transposed RGB: {arr.shape}"
+                                )
                         else:
                             if logger:
-                                logger.debug(f"[XAI-Inference] Skipping unexpected 3D shape: {arr.shape}")
+                                logger.debug(
+                                    f"[XAI-Inference] Skipping unexpected 3D shape: {arr.shape}"
+                                )
                             continue
                     else:
                         if logger:
-                            logger.debug(f"[XAI-Inference] Skipping unexpected shape: {arr.shape}")
+                            logger.debug(
+                                f"[XAI-Inference] Skipping unexpected shape: {arr.shape}"
+                            )
                         continue
-                    
+
                     # Normalize and convert to image
                     arr = arr - arr.min()
                     arr = arr / (arr.max() + 1e-8)
-                    
+
                     # Convert to uint8 for saving
                     arr_uint8 = (arr * 255).astype(np.uint8)
-                    
+
                     # Save as image
                     filename = f"{registry_name}_inference_{sample_count}.png"
                     filepath = os.path.join(save_dir, filename)
-                    
+
                     # Use PIL to save the image
                     from PIL import Image
+
                     img = Image.fromarray(arr_uint8)
                     img.save(filepath)
-                    
+
                     if logger:
-                        logger.debug(f"[XAI-Inference] Saved sample {sample_count} to {filepath}")
-                    
+                        logger.debug(
+                            f"[XAI-Inference] Saved sample {sample_count} to {filepath}"
+                        )
+
                     sample_count += 1
-                    
+
                     # Check if we've reached the sample limit
-                    if sample_indices is not None and sample_count >= max(sample_indices) + 1:
+                    if (
+                        sample_indices is not None
+                        and sample_count >= max(sample_indices) + 1
+                    ):
                         if logger:
-                            logger.debug(f"[XAI-Inference] Reached sample limit, stopping")
+                            logger.debug(
+                                f"[XAI-Inference] Reached sample limit, stopping"
+                            )
                         return
-                    
+
                     # For explanations_inference, only save a single random sample (regardless of shape)
                     if sample_indices is not None:
                         break  # Only process one sample per batch for explanations_inference
-                
+
                 # For explanations_inference, only process one batch
                 if sample_indices is not None:
                     break
-                    
+
         except Exception as e:
             if logger:
                 logger.error(f"[XAI-Inference] Error processing {method}: {e}")
             import traceback
+
             traceback.print_exc()
             continue
 
@@ -373,15 +426,20 @@ def inference(
 
         # Setup artifact dumper
         from refrakt_core.api.utils.train_utils import setup_artifact_dumper
+
         setup_artifact_dumper(config, resolved_model_name, logger, experiment_id)
 
         # --- Inference-time hooks ---
         from omegaconf import OmegaConf
+
         config_dict = OmegaConf.to_container(config, resolve=True)
         if not isinstance(config_dict, dict):
             config_dict = {}
         from typing import cast
-        viz_hooks, xai_hooks, explain_flag = parse_runtime_hooks(cast(Dict[str, Any], config_dict))
+
+        viz_hooks, xai_hooks, explain_flag = parse_runtime_hooks(
+            cast(Dict[str, Any], config_dict)
+        )
         # Convert xai_hooks to list of dicts if needed
         xai_hook_dicts = []
         for hook in xai_hooks:
@@ -394,6 +452,7 @@ def inference(
 
         # --- Inference-time sample predictions visualization ---
         from refrakt_viz.supervised.sample_predictions import SamplePredictionsPlot
+
         class_names = None
         if hasattr(config, "dataset") and hasattr(config.dataset, "params"):
             class_names = getattr(config.dataset.params, "class_names", None)
@@ -420,7 +479,7 @@ def inference(
                     input_tensor = batch[0]
                 else:
                     input_tensor = batch
-                
+
                 input_tensor = input_tensor.to(device)
                 output = model(input_tensor)
             # Collect sample predictions if possible
@@ -431,32 +490,64 @@ def inference(
                     if isinstance(batch, dict):
                         # For dict-based datasets, try to extract images and labels
                         if "lr" in batch:
-                            images = batch["lr"].cpu().numpy() if hasattr(batch["lr"], 'cpu') else None
+                            images = (
+                                batch["lr"].cpu().numpy()
+                                if hasattr(batch["lr"], "cpu")
+                                else None
+                            )
                         elif "input" in batch:
-                            images = batch["input"].cpu().numpy() if hasattr(batch["input"], 'cpu') else None
+                            images = (
+                                batch["input"].cpu().numpy()
+                                if hasattr(batch["input"], "cpu")
+                                else None
+                            )
                         else:
-                            images = next(iter(batch.values())).cpu().numpy() if hasattr(next(iter(batch.values())), 'cpu') else None
-                        
+                            images = (
+                                next(iter(batch.values())).cpu().numpy()
+                                if hasattr(next(iter(batch.values())), "cpu")
+                                else None
+                            )
+
                         # Try to find ground truth labels
                         y_true = None
                         if "hr" in batch:
-                            y_true = batch["hr"].cpu().tolist() if hasattr(batch["hr"], 'cpu') else None
+                            y_true = (
+                                batch["hr"].cpu().tolist()
+                                if hasattr(batch["hr"], "cpu")
+                                else None
+                            )
                         elif "target" in batch or "label" in batch:
                             target_key = "target" if "target" in batch else "label"
-                            y_true = batch[target_key].cpu().tolist() if hasattr(batch[target_key], 'cpu') else None
+                            y_true = (
+                                batch[target_key].cpu().tolist()
+                                if hasattr(batch[target_key], "cpu")
+                                else None
+                            )
                     elif isinstance(batch, (tuple, list)):
-                        images = batch[0].cpu().numpy() if hasattr(batch[0], 'cpu') else None
-                        y_true = batch[1].cpu().tolist() if isinstance(batch, (tuple, list)) and len(batch) > 1 and hasattr(batch[1], 'cpu') else None
+                        images = (
+                            batch[0].cpu().numpy() if hasattr(batch[0], "cpu") else None
+                        )
+                        y_true = (
+                            batch[1].cpu().tolist()
+                            if isinstance(batch, (tuple, list))
+                            and len(batch) > 1
+                            and hasattr(batch[1], "cpu")
+                            else None
+                        )
                     else:
-                        images = batch.cpu().numpy() if hasattr(batch, 'cpu') else None
+                        images = batch.cpu().numpy() if hasattr(batch, "cpu") else None
                         y_true = None
-                    
-                    if hasattr(output, 'logits'):
+
+                    if hasattr(output, "logits"):
                         logits = output.logits
                     else:
                         logits = output
                     if logits is not None:
-                        y_pred = torch.argmax(logits, dim=1).cpu().tolist() if hasattr(logits, 'cpu') else None
+                        y_pred = (
+                            torch.argmax(logits, dim=1).cpu().tolist()
+                            if hasattr(logits, "cpu")
+                            else None
+                        )
                     else:
                         y_pred = None
                     if images is not None and y_true is not None and y_pred is not None:
@@ -472,25 +563,51 @@ def inference(
         if xai_components:
             # Use the experiment_id passed from the pipeline
             if experiment_id is None:
-                experiment_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+                experiment_id = datetime.now().strftime("%Y%m%d_%H%M%S")
                 if logger:
-                    logger.warning(f"No experiment_id provided for inference, generated new one: {experiment_id}")
+                    logger.warning(
+                        f"No experiment_id provided for inference, generated new one: {experiment_id}"
+                    )
             # Use explanations directory structure for inference
-            shared_base_dir = os.path.join("./explanations", f"{resolved_model_name or getattr(model, 'model_name', 'model')}_{experiment_id}", "inference")
+            shared_base_dir = os.path.join(
+                "./explanations",
+                f"{resolved_model_name or getattr(model, 'model_name', 'model')}_{experiment_id}",
+                "inference",
+            )
             os.makedirs(shared_base_dir, exist_ok=True)
-            
+
             # For each XAI method, get its per-method no_samples value (default 1)
             for (xai_cls, params), hook_cfg in zip(xai_components, xai_hook_dicts):
-                no_samples = hook_cfg.get('no_samples', 1)  # Default to 1 if not set
-                _run_inference_explainability_hooks([(xai_cls, params)], model, data_loader, device, no_samples, resolved_model_name, shared_base_dir, experiment_id, logger)
+                no_samples = hook_cfg.get("no_samples", 1)  # Default to 1 if not set
+                _run_inference_explainability_hooks(
+                    [(xai_cls, params)],
+                    model,
+                    data_loader,
+                    device,
+                    no_samples,
+                    resolved_model_name,
+                    shared_base_dir,
+                    experiment_id,
+                    logger,
+                )
         # Save sample predictions plot at the end of inference
         if sample_pred_plot is not None:
-            model_name = getattr(model, 'model_name', resolved_model_name)
+            model_name = getattr(model, "model_name", resolved_model_name)
             sample_pred_plot.save_with_name(model_name)
 
         # At the end, save summary_metrics.json with config_path if needed
-        from refrakt_core.api.helpers.train_helpers import _save_inference_summary_metrics
-        _save_inference_summary_metrics(model, results, resolved_model_name, logger, experiment_id, [config_path] if config_path else [])
+        from refrakt_core.api.helpers.train_helpers import (
+            _save_inference_summary_metrics,
+        )
+
+        _save_inference_summary_metrics(
+            model,
+            results,
+            resolved_model_name,
+            logger,
+            experiment_id,
+            [config_path] if config_path else [],
+        )
 
         logger.info("\n✅ Inference completed successfully!")
         return {
@@ -509,5 +626,6 @@ def inference(
     finally:
         gc.collect()
         torch.cuda.empty_cache()
+
 
 __all__ = ["inference", "_load_and_validate_config"]

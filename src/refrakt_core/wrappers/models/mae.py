@@ -21,7 +21,7 @@ class MAEWrapper(nn.Module):
         self.expected_input_dim = getattr(
             model, "img_size", (3, 224, 224)
         )  # fallback if not present
-        
+
         # Set model attributes for XAI detection
         self.model_name = "mae"
         self.model_type = "contrastive"

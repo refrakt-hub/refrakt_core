@@ -31,13 +31,19 @@ class SwinTransformerWrapper(nn.Module):
     def _make_activation_hook(self, name):
         def hook(module, input, output):
             if isinstance(output, torch.Tensor):
-                self.layer_metrics[name]["activation_mean"] = output.detach().mean().item()
+                self.layer_metrics[name]["activation_mean"] = (
+                    output.detach().mean().item()
+                )
+
         return hook
 
     def _make_grad_hook(self, name):
         def hook(module, grad_input, grad_output):
             if grad_output and isinstance(grad_output[0], torch.Tensor):
-                self.layer_metrics[name]["grad_mean"] = grad_output[0].detach().mean().item()
+                self.layer_metrics[name]["grad_mean"] = (
+                    grad_output[0].detach().mean().item()
+                )
+
         return hook
 
     def get_layer_metrics(self):
@@ -81,6 +87,6 @@ class SwinTransformerWrapper(nn.Module):
         )
 
     def __call__(self, *args, **kwargs):
-        if getattr(self, '_captum_tracing', False):
+        if getattr(self, "_captum_tracing", False):
             return self.forward_for_graph(*args, **kwargs)
         return super().__call__(*args, **kwargs)

@@ -92,13 +92,19 @@ def build_model(
             # MSN wrapper handles model instantiation
             raw_model = None
         else:
-            raw_model = instantiate_base_model(model_name, model_params, modules, device)
+            raw_model = instantiate_base_model(
+                model_name, model_params, modules, device
+            )
 
         # Step 2: Wrap model (if wrapper is specified)
         if wrapper_name:
-            model = wrap_model(raw_model, wrapper_name, model_params, modules, device, logger)
+            model = wrap_model(
+                raw_model, wrapper_name, model_params, modules, device, logger
+            )
         else:
-            model = create_default_wrapper(model_name, model_params, modules, device, logger)
+            model = create_default_wrapper(
+                model_name, model_params, modules, device, logger
+            )
 
     except Exception as e:
         import traceback

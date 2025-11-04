@@ -34,8 +34,10 @@ def load_cuml_registry() -> Dict[str, str]:
         >>> registry["svc"]
         'cuml.svm.SVC'
     """
-    with pkg_resources.files("refrakt_core.integrations.registry").joinpath(
-        "cuml_registry.yaml"
-    ).open("r") as f:
+    with (
+        pkg_resources.files("refrakt_core.integrations.registry")
+        .joinpath("cuml_registry.yaml")
+        .open("r") as f
+    ):
         content = cast(Dict[str, str], yaml.safe_load(f))
     return content

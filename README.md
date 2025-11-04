@@ -31,7 +31,7 @@
 
 ## ⚙️ Setup
 ```bash
-# For pip install 
+# For pip install
 pip install refrakt_core
 ```
 
@@ -99,7 +99,7 @@ model:
   params:
     in_channels: 1
     num_classes: 10
-    image_size: 28 
+    image_size: 28
     patch_size: 7
   fusion:
     type: cuml
@@ -276,11 +276,11 @@ class YourModel(BaseClassifier):
 
 Planned additions:
 - Much better code readability + extensive documentation (`readthedocs`)
-- More sklearn and cuML models made available through the registry. 
+- More sklearn and cuML models made available through the registry.
 - Integration of Kolmogorov-Arnold Networks and Lagrangian Neural Networks.
-- Checkpoints for pre-trained weights of models saved. 
-- Integrate model tracing for Fusion Blocks. 
-- Allow for generative / latent fusion trainng. 
+- Checkpoints for pre-trained weights of models saved.
+- Integrate model tracing for Fusion Blocks.
+- Allow for generative / latent fusion trainng.
 
 ## 📄 License
 

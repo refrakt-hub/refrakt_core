@@ -1,4 +1,4 @@
-runtime: 
+runtime:
   mode: pipeline
   log_type: []
 

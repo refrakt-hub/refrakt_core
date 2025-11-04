@@ -1,9 +1,11 @@
-from typing import List, Any, Dict, Optional
 import importlib
 import inspect
+from typing import Any, Dict, List, Optional
 
 
-def instantiate_visualization_hooks(viz_names: List[str], extra_args: Optional[Dict[str, Any]] = None) -> List[Any]:
+def instantiate_visualization_hooks(
+    viz_names: List[str], extra_args: Optional[Dict[str, Any]] = None
+) -> List[Any]:
     """
     Instantiate visualization components from the refrakt_viz registry.
 
@@ -32,9 +34,9 @@ def instantiate_visualization_hooks(viz_names: List[str], extra_args: Optional[D
             sig = inspect.signature(viz_cls.__init__)
             params = list(sig.parameters.keys())
             # Remove 'self' from params
-            params = [p for p in params if p != 'self']
-            if 'class_names' in params and 'class_names' in extra_args:
-                visualizations.append(viz_cls(class_names=extra_args['class_names']))
+            params = [p for p in params if p != "self"]
+            if "class_names" in params and "class_names" in extra_args:
+                visualizations.append(viz_cls(class_names=extra_args["class_names"]))
             else:
                 visualizations.append(viz_cls())
         except Exception as e:
@@ -78,4 +80,4 @@ def instantiate_explainability_hooks(
             xai_components.append((xai_cls, params))
         except Exception as e:
             print(f"Warning: Could not instantiate XAI method '{xai_cfg}': {e}")
-    return xai_components 
+    return xai_components
