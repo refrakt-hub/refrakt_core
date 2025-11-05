@@ -8,7 +8,7 @@ of models using the DINO objective. It supports logging, artifact dumping, and c
 from typing import Any, Callable, Dict, List, Optional
 
 import torch
-from torch.amp.grad_scaler import GradScaler
+from torch.cuda.amp import GradScaler
 from torch.nn import Module
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader, TensorDataset
