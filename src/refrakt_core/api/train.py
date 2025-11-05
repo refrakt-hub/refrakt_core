@@ -103,8 +103,14 @@ def train(
         optimizer, scheduler = _setup_optimizer_and_scheduler(config, model, logger)
 
         # Setup artifact dumper
+        # Get log_dir from logger if available (for backend execution detection)
+        from refrakt_core.api.utils.train_utils import _extract_base_log_dir
+
+        logger_log_dir = getattr(logger, "log_dir", None) if logger else None
+        base_log_dir = _extract_base_log_dir(logger_log_dir)
+
         artifact_dumper = setup_artifact_dumper(
-            config, resolved_model_name, logger, experiment_id
+            config, resolved_model_name, logger, experiment_id, log_dir=base_log_dir
         )
 
         # Setup trainer

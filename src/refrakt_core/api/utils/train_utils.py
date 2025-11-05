@@ -273,11 +273,63 @@ def build_optimizer_and_scheduler(
     return optimizer, scheduler
 
 
+def _extract_base_log_dir(log_dir: Optional[str]) -> Optional[str]:
+    """
+    Extract base log directory from logger's log_dir, removing model_name subdirectory.
+
+    For backend execution, log_dir might be "./jobs/{job_id}/resnet18",
+    and we need to extract "./jobs/{job_id}".
+
+    For CLI execution, log_dir might be "./logs/resnet18",
+    and we return None (use default checkpoints behavior).
+
+    Args:
+        log_dir: Full log directory path from logger
+
+    Returns:
+        Base log directory if it's a jobs directory, None otherwise
+    """
+    if not log_dir:
+        return None
+
+    # Check if it's a jobs directory path
+    # Handle both "./jobs/{job_id}/model_name" and normalized "jobs/{job_id}/model_name"
+    if "jobs" not in log_dir:
+        return None
+
+    # Normalize path separators
+    log_dir_normalized = os.path.normpath(log_dir)
+    parts = log_dir_normalized.split(os.path.sep)
+
+    # Find the index of "jobs" in the path
+    if "jobs" not in parts:
+        return None
+
+    jobs_idx = parts.index("jobs")
+
+    # Ensure there's a job_id after "jobs"
+    if jobs_idx + 1 >= len(parts):
+        return None
+
+    # Extract up to and including the job_id (next part after "jobs")
+    # parts might be: ['jobs', '{job_id}', 'resnet18'] or ['.', 'jobs', '{job_id}', 'resnet18']
+    base_parts = parts[: jobs_idx + 2]  # Include "jobs" and "{job_id}"
+
+    # Reconstruct path - always start with ./ for consistency
+    if base_parts[0] == ".":
+        base_log_dir = os.path.join(".", *base_parts[1:])
+    else:
+        base_log_dir = os.path.join(".", *base_parts)
+
+    return base_log_dir
+
+
 def setup_artifact_dumper(
     config: DictConfig,
     resolved_model_name: str,
     logger=None,
     experiment_id: Optional[str] = None,
+    log_dir: Optional[str] = None,
 ) -> Any:
     """
     Setup artifact dumper for saving experiment artifacts in the new directory structure.
@@ -287,6 +339,8 @@ def setup_artifact_dumper(
         resolved_model_name: Name of the model
         logger: Logger instance
         experiment_id: Optional experiment ID. If None, generates a new one.
+        log_dir: Optional log directory path. If provided and starts with './jobs/',
+                 artifacts will be saved to the job directory instead of checkpoints.
     """
     from refrakt_core.schema.artifact import ArtifactDumper
 
@@ -297,10 +351,90 @@ def setup_artifact_dumper(
             logger.warning(
                 f"No experiment_id provided, generated new one: {experiment_id}"
             )
-    exp_dir_name = f"{resolved_model_name}_{experiment_id}"
 
-    # Create main experiment directory
-    exp_dir = os.path.join("./checkpoints", exp_dir_name)
+    # Detect backend execution: check environment variable first (most reliable)
+    # Option 1: Check REFRAKT_JOB_DIR environment variable (set by backend) - PRIMARY METHOD
+    # Option 2: Check log_dir parameter (extracted from logger) - FALLBACK METHOD
+    is_backend_execution = False
+    exp_dir = None
+    exp_dir_name = None
+
+    job_dir_from_env = os.getenv("REFRAKT_JOB_DIR")
+
+    # Debug logging
+    if logger:
+        logger.debug(
+            f"setup_artifact_dumper: REFRAKT_JOB_DIR={job_dir_from_env}, log_dir={log_dir}"
+        )
+
+    if job_dir_from_env:
+        # Backend sets this environment variable - this is the primary detection method
+        is_backend_execution = True
+        exp_dir = job_dir_from_env
+        job_id = os.path.basename(os.path.normpath(job_dir_from_env))
+        exp_dir_name = job_id
+        if logger:
+            logger.info(
+                f"✓ Backend execution detected via REFRAKT_JOB_DIR: {job_dir_from_env}"
+            )
+            logger.info(f"✓ Will save artifacts to: {exp_dir}")
+    elif log_dir:
+        # Check if log_dir contains 'jobs' directory
+        normalized_log_dir = os.path.normpath(log_dir)
+        # Check multiple patterns to catch normalized paths
+        if (
+            log_dir.startswith("./jobs/")
+            or log_dir.startswith("jobs/")
+            or normalized_log_dir.startswith("jobs/")
+        ):
+            is_backend_execution = True
+        else:
+            # Check if 'jobs' is in the path parts
+            parts = normalized_log_dir.split(os.path.sep)
+            if "jobs" in parts:
+                jobs_idx = parts.index("jobs")
+                # Check if jobs is early in the path (at index 0 or 1)
+                if jobs_idx == 0 or (jobs_idx == 1 and parts[0] == "."):
+                    is_backend_execution = True
+
+        if is_backend_execution:
+            # Extract job_id from log_dir
+            normalized = os.path.normpath(log_dir)
+            parts = normalized.split(os.path.sep)
+            if "jobs" in parts:
+                jobs_idx = parts.index("jobs")
+                if jobs_idx + 1 < len(parts):
+                    job_id = parts[jobs_idx + 1]
+                    # Reconstruct path with ./ prefix for consistency
+                    exp_dir = os.path.join(".", "jobs", job_id)
+                    exp_dir_name = job_id
+                else:
+                    # Fallback to basename
+                    job_id = os.path.basename(normalized)
+                    exp_dir = (
+                        log_dir
+                        if log_dir.startswith("./")
+                        else os.path.join(".", log_dir)
+                    )
+                    exp_dir_name = job_id
+            else:
+                # Fallback
+                job_id = os.path.basename(normalized)
+                exp_dir = (
+                    log_dir if log_dir.startswith("./") else os.path.join(".", log_dir)
+                )
+                exp_dir_name = job_id
+
+        if logger:
+            logger.debug(
+                f"Backend detection: log_dir={log_dir}, normalized={normalized_log_dir}, is_backend={is_backend_execution}"
+            )
+
+    if not is_backend_execution:
+        # CLI execution: save to checkpoints/{model_name}_{experiment_id}/ directory
+        exp_dir_name = f"{resolved_model_name}_{experiment_id}"
+        exp_dir = os.path.join("./checkpoints", exp_dir_name)
+
     os.makedirs(exp_dir, exist_ok=True)
 
     # Create subdirectories
@@ -317,10 +451,11 @@ def setup_artifact_dumper(
         yaml.dump(config_dict, f, default_flow_style=False)
 
     if logger:
-        logger.debug(f"Created experiment directory: {exp_dir}")
-        logger.debug(f"  - Weights: {weights_dir}")
-        logger.debug(f"  - Explanations: {explanations_dir}")
-        logger.debug(f"  - Config: {config_path}")
+        logger.info(f"Created experiment directory: {exp_dir}")
+        logger.info(f"  - Weights: {weights_dir}")
+        logger.info(f"  - Explanations: {explanations_dir}")
+        logger.info(f"  - Config: {config_path}")
+        logger.info(f"  - Backend execution: {is_backend_execution}")
 
     # Update save_dir in config to point to weights directory
     config.trainer.params.save_dir = weights_dir
@@ -589,8 +724,11 @@ def _handle_pure_ml_training(
         y_val,
     )
 
-    # Setup artifact dumper
-    artifact_dumper = setup_artifact_dumper(cfg, resolved_model_name, logger)
+    logger_log_dir = getattr(logger, "log_dir", None) if logger else None
+    base_log_dir = _extract_base_log_dir(logger_log_dir)
+    artifact_dumper = setup_artifact_dumper(
+        cfg, resolved_model_name, logger, log_dir=base_log_dir
+    )
 
     # Train ML model
     trainer = MLTrainer(

@@ -45,7 +45,19 @@ class RefraktLogger:
             debug (bool, optional): Enable debug logging. Defaults to False.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        log_dir = os.path.join(log_dir, model_name)
+
+        # Check if running via backend (REFRAKT_JOB_DIR environment variable)
+        # In backend mode, don't add model_name subdirectory to log_dir
+        # Backend already passes ./jobs/{job_id} as log_dir and expects logs directly there
+        job_dir = os.getenv("REFRAKT_JOB_DIR")
+        if job_dir:
+            # Backend execution: use job_dir directly without model_name subdirectory
+            # This ensures logs are saved to ./jobs/{job_id}/*.log instead of ./jobs/{job_id}/model_name/*.log
+            log_dir = os.path.normpath(job_dir)
+        else:
+            # CLI execution: add model_name subdirectory (default behavior)
+            log_dir = os.path.join(log_dir, model_name)
+
         os.makedirs(log_dir, exist_ok=True)
 
         self.log_file: str = os.path.join(log_dir, f"{timestamp}.log")

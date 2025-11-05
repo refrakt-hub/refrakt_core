@@ -425,9 +425,18 @@ def inference(
         data_loader = _setup_data_loader(config, data, logger)
 
         # Setup artifact dumper
-        from refrakt_core.api.utils.train_utils import setup_artifact_dumper
+        from refrakt_core.api.utils.train_utils import (
+            _extract_base_log_dir,
+            setup_artifact_dumper,
+        )
 
-        setup_artifact_dumper(config, resolved_model_name, logger, experiment_id)
+        # Get log_dir from logger if available (for backend execution detection)
+        logger_log_dir = getattr(logger, "log_dir", None) if logger else None
+        base_log_dir = _extract_base_log_dir(logger_log_dir)
+
+        setup_artifact_dumper(
+            config, resolved_model_name, logger, experiment_id, log_dir=base_log_dir
+        )
 
         # --- Inference-time hooks ---
         from omegaconf import OmegaConf
