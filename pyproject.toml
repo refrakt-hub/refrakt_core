@@ -17,7 +17,7 @@ dependencies = [
     "torchvision",
     "einops",
     "matplotlib",
-    "numpy",
+    "numpy<2.0",  # PyTorch 2.0.x is not compatible with numpy 2.x
     "requests",
     "pillow",
     "pandas",
