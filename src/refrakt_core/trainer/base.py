@@ -48,7 +48,7 @@ class BaseTrainer(ABC):
         model: Module,
         train_loader: DataLoader[Any],
         val_loader: DataLoader[Any],
-        device: str = "cuda",
+        device: Union[str, torch.device] = "cuda",
         **kwargs: Any,
     ) -> None:
         """
@@ -58,9 +58,22 @@ class BaseTrainer(ABC):
             model (Module): The model to be trained.
             train_loader (DataLoader): DataLoader for training data.
             val_loader (DataLoader): DataLoader for validation data.
-            device (str, optional): Device to use (default: "cuda").
+            device (Union[str, torch.device], optional): Device to use (default: "cuda").
             **kwargs: Additional keyword arguments (e.g., save_dir, model_name, artifact_dumper).
         """
+        # Final safety check: ensure device is not "cuda" if CUDA is not available
+        # Handle both string and torch.device objects
+        if isinstance(device, str):
+            if device.startswith("cuda") and not torch.cuda.is_available():
+                device = "cpu"
+        elif hasattr(device, "type"):
+            # Handle torch.device objects
+            device_str = str(device)
+            if device_str.startswith("cuda") and not torch.cuda.is_available():
+                device = "cpu"
+            else:
+                device = device_str
+
         self.device = torch.device(device)
         self.model = model.to(self.device)
         self.train_loader = train_loader

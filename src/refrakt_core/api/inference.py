@@ -171,7 +171,11 @@ def _run_inference_explainability_hooks(
                     model, "model_name", "model"
                 )
                 if experiment_id:
-                    checkpoints_base_dir = f"./checkpoints/{model_name}_{experiment_id}"
+                    # Use CHECKPOINTS_DIR environment variable if set, otherwise default to ./checkpoints
+                    checkpoints_base = os.getenv("CHECKPOINTS_DIR", "./checkpoints")
+                    checkpoints_base_dir = (
+                        f"{checkpoints_base}/{model_name}_{experiment_id}"
+                    )
                     save_runtime_xai_info(
                         xai_instance,
                         xai_cls.__name__,
@@ -434,9 +438,14 @@ def inference(
         logger_log_dir = getattr(logger, "log_dir", None) if logger else None
         base_log_dir = _extract_base_log_dir(logger_log_dir)
 
-        setup_artifact_dumper(
+        artifact_dumper = setup_artifact_dumper(
             config, resolved_model_name, logger, experiment_id, log_dir=base_log_dir
         )
+
+        # Set experiment_dir on model for proper directory resolution in _save_inference_summary_metrics
+        # Use experiment_dir property for consistency with training/testing phases
+        if hasattr(artifact_dumper, "experiment_dir"):
+            setattr(model, "experiment_dir", artifact_dumper.experiment_dir)
 
         # --- Inference-time hooks ---
         from omegaconf import OmegaConf

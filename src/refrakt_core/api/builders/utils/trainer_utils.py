@@ -125,6 +125,15 @@ def setup_standard_trainer(
             f"optimizer_params must be a dict, got {type(optimizer_params)}"
         )
 
+    # Final safety check: ensure device is not "cuda" if CUDA is not available
+    if (
+        device
+        and isinstance(device, str)
+        and device.startswith("cuda")
+        and not torch.cuda.is_available()
+    ):
+        device = "cpu"
+
     return trainer_cls(
         model=model,
         train_loader=train_loader,

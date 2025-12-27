@@ -509,12 +509,25 @@ def _save_inference_summary_metrics(
 ):
     """Save summary_metrics.json for inference phase, using config_files for metadata."""
     experiment_dir = None
+
+    # Priority 1: Check if model has experiment_dir attribute (set by artifact_dumper)
     if hasattr(model, "experiment_dir") and model.experiment_dir:
         experiment_dir = model.experiment_dir
     else:
-        experiment_dir = os.path.join(
-            "./checkpoints", f"{resolved_model_name}_{experiment_id}"
-        )
+        # Priority 2: Check REFRAKT_JOB_DIR environment variable (backend execution)
+        job_dir_from_env = os.getenv("REFRAKT_JOB_DIR")
+        if job_dir_from_env:
+            experiment_dir = job_dir_from_env
+            if logger:
+                logger.debug(
+                    f"Using REFRAKT_JOB_DIR for inference summary metrics: {experiment_dir}"
+                )
+        else:
+            # Priority 3: Fallback to CHECKPOINTS_DIR or default ./checkpoints
+            checkpoints_base = os.getenv("CHECKPOINTS_DIR", "./checkpoints")
+            experiment_dir = os.path.join(
+                checkpoints_base, f"{resolved_model_name}_{experiment_id}"
+            )
     if experiment_dir:
         summary_metrics_path = os.path.join(
             experiment_dir, "explanations", "summary_metrics.json"

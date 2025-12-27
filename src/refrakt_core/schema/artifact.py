@@ -38,6 +38,15 @@ class ArtifactDumper:
         self.log_every = log_every
         self.buffer = {}
 
+    @property
+    def experiment_dir(self) -> str:
+        """
+        Property that returns base_path as experiment_dir for consistency.
+        This matches the pattern used in _setup_trainer where trainer.experiment_dir
+        is set from artifact_dumper.experiment_dir.
+        """
+        return self.base_path
+
     def log_output(
         self,
         output: ModelOutput,

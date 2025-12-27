@@ -802,7 +802,19 @@ def _setup_trainer_params(
     trainer_params = cast(Dict[str, Any], trainer_params)
     num_epochs = trainer_params.pop("num_epochs", 10)  # Changed default from 1 to 10
     device_param = trainer_params.pop("device", device)
-    final_device = device_param or device
+    # Validate device: if config says "cuda" but CUDA is not available, use CPU
+    # Check both device_param and device parameter, handle both str and torch.device
+    candidate_device = device_param if device_param else device
+    # Convert torch.device to string if needed
+    if hasattr(candidate_device, "type"):
+        candidate_device = str(candidate_device)
+    if candidate_device and isinstance(candidate_device, str):
+        if candidate_device.startswith("cuda") and not torch.cuda.is_available():
+            final_device = "cpu"
+        else:
+            final_device = candidate_device
+    else:
+        final_device = "cpu"
     trainer_params["logger"] = logger
     trainer_params["artifact_dumper"] = artifact_dumper
     trainer_params["model_name"] = resolved_model_name

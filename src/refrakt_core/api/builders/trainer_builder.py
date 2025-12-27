@@ -21,6 +21,7 @@ Typical usage involves passing a configuration (OmegaConf), model, dataloaders, 
 
 from typing import Any, Dict, Optional
 
+import torch
 from omegaconf import OmegaConf
 
 from refrakt_core.registry.trainer_registry import register_trainer
@@ -110,6 +111,34 @@ def initialize_trainer(
         logger.debug("Initializing trainer...")
     else:
         print("Initializing trainer...")
+
+    # Validate device parameter first - if CUDA is requested but not available, use CPU
+    if device and isinstance(device, str):
+        if device.startswith("cuda") and not torch.cuda.is_available():
+            if logger:
+                logger.warning(
+                    f"Device '{device}' requested but CUDA not available, using CPU"
+                )
+            else:
+                print(
+                    f"WARNING: Device '{device}' requested but CUDA not available, using CPU"
+                )
+            device = "cpu"
+    elif hasattr(device, "type"):
+        device_str = str(device)
+        if device_str.startswith("cuda") and not torch.cuda.is_available():
+            if logger:
+                logger.warning(
+                    f"Device '{device_str}' requested but CUDA not available, using CPU"
+                )
+            else:
+                print(
+                    f"WARNING: Device '{device_str}' requested but CUDA not available, using CPU"
+                )
+            device = "cpu"
+        else:
+            device = device_str
+
     if OmegaConf.is_config(cfg):
         cfg_dict = OmegaConf.to_container(cfg, resolve=True)
     else:
@@ -122,7 +151,37 @@ def initialize_trainer(
 
     # Extract special parameters
     device_param = trainer_params.pop("device", device)
-    final_device = device_param if device_param else device
+    # Validate device: if config says "cuda" but CUDA is not available, use CPU
+    # Check both device_param and device parameter, handle both str and torch.device
+    candidate_device = device_param if device_param else device
+    # Convert torch.device to string if needed
+    if hasattr(candidate_device, "type"):
+        candidate_device = str(candidate_device)
+    if candidate_device and isinstance(candidate_device, str):
+        if candidate_device.startswith("cuda") and not torch.cuda.is_available():
+            if logger:
+                logger.warning(
+                    f"Device '{candidate_device}' from config but CUDA not available, using CPU"
+                )
+            else:
+                print(
+                    f"WARNING: Device '{candidate_device}' from config but CUDA not available, using CPU"
+                )
+            final_device = "cpu"
+        else:
+            final_device = candidate_device
+    else:
+        final_device = "cpu"
+
+    # Debug logging
+    if logger:
+        logger.debug(
+            f"Device validation: input_device={device}, device_param={device_param}, final_device={final_device}, cuda_available={torch.cuda.is_available()}"
+        )
+    else:
+        print(
+            f"DEBUG: Device validation: input_device={device}, device_param={device_param}, final_device={final_device}, cuda_available={torch.cuda.is_available()}"
+        )
     artifact_dumper = modules.get("artifact_dumper", None)
 
     trainer_name_lower = trainer_name.lower()
